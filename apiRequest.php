@@ -1,0 +1,204 @@
+<?php
+require_once __DIR__ . '/helpers.php';
+
+switch ($action) {
+
+   case "loadDashboard":
+    try {
+        requirePermission($db, 'view_reports');
+
+        $cid = intval($cid);
+        $range = strtolower(trim($_POST['range'] ?? 'all'));
+
+        $dateFilter = "";
+        $dateFilterAlias = "";
+        $rangeMap = [
+            'today' => "date('now','localtime')",
+            '7d'    => "date('now','-6 day','localtime')",
+            '30d'   => "date('now','-29 day','localtime')"
+        ];
+
+        if (!array_key_exists($range, $rangeMap) && $range !== 'all') {
+            $range = 'all';
+        }
+
+        if (isset($rangeMap[$range])) {
+            $operator = $range === 'today' ? '=' : '>=';
+            $dateExpr = $rangeMap[$range];
+            $dateFilter = " AND date(createdAt) {$operator} {$dateExpr}";
+            $dateFilterAlias = " AND date(t.createdAt) {$operator} {$dateExpr}";
+        }
+
+        $partnerStatsStmt = $db->prepare(" 
+            SELECT
+                IFNULL(SUM(outstanding),0) AS outstanding,
+                IFNULL(SUM(advancePayment),0) AS advancePayment,
+                COUNT(CASE WHEN outstanding > 0 THEN 1 END) AS activeDebtors,
+                COUNT(CASE WHEN advancePayment > 0 THEN 1 END) AS activeCreditors,
+                COUNT(sid) AS totalPartners
+            FROM partner
+            WHERE cid = :cid
+        ");
+        $partnerStatsStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $partnerStatsRow = $partnerStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+
+        $transactionStatsStmt = $db->prepare(" 
+            SELECT
+                IFNULL((SELECT SUM(totalAmount) FROM sales WHERE cid = :sid {$dateFilter}),0) AS totalSales,
+                IFNULL((SELECT SUM(totalAmount) FROM purchases WHERE cid = :pid {$dateFilter}),0) AS totalPurchases,
+                IFNULL((SELECT COUNT(sale_id) FROM sales WHERE cid = :sidc {$dateFilter}),0) +
+                IFNULL((SELECT COUNT(purchase_id) FROM purchases WHERE cid = :pidc {$dateFilter}),0) AS rangeTransactions
+        ");
+        $transactionStatsStmt->bindValue(':sid', $cid, SQLITE3_INTEGER);
+        $transactionStatsStmt->bindValue(':pid', $cid, SQLITE3_INTEGER);
+        $transactionStatsStmt->bindValue(':sidc', $cid, SQLITE3_INTEGER);
+        $transactionStatsStmt->bindValue(':pidc', $cid, SQLITE3_INTEGER);
+        $transactionStatsRow = $transactionStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+
+        $inventoryValueStmt = $db->prepare(" 
+            SELECT IFNULL(SUM(COALESCE(inv.qty,0) * COALESCE(p.cost_price,0)),0) AS inventoryValue
+            FROM products p
+            LEFT JOIN (
+                SELECT product_id, cid, SUM(quantity) AS qty
+                FROM inventory
+                WHERE cid = :inv_cid
+                GROUP BY product_id, cid
+            ) inv ON inv.product_id = p.product_id AND inv.cid = p.cid
+            WHERE p.cid = :prod_cid
+        ");
+        $inventoryValueStmt->bindValue(':inv_cid', $cid, SQLITE3_INTEGER);
+        $inventoryValueStmt->bindValue(':prod_cid', $cid, SQLITE3_INTEGER);
+        $inventoryValueRow = $inventoryValueStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+
+        $topSellingProducts = [];
+        $topSellingStmt = $db->prepare(" 
+            SELECT
+                pr.product_id,
+                pr.product_name,
+                IFNULL(SUM(si.qty),0) AS total_qty,
+                IFNULL(SUM(si.total),0) AS total_amount
+            FROM sales_items si
+            INNER JOIN sales t ON t.sale_id = si.sale_id
+            INNER JOIN products pr ON pr.product_id = si.product_id
+            WHERE t.cid = :cid {$dateFilterAlias}
+            GROUP BY pr.product_id, pr.product_name
+            ORDER BY total_qty DESC, total_amount DESC
+            LIMIT 5
+        ");
+        $topSellingStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $topSellingRes = $topSellingStmt->execute();
+        while($row = $topSellingRes->fetchArray(SQLITE3_ASSOC)){
+            $topSellingProducts[] = $row;
+        }
+
+        $topSuppliers = [];
+        $topSuppliersStmt = $db->prepare(" 
+            SELECT
+                par.sid,
+                par.sName,
+                COUNT(t.purchase_id) AS transactions,
+                IFNULL(SUM(t.totalAmount),0) AS total_amount
+            FROM purchases t
+            INNER JOIN partner par ON par.sid = t.partner_id
+            WHERE t.cid = :cid {$dateFilterAlias}
+            GROUP BY par.sid, par.sName
+            ORDER BY total_amount DESC
+            LIMIT 5
+        ");
+        $topSuppliersStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $topSuppliersRes = $topSuppliersStmt->execute();
+        while($row = $topSuppliersRes->fetchArray(SQLITE3_ASSOC)){
+            $topSuppliers[] = $row;
+        }
+
+        $topBuyers = [];
+        $topBuyersStmt = $db->prepare(" 
+            SELECT
+                par.sid,
+                par.sName,
+                COUNT(t.sale_id) AS transactions,
+                IFNULL(SUM(t.totalAmount),0) AS total_amount
+            FROM sales t
+            INNER JOIN partner par ON par.sid = t.partner_id
+            WHERE t.cid = :cid {$dateFilterAlias}
+            GROUP BY par.sid, par.sName
+            ORDER BY total_amount DESC
+            LIMIT 5
+        ");
+        $topBuyersStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $topBuyersRes = $topBuyersStmt->execute();
+        while($row = $topBuyersRes->fetchArray(SQLITE3_ASSOC)){
+            $topBuyers[] = $row;
+        }
+
+        $outstanding = floatval($partnerStatsRow['outstanding'] ?? 0);
+        $advancePayment = floatval($partnerStatsRow['advancePayment'] ?? 0);
+        $activeDebtors = intval($partnerStatsRow['activeDebtors'] ?? 0);
+        $activeCreditors = intval($partnerStatsRow['activeCreditors'] ?? 0);
+        $totalPartners = intval($partnerStatsRow['totalPartners'] ?? 0);
+
+        $totalSales = floatval($transactionStatsRow['totalSales'] ?? 0);
+        $totalPurchases = floatval($transactionStatsRow['totalPurchases'] ?? 0);
+        $rangeTransactions = intval($transactionStatsRow['rangeTransactions'] ?? 0);
+
+        $inventoryValue = floatval($inventoryValueRow['inventoryValue'] ?? 0);
+        $profit = $totalSales - $totalPurchases;
+
+        respond("success", "Dashboard loaded", [
+            "outstanding"      => intval($outstanding),
+            "advancePayment"   => intval($advancePayment),
+            "activeDebtors"    => intval($activeDebtors),
+            "activeCreditors"  => intval($activeCreditors),
+            "totalSales"       => floatval($totalSales),
+            "totalPurchases"   => floatval($totalPurchases),
+            "rangeTransactions"=> intval($rangeTransactions),
+            "totalPartners"    => intval($totalPartners),
+            "inventoryValue"   => floatval($inventoryValue),
+            "profit"           => floatval($profit),
+            "metrics"          => [
+                "totalSales" => [
+                    "raw" => floatval($totalSales),
+                    "formatted" => number_format($totalSales, 2)
+                ],
+                "totalPurchases" => [
+                    "raw" => floatval($totalPurchases),
+                    "formatted" => number_format($totalPurchases, 2)
+                ],
+                "inventoryValue" => [
+                    "raw" => floatval($inventoryValue),
+                    "formatted" => number_format($inventoryValue, 2)
+                ],
+                "profit" => [
+                    "raw" => floatval($profit),
+                    "formatted" => number_format($profit, 2)
+                ]
+            ],
+            "topSellingProducts" => $topSellingProducts,
+            "topSuppliers"       => $topSuppliers,
+            "topBuyers"          => $topBuyers,
+            "selectedRange"      => $range
+        ]);
+
+    } catch (Exception $e) {
+        respond("error", "Failed to load dashboard: " . $e->getMessage());
+    }
+    break;
+
+    case "loadPartners":
+        $rows = [];
+        $stmt = $db->prepare("SELECT sid, sName FROM partner WHERE cid = :cid ORDER BY sName ASC");
+        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $res = $stmt->execute();
+
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $rows[] = $row;
+        }
+
+        respond("success", "Partners loaded", ["data" => $rows]);
+        break;
+
+    default:
+        respond("error", "Unknown action: $action");
+}
+
+?>
