@@ -99,7 +99,7 @@ include "INC/navbar.php";
 
 <?php include "INC/footer.php"; ?>
 
-<script src="scripts/partners.js?ver=<?= time() ?>"></script>
+<script src="scripts/partners.js?v=<?= asset_ver('scripts/partners.js') ?>"></script>
 
 </body>
 </html>

@@ -405,12 +405,12 @@ include "INC/navbar.php";
 <?php include "INC/footer.php"; ?>
 
 <!-- Transactions modules docs: scripts/transactions/README.md -->
-<script src="scripts/transactions/transaction-manager.js?ver=<?= time() ?>"></script>
-<script src="scripts/transactions/autocomplete.js?ver=<?= time() ?>"></script>
-<script src="scripts/transactions/items.js?ver=<?= time() ?>"></script>
-<script src="scripts/transactions/transactions-api.js?ver=<?= time() ?>"></script>
-<script src="scripts/transactions/history.js?ver=<?= time() ?>"></script>
-<script src="scripts/transactions/bootstrap.js?ver=<?= time() ?>"></script>
+<script src="scripts/transactions/transaction-manager.js?v=<?= asset_ver('scripts/transactions/transaction-manager.js') ?>"></script>
+<script src="scripts/transactions/autocomplete.js?v=<?= asset_ver('scripts/transactions/autocomplete.js') ?>"></script>
+<script src="scripts/transactions/items.js?v=<?= asset_ver('scripts/transactions/items.js') ?>"></script>
+<script src="scripts/transactions/transactions-api.js?v=<?= asset_ver('scripts/transactions/transactions-api.js') ?>"></script>
+<script src="scripts/transactions/history.js?v=<?= asset_ver('scripts/transactions/history.js') ?>"></script>
+<script src="scripts/transactions/bootstrap.js?v=<?= asset_ver('scripts/transactions/bootstrap.js') ?>"></script>
 
 </body>
 </html>

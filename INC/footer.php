@@ -7,5 +7,5 @@
 <script src="assets/vendor/js/bootstrap-4.6.2.min.js"></script>
 
 <!-- Your custom scripts -->
-<script src="scripts/App.js?ver=<?= time() ?>"></script>
-<script src="scripts/api.js?ver=<?= time() ?>"></script>
+<script src="scripts/App.js?v=<?= asset_ver('scripts/App.js') ?>"></script>
+<script src="scripts/api.js?v=<?= asset_ver('scripts/api.js') ?>"></script>

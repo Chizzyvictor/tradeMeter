@@ -1,7 +1,16 @@
+<?php
+if (!function_exists('asset_ver')) {
+  function asset_ver(string $relativePath): int {
+    $absolute = dirname(__DIR__) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+    $mtime = @filemtime($absolute);
+    return $mtime !== false ? $mtime : 1;
+  }
+}
+?>
 <!DOCTYPE html>
 <html>
 <head>
-<title>TradeAssistant</title>
+<title>TradeMeter</title>
 <meta http-equiv="CONTENT-TYPE" content="text/html; charset=UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="csrf-token" content="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
@@ -32,7 +41,7 @@
 
 <div class="header">
   <div class="h_left"><img id="cLogo" src="" class="logo image"></div>
-  <div class="h_right">TradeAssistant</div>
+  <div class="h_right">TradeMeter</div>
 </div>
 
 <div class="tab">

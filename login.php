@@ -292,7 +292,7 @@ include "INC/header.php";
 
 <?php include "INC/footer.php";?>
 
-<script src="scripts/login.js?ver=<?= time() ?>"></script>
+<script src="scripts/login.js?v=<?= asset_ver('scripts/login.js') ?>"></script>
 
 </div>
 </body>

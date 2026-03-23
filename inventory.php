@@ -269,7 +269,7 @@ include "INC/navbar.php";
 
 
 <?php include "INC/footer.php"; ?>
-<script src="scripts/inventory.js?ver=<?= time() ?>"></script>
+<script src="scripts/inventory.js?v=<?= asset_ver('scripts/inventory.js') ?>"></script>
 
 </body>
 </html>

@@ -61,7 +61,7 @@ include "INC/header.php"; ?>
 </div>
 
 <?php include "INC/footer.php"; ?>
-<script src="scripts/companies.js?ver=<?= time() ?>"></script>
+<script src="scripts/companies.js?v=<?= asset_ver('scripts/companies.js') ?>"></script>
 
 </body>
 </html>

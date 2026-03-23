@@ -90,7 +90,6 @@ class AppCore {
 					: "Server error. Please try again.";
 
 				this.showAlert(msg, "error");
-                alert(JSON.stringify(xhr));
 				console.error("AJAX Error:", status, error, xhr.responseText);
 			},
 			complete: () => {

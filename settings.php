@@ -255,7 +255,7 @@ include "INC/navbar.php";
 </div>
 
 <?php include "INC/footer.php"; ?>
-<script src="scripts/settings.js?ver=<?= time() ?>"></script>
+<script src="scripts/settings.js?v=<?= asset_ver('scripts/settings.js') ?>"></script>
 
 </body>
 </html>
