@@ -1,0 +1,59 @@
+# ============================================================
+# TradeMeter — Apache / LiteSpeed configuration
+# ============================================================
+
+# ── HTTPS redirect ─────────────────────────────────────────
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+# ── Block direct access to sensitive files ─────────────────
+<Files "mysqlitedb.db">
+    Order Allow,Deny
+    Deny from all
+</Files>
+
+<FilesMatch "^\.env">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+<FilesMatch "\.(log|db|sqlite|sql)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Block backup / config files
+<FilesMatch "(composer\.json|composer\.lock|package\.json|package-lock\.json|README\.md)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# ── Security headers ───────────────────────────────────────
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ── SMTP environment variables ─────────────────────────────
+# Uncomment and fill in these values after uploading to Hostinger.
+# Use the email account you created in hPanel → Email Accounts.
+#
+# SetEnv SMTP_HOST smtp.hostinger.com
+# SetEnv SMTP_PORT 587
+# SetEnv SMTP_AUTH true
+# SetEnv SMTP_USERNAME your@yourdomain.com
+# SetEnv SMTP_PASSWORD your_email_password
+# SetEnv SMTP_ENCRYPTION tls
+# SetEnv SMTP_FROM_EMAIL your@yourdomain.com
+# SetEnv SMTP_FROM_NAME TradeMeter
+
+# ── PHP settings (optional tuning) ────────────────────────
+<IfModule mod_php.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 12M
+    php_flag display_errors Off
+    php_flag log_errors On
+</IfModule>

@@ -318,6 +318,126 @@ Use this checklist before going live:
 
 ---
 
+## Deploying to Hostinger (Step-by-Step)
+
+Hostinger shared hosting runs Apache/LiteSpeed with PHP and supports SQLite3 — no extra configuration needed.
+
+### 1 — Buy a plan & point a domain
+
+1. Purchase a **Web Hosting** plan (Business or higher recommended for SQLite write performance).
+2. In **hPanel → Domains**, add or connect your domain.
+3. In **hPanel → Advanced → PHP Configuration**, select **PHP 8.2** (or 8.1 / 8.0).  
+   SQLite3 (PDO) is enabled by default.
+
+### 2 — Upload project files
+
+**Option A — File Manager (easiest)**
+
+1. hPanel → **File Manager** → open `public_html/`.
+2. Delete the default placeholder files (`index.html`, etc.) if present.
+3. Click **Upload** → select all project files as a ZIP → then **Extract** inside `public_html/`.
+
+**Option B — FTP/SFTP**
+
+1. hPanel → **Files → FTP Accounts** → note the host, user, and password.
+2. Use FileZilla (free): connect, upload everything into `public_html/`.
+
+> **Do NOT upload** `.git/`, `.hopweb/`, your local `mysqlitedb.db`, or `TradeMeter.apk`.  
+> These are already excluded by `.gitignore` if deploying via Git (see Option C below).
+
+**Option C — Git (cleanest)**
+
+```bash
+# SSH into your Hostinger account (hPanel → Advanced → SSH Access)
+ssh u123456@srv123.hostinger.com
+
+cd public_html
+git clone https://github.com/Chizzyvictor/tradeMeter .
+```
+
+The `.gitignore` already excludes all local runtime artifacts.
+
+### 3 — Set file permissions
+
+From SSH or File Manager, set these exact permissions:
+
+| Path | Permission |
+|---|---|
+| `mysqlitedb.db` | `664` |
+| `Images/companyDP/` | `775` |
+| `Images/partnersDP/` | `775` |
+| `Images/productsDP/` | `775` |
+
+In File Manager: right-click each → **Permissions** → enter the octal value.  
+Via SSH:
+```bash
+chmod 664 mysqlitedb.db
+chmod 775 Images/companyDP Images/partnersDP Images/productsDP
+```
+
+> If `mysqlitedb.db` doesn't exist yet, the app creates it automatically on first request — just make sure the folder is writable (`public_html/` itself already is).
+
+### 4 — Configure SMTP (email verification)
+
+1. hPanel → **Emails → Email Accounts** → create `no-reply@yourdomain.com`.
+2. In hPanel → **File Manager**, open `.htaccess` in `public_html/`.
+3. Find the commented SMTP block at the bottom and uncomment + fill in your values:
+
+```apache
+SetEnv SMTP_HOST smtp.hostinger.com
+SetEnv SMTP_PORT 587
+SetEnv SMTP_AUTH true
+SetEnv SMTP_USERNAME no-reply@yourdomain.com
+SetEnv SMTP_PASSWORD your_email_password
+SetEnv SMTP_ENCRYPTION tls
+SetEnv SMTP_FROM_EMAIL no-reply@yourdomain.com
+SetEnv SMTP_FROM_NAME TradeMeter
+```
+
+> Hostinger's SMTP host is always `smtp.hostinger.com` for email accounts on their servers.
+
+### 5 — Install PHPMailer (if not already present)
+
+If `vendor/` is not uploaded (Git clone skips it if it's in `.gitignore`), install via SSH:
+
+```bash
+cd ~/public_html
+curl -sS https://getcomposer.org/installer | php
+php composer.phar require phpmailer/phpmailer
+```
+
+If you uploaded the full project including `vendor/`, skip this step.
+
+### 6 — Verify SSL / HTTPS
+
+1. hPanel → **SSL → SSL/TLS** → enable **Hostinger Free SSL** (Let's Encrypt) for your domain.
+2. The `.htaccess` already forces HTTP → HTTPS redirect automatically.
+
+### 7 — Smoke test
+
+Open your domain and run through:
+
+- [ ] Sign up → receive verification email → verify account
+- [ ] Log in / log out
+- [ ] Add a partner
+- [ ] Add an inventory item (with image upload)
+- [ ] Record a transaction
+- [ ] Check the dashboard widget totals
+- [ ] Log out and confirm session expires
+- [ ] Test remember-me (tick the checkbox at login, close browser, reopen)
+
+### Ongoing backups
+
+Hostinger does weekly automated backups on Business plans. For daily protection, also schedule a manual backup of `mysqlitedb.db`:
+
+```bash
+# in a Hostinger Cron Job (hPanel → Advanced → Cron Jobs)
+# Run daily at 2 AM
+0 2 * * * cp ~/public_html/mysqlitedb.db ~/backups/mysqlitedb_$(date +\%Y\%m\%d).db
+```
+
+---
+
 ## Notes
 
 - The frontend is intentionally modular (especially transactions) to simplify maintenance.
