@@ -283,6 +283,41 @@ Set as needed:
 
 ---
 
+## Deployment Checklist
+
+Use this checklist before going live:
+
+1. **Server & PHP**
+  - Use PHP 8.x (or supported 7.4+) with SQLite enabled.
+  - Disable PHP error display in production (`display_errors=0`) and enable error logging.
+
+2. **Environment Variables**
+  - Copy values from `.env.example` into your server environment.
+  - Set real SMTP credentials if verification and test emails are required.
+
+3. **Filesystem Permissions**
+  - Ensure the app can read/write `mysqlitedb.db`.
+  - Ensure image upload directories are writable:
+    - `Images/companyDP/`
+    - `Images/partnersDP/`
+    - `Images/productsDP/`
+
+4. **Security Hardening**
+  - Serve the app over HTTPS.
+  - Keep web root clean from local-only artifacts (`.hopweb/`, local DB snapshots, logs, APK outputs).
+  - Do not expose backups or database files publicly.
+
+5. **App Verification**
+  - Complete signup and verify email flow.
+  - Confirm login/logout, remember-me, and session revocation behavior.
+  - Run a smoke test on dashboard, partners, inventory, transactions, and settings pages.
+
+6. **Backup & Recovery**
+  - Schedule regular backups of `mysqlitedb.db`.
+  - Test restore procedure at least once before production launch.
+
+---
+
 ## Notes
 
 - The frontend is intentionally modular (especially transactions) to simplify maintenance.
