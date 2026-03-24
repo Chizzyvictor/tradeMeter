@@ -19,7 +19,6 @@ class TransactionManager {
             return;
         }
         console.log(`[TransactionDebug] ${label}`, payload);
-        alert(`[Debug] ${label}\n\n${JSON.stringify(payload, null, 2)}`);
     }
 
     setFieldError(fieldSelector, message = "", errorSelector = null) {
