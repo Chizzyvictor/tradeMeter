@@ -162,7 +162,7 @@ function getClientIpAddress(): string {
     return trim((string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
 }
 
-function logRememberEvent(SQLite3 $db, string $eventType, int $userId = 0, int $cid = 0, array $details = []): void {
+function logRememberEvent(AppDbConnection $db, string $eventType, int $userId = 0, int $cid = 0, array $details = []): void {
     $stmt = $db->prepare("INSERT INTO remember_token_audit (event_type, user_id, cid, ip_address, user_agent, details, created_at)
                           VALUES (:event_type, :user_id, :cid, :ip_address, :user_agent, :details, :created_at)");
     if (!$stmt) {
@@ -186,7 +186,7 @@ function logRememberEvent(SQLite3 $db, string $eventType, int $userId = 0, int $
     $stmt->execute();
 }
 
-function ensureSecurityTables(SQLite3 $db): void {
+function ensureSecurityTables(AppDbConnection $db): void {
     $db->exec("CREATE TABLE IF NOT EXISTS login_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -219,7 +219,7 @@ function ensureSecurityTables(SQLite3 $db): void {
     $db->exec("CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id, cid)");
 }
 
-function ensureUserVerificationColumns(SQLite3 $db): void {
+function ensureUserVerificationColumns(AppDbConnection $db): void {
     $columns = [];
     $addedVerifiedColumn = false;
 
@@ -244,7 +244,7 @@ function ensureUserVerificationColumns(SQLite3 $db): void {
     }
 }
 
-function logLoginAttempt(SQLite3 $db, int $userId, int $cid, string $status, int $now): void {
+function logLoginAttempt(AppDbConnection $db, int $userId, int $cid, string $status, int $now): void {
     $stmt = $db->prepare("INSERT INTO login_logs (user_id, cid, ip_address, user_agent, login_time, status)
                           VALUES (:uid, :cid, :ip, :ua, :time, :status)");
     if (!$stmt) {
@@ -270,7 +270,7 @@ function logLoginAttempt(SQLite3 $db, int $userId, int $cid, string $status, int
     $stmt->execute();
 }
 
-function isRateLimited(SQLite3 $db, string $ipAddress, int $now, int $maxAttempts = 5, int $windowSeconds = 300): bool {
+function isRateLimited(AppDbConnection $db, string $ipAddress, int $now, int $maxAttempts = 5, int $windowSeconds = 300): bool {
     $stmt = $db->prepare("SELECT attempts, last_attempt FROM login_attempts WHERE ip_address = :ip LIMIT 1");
     if (!$stmt) {
         return false;
@@ -286,7 +286,7 @@ function isRateLimited(SQLite3 $db, string $ipAddress, int $now, int $maxAttempt
     return $attempts >= $maxAttempts && ($now - $lastAttempt) < $windowSeconds;
 }
 
-function registerFailedLoginAttempt(SQLite3 $db, string $ipAddress, int $now): void {
+function registerFailedLoginAttempt(AppDbConnection $db, string $ipAddress, int $now): void {
     $stmt = $db->prepare("SELECT attempts FROM login_attempts WHERE ip_address = :ip LIMIT 1");
     if (!$stmt) {
         return;
@@ -316,7 +316,7 @@ function registerFailedLoginAttempt(SQLite3 $db, string $ipAddress, int $now): v
     }
 }
 
-function clearLoginAttempts(SQLite3 $db, string $ipAddress): void {
+function clearLoginAttempts(AppDbConnection $db, string $ipAddress): void {
     $stmt = $db->prepare("DELETE FROM login_attempts WHERE ip_address = :ip");
     if (!$stmt) {
         return;
@@ -325,7 +325,7 @@ function clearLoginAttempts(SQLite3 $db, string $ipAddress): void {
     $stmt->execute();
 }
 
-function upsertUserSession(SQLite3 $db, int $userId, int $cid, string $sessionId, int $now): void {
+function upsertUserSession(AppDbConnection $db, int $userId, int $cid, string $sessionId, int $now): void {
     if ($userId <= 0 || $cid <= 0 || $sessionId === '') {
         return;
     }
@@ -360,9 +360,9 @@ function upsertUserSession(SQLite3 $db, int $userId, int $cid, string $sessionId
 // -------------------------
 // Database Connection
 // -------------------------
-$db = appDbConnect();
+$db = appDbConnectCompat();
 
-function ensureRbacSchema(SQLite3 $db): void {
+function ensureRbacSchema(AppDbConnection $db): void {
     $db->exec("CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
         cid INTEGER NOT NULL,
@@ -430,7 +430,7 @@ function ensureRbacSchema(SQLite3 $db): void {
     ensureSecurityTables($db);
 }
 
-function seedRolesAndPermissions(SQLite3 $db, int $cid): void {
+function seedRolesAndPermissions(AppDbConnection $db, int $cid): void {
     $permissions = [
         'view_dashboard',
         'manage_products',
@@ -499,7 +499,7 @@ function seedRolesAndPermissions(SQLite3 $db, int $cid): void {
     }
 }
 
-function assignUserRole(SQLite3 $db, int $userId, int $cid, string $roleName): void {
+function assignUserRole(AppDbConnection $db, int $userId, int $cid, string $roleName): void {
     $stmt = $db->prepare("SELECT role_id FROM roles WHERE cid = :cid AND lower(role_name) = lower(:role_name) LIMIT 1");
     $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
     $stmt->bindValue(':role_name', $roleName, SQLITE3_TEXT);
@@ -514,7 +514,7 @@ function assignUserRole(SQLite3 $db, int $userId, int $cid, string $roleName): v
     $stmt->execute();
 }
 
-function getUserRoles(SQLite3 $db, int $userId): array {
+function getUserRoles(AppDbConnection $db, int $userId): array {
     if ($userId <= 0) {
         return [];
     }
@@ -538,7 +538,7 @@ function getUserRoles(SQLite3 $db, int $userId): array {
     return array_values(array_filter($roles));
 }
 
-function getUserPermissions(SQLite3 $db, int $userId): array {
+function getUserPermissions(AppDbConnection $db, int $userId): array {
     if ($userId <= 0) {
         return [];
     }
