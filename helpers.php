@@ -37,7 +37,7 @@ $_SESSION['last_activity'] = time();
 // -------------------------
 // Database Connection
 // -------------------------
-$db = appDbConnect();
+$db = appDbConnectCompat();
 
 define('SALE_ID_OFFSET', 1000000000);
 
@@ -71,7 +71,7 @@ function can(string $permissionKey): bool {
     return false;
 }
 
-function userHasPermission(SQLite3 $db, int $userId, string $permissionKey): bool {
+function userHasPermission(AppDbConnection $db, int $userId, string $permissionKey): bool {
     if ($userId <= 0 || $permissionKey === '') {
         return false;
     }
@@ -104,7 +104,7 @@ function userHasPermission(SQLite3 $db, int $userId, string $permissionKey): boo
     return $allowed;
 }
 
-function requirePermission(SQLite3 $db, string $permissionKey): void {
+function requirePermission(AppDbConnection $db, string $permissionKey): void {
     $uid = intval($_SESSION['user_id'] ?? 0);
 
     // Backward compatibility: old accounts without users table session keep full access.
@@ -117,7 +117,7 @@ function requirePermission(SQLite3 $db, string $permissionKey): void {
     }
 }
 
-function requireAnyPermission(SQLite3 $db, array $permissionKeys): void {
+function requireAnyPermission(AppDbConnection $db, array $permissionKeys): void {
     $uid = intval($_SESSION['user_id'] ?? 0);
 
     if ($uid <= 0) {
@@ -138,7 +138,7 @@ function requireAnyPermission(SQLite3 $db, array $permissionKeys): void {
  * Adjust stock for a product
  * Updates inventory table and stock_ledger
  *
- * @param SQLite3 $db
+ * @param AppDbConnection $db
  * @param int $productId
  * @param int $cid
  * @param int $qtyChange (+ for purchase, - for sale)
@@ -147,7 +147,7 @@ function requireAnyPermission(SQLite3 $db, array $permissionKeys): void {
  * @throws Exception if stock goes negative
  * @return int new balance
  */
-function adjustStock(SQLite3 $db, int $productId, int $cid, int $qtyChange, string $referenceType, int $referenceId): int {
+function adjustStock(AppDbConnection $db, int $productId, int $cid, int $qtyChange, string $referenceType, int $referenceId): int {
     $db->exec("BEGIN");
 
     try {
@@ -204,7 +204,7 @@ function adjustStock(SQLite3 $db, int $productId, int $cid, int $qtyChange, stri
 }
 
 
-function savePurchase(SQLite3 $db, int $cid, int $supplierId, array $items) {
+function savePurchase(AppDbConnection $db, int $cid, int $supplierId, array $items) {
     $db->exec("BEGIN");
     try {
         // 1️⃣ Insert purchase record
@@ -246,7 +246,7 @@ function savePurchase(SQLite3 $db, int $cid, int $supplierId, array $items) {
 }
 
 
-function saveSale(SQLite3 $db, int $cid, int $customerId, array $items) {
+function saveSale(AppDbConnection $db, int $cid, int $customerId, array $items) {
     $db->exec("BEGIN");
     try {
         // 1️⃣ Insert sale record
@@ -288,7 +288,7 @@ function saveSale(SQLite3 $db, int $cid, int $customerId, array $items) {
 }
 
 
-function applyUnpaidToPartner(SQLite3 $db, int $partnerId, int $cid, string $transactionType, float $unpaid): void {
+function applyUnpaidToPartner(AppDbConnection $db, int $partnerId, int $cid, string $transactionType, float $unpaid): void {
     if ($unpaid <= 0) return;
 
     $stmt = $db->prepare("SELECT outstanding, advancePayment FROM partner WHERE sid = :sid AND cid = :cid LIMIT 1");
@@ -331,7 +331,7 @@ function applyUnpaidToPartner(SQLite3 $db, int $partnerId, int $cid, string $tra
     }
 }
 
-function applyPaymentToPartner(SQLite3 $db, int $partnerId, int $cid, string $transactionType, float $payment): void {
+function applyPaymentToPartner(AppDbConnection $db, int $partnerId, int $cid, string $transactionType, float $payment): void {
     if ($payment <= 0) return;
 
     $stmt = $db->prepare("SELECT outstanding, advancePayment FROM partner WHERE sid = :sid AND cid = :cid LIMIT 1");
@@ -374,7 +374,7 @@ function applyPaymentToPartner(SQLite3 $db, int $partnerId, int $cid, string $tr
     }
 }
 
-function addTransactionNotification(SQLite3 $db, int $partnerId, int $cid, float $amount, string $description, int $status, int $timestamp): void {
+function addTransactionNotification(AppDbConnection $db, int $partnerId, int $cid, float $amount, string $description, int $status, int $timestamp): void {
     if ($amount <= 0) return;
 
     $type = null;

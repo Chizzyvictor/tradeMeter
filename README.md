@@ -512,7 +512,8 @@ heroku open
 - `.htaccess` exists in this repo for Apache behavior; Heroku uses Apache via `Procfile`.
 - The app now includes a DB connection scaffold in `INC/db.php` with `DATABASE_URL` parsing for the PostgreSQL migration path.
 - `apiAuthentications.php` now uses the compatibility connection (`appDbConnectCompat()`), allowing SQLite or PostgreSQL selection via environment.
-- Current runtime still executes using SQLite (`appDbConnect()`), with optional `SQLITE_DB_PATH` override.
+- `helpers.php` (and dependent APIs: inventory, partners, request, settings, transactions) now also use `appDbConnectCompat()`.
+- Runtime still supports SQLite by default, with optional `SQLITE_DB_PATH` override.
 - Do not rely on `mysqlitedb.db` persistence on Heroku.
 - Do not rely on local `Images/` folder persistence on Heroku.
 
