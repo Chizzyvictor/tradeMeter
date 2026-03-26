@@ -443,3 +443,85 @@ Hostinger does weekly automated backups on Business plans. For daily protection,
 - The frontend is intentionally modular (especially transactions) to simplify maintenance.
 - Most APIs return JSON with a standard `status` + `text` response shape.
 - The app is designed for one database file per deployment and company-level data isolation by `cid`.
+
+---
+
+## Deploying to Heroku
+
+TradeMeter can run on Heroku using the PHP buildpack, but there is a **critical limitation**:
+
+- Heroku dyno filesystem is **ephemeral**.
+- `mysqlitedb.db` and uploaded images under `Images/` are lost whenever dynos restart or redeploy.
+
+### Recommended approach
+
+Use Heroku only for short-term demos unless you migrate to persistent storage:
+
+1. Move database from SQLite to a managed DB (for example PostgreSQL).
+2. Move image uploads to object storage (for example Cloudinary / S3).
+
+### Quick deploy (current SQLite version)
+
+1. Install prerequisites:
+  - Heroku CLI
+  - Git
+  - Composer (optional locally; Heroku runs Composer during build)
+
+2. Login and create app:
+
+```bash
+heroku login
+heroku create your-trademeter-app
+```
+
+3. Set PHP stack/buildpack (optional but explicit):
+
+```bash
+heroku stack:set heroku-22
+heroku buildpacks:set heroku/php
+```
+
+4. Configure environment variables (replace with your real values):
+
+```bash
+heroku config:set SMTP_HOST=smtp.hostinger.com
+heroku config:set SMTP_PORT=587
+heroku config:set SMTP_AUTH=true
+heroku config:set SMTP_USERNAME=no-reply@yourdomain.com
+heroku config:set SMTP_PASSWORD=your_email_password
+heroku config:set SMTP_ENCRYPTION=tls
+heroku config:set SMTP_FROM_EMAIL=no-reply@yourdomain.com
+heroku config:set SMTP_FROM_NAME=TradeMeter
+```
+
+5. Deploy:
+
+```bash
+git push heroku master
+```
+
+6. Open app:
+
+```bash
+heroku open
+```
+
+### Important operational notes on Heroku
+
+- Email features work with config vars, because `envValue()` already reads environment variables.
+- `.htaccess` exists in this repo for Apache behavior; Heroku uses Apache via `Procfile`.
+- Do not rely on `mysqlitedb.db` persistence on Heroku.
+- Do not rely on local `Images/` folder persistence on Heroku.
+
+### Optional: one-off data backup commands
+
+You can still pull snapshots during a dyno lifecycle:
+
+```bash
+heroku run bash
+tar -czf /tmp/trademeter_runtime_backup.tgz mysqlitedb.db Images
+exit
+heroku ps:copy /tmp/trademeter_runtime_backup.tgz ./trademeter_runtime_backup.tgz
+```
+
+If this command is unavailable in your Heroku CLI version, use a custom script or migrate to persistent storage.
