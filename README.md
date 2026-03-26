@@ -500,10 +500,18 @@ heroku config:set SMTP_FROM_NAME=TradeMeter
 git push heroku master
 ```
 
+`Procfile` now includes a `release` phase (`php exe.php`) so schema initialization runs on each deploy.
+
 6. Open app:
 
 ```bash
 heroku open
+```
+
+7. (Optional) Verify schema bootstrap manually:
+
+```bash
+heroku run php exe.php
 ```
 
 ### Important operational notes on Heroku

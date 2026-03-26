@@ -2,12 +2,12 @@
 require_once __DIR__ . '/INC/db.php';
 
 // ============================
-//  FRESH SQLITE INITIALIZER
+//  FRESH DATABASE INITIALIZER
 // ============================
 
 try {
 
-    $db = appDbConnect();
+    $db = appDbConnectCompat();
 
     // ============================
     // CREATE TABLES
@@ -296,55 +296,57 @@ try {
     // ============================
     // LEGACY MIGRATION (purchase -> purchases + sales)
     // ============================
-    $hasLegacyPurchase = false;
-    $legacyTables = [];
-    $tableRes = $db->query("SELECT name FROM sqlite_master WHERE type='table'");
-    while ($tableRes && ($row = $tableRes->fetchArray(SQLITE3_ASSOC))) {
-        $legacyTables[] = $row['name'] ?? '';
-    }
-    $hasLegacyPurchase = in_array('purchase', $legacyTables, true);
-    $hasLegacyPurchaseItems = in_array('purchase_items', $legacyTables, true);
+    if ($db->driver() === 'sqlite') {
+        $hasLegacyPurchase = false;
+        $legacyTables = [];
+        $tableRes = $db->query("SELECT name FROM sqlite_master WHERE type='table'");
+        while ($tableRes && ($row = $tableRes->fetchArray(SQLITE3_ASSOC))) {
+            $legacyTables[] = $row['name'] ?? '';
+        }
+        $hasLegacyPurchase = in_array('purchase', $legacyTables, true);
+        $hasLegacyPurchaseItems = in_array('purchase_items', $legacyTables, true);
 
-    if ($hasLegacyPurchase && $hasLegacyPurchaseItems) {
-        $purchaseCount = intval($db->querySingle("SELECT COUNT(1) FROM purchases"));
-        $saleCount = intval($db->querySingle("SELECT COUNT(1) FROM sales"));
+        if ($hasLegacyPurchase && $hasLegacyPurchaseItems) {
+            $purchaseCount = intval($db->querySingle("SELECT COUNT(1) FROM purchases"));
+            $saleCount = intval($db->querySingle("SELECT COUNT(1) FROM sales"));
 
-        if ($purchaseCount === 0 && $saleCount === 0) {
-            $db->exec("INSERT INTO purchases (cid, partner_id, totalAmount, amountPaid, status, createdAt)
-                       SELECT cid, partner_id, totalAmount, amountPaid, status, createdAt
-                       FROM purchase
-                       WHERE LOWER(COALESCE(transaction_type,'buy')) IN ('buy','purchase')");
+            if ($purchaseCount === 0 && $saleCount === 0) {
+                $db->exec("INSERT INTO purchases (cid, partner_id, totalAmount, amountPaid, status, createdAt)
+                           SELECT cid, partner_id, totalAmount, amountPaid, status, createdAt
+                           FROM purchase
+                           WHERE LOWER(COALESCE(transaction_type,'buy')) IN ('buy','purchase')");
 
-            $db->exec("INSERT INTO purchases_items (purchase_id, product_id, qty, costPrice, created_at)
-                       SELECT p_new.purchase_id, pi.product_id, pi.qty, pi.costPrice, pi.created_at
-                       FROM purchase_items pi
-                       INNER JOIN purchase p_old ON p_old.purchase_id = pi.purchase_id
-                       INNER JOIN purchases p_new
-                           ON p_new.cid = p_old.cid
-                          AND p_new.partner_id = p_old.partner_id
-                          AND p_new.totalAmount = p_old.totalAmount
-                          AND p_new.amountPaid = p_old.amountPaid
-                          AND p_new.status = p_old.status
-                          AND p_new.createdAt = p_old.createdAt
-                       WHERE LOWER(COALESCE(p_old.transaction_type,'buy')) IN ('buy','purchase')");
+                $db->exec("INSERT INTO purchases_items (purchase_id, product_id, qty, costPrice, created_at)
+                           SELECT p_new.purchase_id, pi.product_id, pi.qty, pi.costPrice, pi.created_at
+                           FROM purchase_items pi
+                           INNER JOIN purchase p_old ON p_old.purchase_id = pi.purchase_id
+                           INNER JOIN purchases p_new
+                               ON p_new.cid = p_old.cid
+                              AND p_new.partner_id = p_old.partner_id
+                              AND p_new.totalAmount = p_old.totalAmount
+                              AND p_new.amountPaid = p_old.amountPaid
+                              AND p_new.status = p_old.status
+                              AND p_new.createdAt = p_old.createdAt
+                           WHERE LOWER(COALESCE(p_old.transaction_type,'buy')) IN ('buy','purchase')");
 
-            $db->exec("INSERT INTO sales (cid, partner_id, totalAmount, amountPaid, status, createdAt)
-                       SELECT cid, partner_id, totalAmount, amountPaid, status, createdAt
-                       FROM purchase
-                       WHERE LOWER(COALESCE(transaction_type,'buy')) IN ('sell','sale')");
+                $db->exec("INSERT INTO sales (cid, partner_id, totalAmount, amountPaid, status, createdAt)
+                           SELECT cid, partner_id, totalAmount, amountPaid, status, createdAt
+                           FROM purchase
+                           WHERE LOWER(COALESCE(transaction_type,'buy')) IN ('sell','sale')");
 
-            $db->exec("INSERT INTO sales_items (sale_id, product_id, qty, costPrice, created_at)
-                       SELECT s_new.sale_id, pi.product_id, pi.qty, pi.costPrice, pi.created_at
-                       FROM purchase_items pi
-                       INNER JOIN purchase p_old ON p_old.purchase_id = pi.purchase_id
-                       INNER JOIN sales s_new
-                           ON s_new.cid = p_old.cid
-                          AND s_new.partner_id = p_old.partner_id
-                          AND s_new.totalAmount = p_old.totalAmount
-                          AND s_new.amountPaid = p_old.amountPaid
-                          AND s_new.status = p_old.status
-                          AND s_new.createdAt = p_old.createdAt
-                       WHERE LOWER(COALESCE(p_old.transaction_type,'buy')) IN ('sell','sale')");
+                $db->exec("INSERT INTO sales_items (sale_id, product_id, qty, costPrice, created_at)
+                           SELECT s_new.sale_id, pi.product_id, pi.qty, pi.costPrice, pi.created_at
+                           FROM purchase_items pi
+                           INNER JOIN purchase p_old ON p_old.purchase_id = pi.purchase_id
+                           INNER JOIN sales s_new
+                               ON s_new.cid = p_old.cid
+                              AND s_new.partner_id = p_old.partner_id
+                              AND s_new.totalAmount = p_old.totalAmount
+                              AND s_new.amountPaid = p_old.amountPaid
+                              AND s_new.status = p_old.status
+                              AND s_new.createdAt = p_old.createdAt
+                           WHERE LOWER(COALESCE(p_old.transaction_type,'buy')) IN ('sell','sale')");
+            }
         }
     }
 
@@ -380,18 +382,18 @@ try {
         $db->exec($index);
     }
 
-    echo "✅ Fresh SQLite schema created successfully.";
+    $db->exec("CREATE TABLE IF NOT EXISTS remember_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        cid INTEGER NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+    )");
+
+    echo "✅ Database schema initialized successfully (driver: " . $db->driver() . ").";
 
 } catch (Throwable $e) {
     http_response_code(500);
     echo "❌ Initialization failed: " . $e->getMessage();
 }
-
-  $db->exec("CREATE TABLE IF NOT EXISTS remember_tokens (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                cid INTEGER NOT NULL,
-                token_hash TEXT NOT NULL UNIQUE,
-                expires_at INTEGER NOT NULL,
-                created_at INTEGER DEFAULT (strftime('%s','now'))
-            )");

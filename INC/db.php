@@ -209,6 +209,29 @@ class AppDbConnection {
         return $stmt === false ? false : new AppDbResult('pgsql', $stmt);
     }
 
+    public function querySingle(string $sql, bool $entireRow = false) {
+        if ($this->driver === 'sqlite') {
+            return $this->native->querySingle($sql, $entireRow);
+        }
+
+        $stmt = $this->native->query($this->normalizeSqlForPg($sql));
+        if (!$stmt) {
+            return null;
+        }
+
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row === false) {
+            return null;
+        }
+
+        if ($entireRow) {
+            return $row;
+        }
+
+        $first = array_values($row);
+        return $first[0] ?? null;
+    }
+
     public function prepare(string $sql) {
         if ($this->driver === 'sqlite') {
             $stmt = $this->native->prepare($sql);
