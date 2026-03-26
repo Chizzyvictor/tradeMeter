@@ -1,20 +1,13 @@
 <?php
+require_once __DIR__ . '/INC/db.php';
 
 // ============================
 //  FRESH SQLITE INITIALIZER
 // ============================
 
-class MyDB extends SQLite3 {
-    public function __construct() {
-        $this->open(__DIR__ . '/mysqlitedb.db');
-    }
-}
-
 try {
 
-    $db = new MyDB();
-    $db->enableExceptions(true);
-    $db->exec('PRAGMA foreign_keys = ON;');
+    $db = appDbConnect();
 
     // ============================
     // CREATE TABLES

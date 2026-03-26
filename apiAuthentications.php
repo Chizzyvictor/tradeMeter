@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once __DIR__ . '/INC/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -359,12 +360,7 @@ function upsertUserSession(SQLite3 $db, int $userId, int $cid, string $sessionId
 // -------------------------
 // Database Connection
 // -------------------------
-class MyDB extends SQLite3 {
-    function __construct() {
-       $this->open('mysqlitedb.db');
-    }
-}
-$db = new MyDB();
+$db = appDbConnect();
 
 function ensureRbacSchema(SQLite3 $db): void {
     $db->exec("CREATE TABLE IF NOT EXISTS users (

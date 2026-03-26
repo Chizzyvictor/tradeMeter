@@ -1,5 +1,6 @@
 <?php
 session_start();
+require_once __DIR__ . '/INC/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -36,12 +37,7 @@ $_SESSION['last_activity'] = time();
 // -------------------------
 // Database Connection
 // -------------------------
-class MyDB extends SQLite3 {
-    function __construct() {
-       $this->open('mysqlitedb.db');
-    }
-}
-$db = new MyDB();
+$db = appDbConnect();
 
 define('SALE_ID_OFFSET', 1000000000);
 

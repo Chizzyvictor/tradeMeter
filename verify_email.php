@@ -1,11 +1,6 @@
 <?php
 session_start();
-
-class MyDB extends SQLite3 {
-    function __construct() {
-        $this->open('mysqlitedb.db');
-    }
-}
+require_once __DIR__ . '/INC/db.php';
 
 function ensureVerificationColumns(SQLite3 $db): void {
     $columns = [];
@@ -31,7 +26,7 @@ $message = 'Invalid or expired verification link.';
 
 $token = trim((string)($_GET['token'] ?? ''));
 if ($token !== '') {
-    $db = new MyDB();
+    $db = appDbConnect();
     ensureVerificationColumns($db);
 
     $tokenHash = hash('sha256', $token);

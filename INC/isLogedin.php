@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/db.php';
+
 function isHttpsRequestRemember(): bool {
     if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
         return true;
@@ -179,7 +181,7 @@ if (empty($_SESSION['isLogedin'])) {
     $autoLoggedIn = false;
 
     if ($rememberToken !== '') {
-        $rdb = new SQLite3(__DIR__ . '/../mysqlitedb.db');
+        $rdb = appDbConnect();
         $tokenHash = hash('sha256', $rememberToken);
         $now = time();
 
@@ -325,7 +327,7 @@ if (empty($_SESSION['isLogedin'])) {
 }
 
 if (!empty($_SESSION['isLogedin'])) {
-    $rdb = new SQLite3(__DIR__ . '/../mysqlitedb.db');
+    $rdb = appDbConnect();
     $now = time();
     ensureAuthSecurityTables($rdb);
     $currentSessionId = session_id();
