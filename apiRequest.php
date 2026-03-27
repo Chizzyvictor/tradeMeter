@@ -31,8 +31,8 @@ switch ($action) {
 
         $partnerStatsStmt = $db->prepare(" 
             SELECT
-                IFNULL(SUM(outstanding),0) AS outstanding,
-                IFNULL(SUM(advancePayment),0) AS advancePayment,
+                COALESCE(SUM(outstanding),0) AS outstanding,
+                COALESCE(SUM(advancePayment),0) AS advancePayment,
                 COUNT(CASE WHEN outstanding > 0 THEN 1 END) AS activeDebtors,
                 COUNT(CASE WHEN advancePayment > 0 THEN 1 END) AS activeCreditors,
                 COUNT(sid) AS totalPartners
@@ -44,10 +44,10 @@ switch ($action) {
 
         $transactionStatsStmt = $db->prepare(" 
             SELECT
-                IFNULL((SELECT SUM(totalAmount) FROM sales WHERE cid = :sid {$dateFilter}),0) AS totalSales,
-                IFNULL((SELECT SUM(totalAmount) FROM purchases WHERE cid = :pid {$dateFilter}),0) AS totalPurchases,
-                IFNULL((SELECT COUNT(sale_id) FROM sales WHERE cid = :sidc {$dateFilter}),0) +
-                IFNULL((SELECT COUNT(purchase_id) FROM purchases WHERE cid = :pidc {$dateFilter}),0) AS rangeTransactions
+                COALESCE((SELECT SUM(totalAmount) FROM sales WHERE cid = :sid {$dateFilter}),0) AS totalSales,
+                COALESCE((SELECT SUM(totalAmount) FROM purchases WHERE cid = :pid {$dateFilter}),0) AS totalPurchases,
+                COALESCE((SELECT COUNT(sale_id) FROM sales WHERE cid = :sidc {$dateFilter}),0) +
+                COALESCE((SELECT COUNT(purchase_id) FROM purchases WHERE cid = :pidc {$dateFilter}),0) AS rangeTransactions
         ");
         $transactionStatsStmt->bindValue(':sid', $cid, SQLITE3_INTEGER);
         $transactionStatsStmt->bindValue(':pid', $cid, SQLITE3_INTEGER);
@@ -56,7 +56,7 @@ switch ($action) {
         $transactionStatsRow = $transactionStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
         $inventoryValueStmt = $db->prepare(" 
-            SELECT IFNULL(SUM(COALESCE(inv.qty,0) * COALESCE(p.cost_price,0)),0) AS inventoryValue
+            SELECT COALESCE(SUM(COALESCE(inv.qty,0) * COALESCE(p.cost_price,0)),0) AS inventoryValue
             FROM products p
             LEFT JOIN (
                 SELECT product_id, cid, SUM(quantity) AS qty
@@ -75,8 +75,8 @@ switch ($action) {
             SELECT
                 pr.product_id,
                 pr.product_name,
-                IFNULL(SUM(si.qty),0) AS total_qty,
-                IFNULL(SUM(si.total),0) AS total_amount
+                COALESCE(SUM(si.qty),0) AS total_qty,
+                COALESCE(SUM(si.total),0) AS total_amount
             FROM sales_items si
             INNER JOIN sales t ON t.sale_id = si.sale_id
             INNER JOIN products pr ON pr.product_id = si.product_id
@@ -97,7 +97,7 @@ switch ($action) {
                 par.sid,
                 par.sName,
                 COUNT(t.purchase_id) AS transactions,
-                IFNULL(SUM(t.totalAmount),0) AS total_amount
+                COALESCE(SUM(t.totalAmount),0) AS total_amount
             FROM purchases t
             INNER JOIN partner par ON par.sid = t.partner_id
             WHERE t.cid = :cid {$dateFilterAlias}
@@ -117,7 +117,7 @@ switch ($action) {
                 par.sid,
                 par.sName,
                 COUNT(t.sale_id) AS transactions,
-                IFNULL(SUM(t.totalAmount),0) AS total_amount
+                COALESCE(SUM(t.totalAmount),0) AS total_amount
             FROM sales t
             INNER JOIN partner par ON par.sid = t.partner_id
             WHERE t.cid = :cid {$dateFilterAlias}
