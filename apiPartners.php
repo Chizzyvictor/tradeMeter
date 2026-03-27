@@ -12,30 +12,52 @@ switch ($action) {
         $email   = strtolower(safe_input($_POST['aEmail'] ?? ''));
         $address = safe_input($_POST['aAddress'] ?? '');
         $phone   = safe_input($_POST['aPhone'] ?? '');
-          $logo    = handleFileUpload('partnerImage', 'user.jpg');
+        $logo    = handleFileUpload('partnerImage', 'user.jpg');
         if ($name === '') respond("error", "Partner name required");
         $dup = $db->prepare("SELECT 1 FROM partner WHERE cid=:cid AND lower(sName)=lower(:name)");
         $dup->bindValue(':cid', $cid, SQLITE3_INTEGER);
         $dup->bindValue(':name', $name, SQLITE3_TEXT);
         if ($dup->execute()->fetchArray())
             respond("error", "Partner name already exists");
-        $stmt = $db->prepare("
-            INSERT INTO partner
-            (sName, sEmail, sPhone, sAddress, outstanding, advancePayment, sLogo, cid, created_at, updated_at)
-            VALUES
-            (:name, :email, :phone, :address, 0, 0, :logo, :cid, :now, :now)
-        ");
-        $stmt->bindValue(':name', $name, SQLITE3_TEXT);
-        $stmt->bindValue(':email', $email, SQLITE3_TEXT);
-        $stmt->bindValue(':phone', $phone, SQLITE3_TEXT);
-        $stmt->bindValue(':address', $address, SQLITE3_TEXT);
-        $stmt->bindValue(':logo', $logo, SQLITE3_TEXT);
-        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-        $stmt->bindValue(':now', $now, SQLITE3_INTEGER);
-        if ($stmt->execute()) {
+
+        try {
+            // Primary insert path for schemas that include created_at/updated_at.
+            $stmt = $db->prepare("
+                INSERT INTO partner
+                (sName, sEmail, sPhone, sAddress, outstanding, advancePayment, sLogo, cid, created_at, updated_at)
+                VALUES
+                (:name, :email, :phone, :address, 0, 0, :logo, :cid, :now, :now)
+            ");
+            $stmt->bindValue(':name', $name, SQLITE3_TEXT);
+            $stmt->bindValue(':email', $email, SQLITE3_TEXT);
+            $stmt->bindValue(':phone', $phone, SQLITE3_TEXT);
+            $stmt->bindValue(':address', $address, SQLITE3_TEXT);
+            $stmt->bindValue(':logo', $logo, SQLITE3_TEXT);
+            $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $stmt->bindValue(':now', $now, SQLITE3_INTEGER);
+            $stmt->execute();
             respond("success", "Partner added successfully");
+        } catch (Throwable $firstInsertError) {
+            try {
+                // Fallback insert path for older schemas without created_at/updated_at.
+                $fallback = $db->prepare("
+                    INSERT INTO partner
+                    (sName, sEmail, sPhone, sAddress, outstanding, advancePayment, sLogo, cid)
+                    VALUES
+                    (:name, :email, :phone, :address, 0, 0, :logo, :cid)
+                ");
+                $fallback->bindValue(':name', $name, SQLITE3_TEXT);
+                $fallback->bindValue(':email', $email, SQLITE3_TEXT);
+                $fallback->bindValue(':phone', $phone, SQLITE3_TEXT);
+                $fallback->bindValue(':address', $address, SQLITE3_TEXT);
+                $fallback->bindValue(':logo', $logo, SQLITE3_TEXT);
+                $fallback->bindValue(':cid', $cid, SQLITE3_INTEGER);
+                $fallback->execute();
+                respond("success", "Partner added successfully");
+            } catch (Throwable $secondInsertError) {
+                respond("error", "Unable to create partner: " . $secondInsertError->getMessage());
+            }
         }
-        respond("error", $db->lastErrorMsg());
         break;
 
 
