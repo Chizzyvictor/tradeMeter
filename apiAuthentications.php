@@ -78,6 +78,10 @@ function boolFromEnv(string $value): bool {
     return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
 }
 
+function isEmailVerificationStrict(): bool {
+    return boolFromEnv((string)envValue('EMAIL_VERIFICATION_STRICT', 'true'));
+}
+
 function sendAppEmail(string $toEmail, string $recipientName, string $subject, string $textMessage, string $htmlMessage = ''): bool {
     $host = trim((string)($_SERVER['HTTP_HOST'] ?? 'localhost'));
     $fromDomain = strpos($host, ':') !== false ? explode(':', $host)[0] : $host;
@@ -799,11 +803,29 @@ switch ($action) {
             assignUserRole($db, $userId, $companyId, 'Owner');
 
             if (!sendVerificationEmail($email, $fullName, $verificationToken)) {
-                throw new Exception('Could not send verification email. Please check mail server configuration and try again.');
+                if (isEmailVerificationStrict()) {
+                    throw new Exception('Could not send verification email. Please check mail server configuration and try again.');
+                }
+
+                $verifyFallbackStmt = $db->prepare("UPDATE users
+                                                    SET email_verified_at = :verified_at,
+                                                        email_verification_token_hash = NULL,
+                                                        email_verification_expires_at = NULL
+                                                    WHERE user_id = :uid");
+                if ($verifyFallbackStmt) {
+                    $verifyFallbackStmt->bindValue(':verified_at', $now, SQLITE3_INTEGER);
+                    $verifyFallbackStmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+                    $verifyFallbackStmt->execute();
+                }
+
+                error_log('TradeMeter signup warning: verification email failed, auto-verified due to EMAIL_VERIFICATION_STRICT=false.');
             }
 
             $db->exec("COMMIT");
-            respond("success", "Account created. Please verify your email before logging in.");
+            if (isEmailVerificationStrict()) {
+                respond("success", "Account created. Please verify your email before logging in.");
+            }
+            respond("success", "Account created. Email verification is currently bypassed because mail delivery is unavailable.");
         } catch (Throwable $e) {
             $db->exec("ROLLBACK");
             respond("error", $e->getMessage());
