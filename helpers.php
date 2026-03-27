@@ -519,12 +519,21 @@ function appCloudinaryConfig(): array {
     $cloudinaryUrl = trim((string)appEnv('CLOUDINARY_URL', ''));
     $folder = trim((string)appEnv('CLOUDINARY_FOLDER', 'trademeter'));
 
+    // Validate CLOUDINARY_CLOUD_NAME; if invalid or unset, clear it
+    if ($cloudName !== '' && !isValidCloudinaryCloudName($cloudName)) {
+        $cloudName = '';
+    }
+
     // Accept either separate CLOUDINARY_* vars or a single CLOUDINARY_URL.
     if ($cloudinaryUrl !== '') {
         $urlCfg = parseCloudinaryUrl($cloudinaryUrl);
-        if ($cloudName === '' || !isValidCloudinaryCloudName($cloudName)) {
-            $cloudName = (string)($urlCfg['cloud_name'] ?? $cloudName);
+        $urlCloudName = (string)($urlCfg['cloud_name'] ?? '');
+        
+        // Only use URL's cloud_name if our CLOUDINARY_CLOUD_NAME is empty AND URL's is valid
+        if ($cloudName === '' && $urlCloudName !== '' && isValidCloudinaryCloudName($urlCloudName)) {
+            $cloudName = $urlCloudName;
         }
+        
         if ($apiKey === '') {
             $apiKey = (string)($urlCfg['api_key'] ?? '');
         }
