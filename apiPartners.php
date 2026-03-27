@@ -35,7 +35,10 @@ switch ($action) {
             $stmt->bindValue(':logo', $logo, SQLITE3_TEXT);
             $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
             $stmt->bindValue(':now', $now, SQLITE3_INTEGER);
-            $stmt->execute();
+            $result = $stmt->execute();
+            if ($result === false) {
+                throw new Exception("Insert with timestamps failed");
+            }
             respond("success", "Partner added successfully");
         } catch (Throwable $firstInsertError) {
             try {
@@ -52,7 +55,10 @@ switch ($action) {
                 $fallback->bindValue(':address', $address, SQLITE3_TEXT);
                 $fallback->bindValue(':logo', $logo, SQLITE3_TEXT);
                 $fallback->bindValue(':cid', $cid, SQLITE3_INTEGER);
-                $fallback->execute();
+                $fbResult = $fallback->execute();
+                if ($fbResult === false) {
+                    throw new Exception("Insert without timestamps also failed");
+                }
                 respond("success", "Partner added successfully");
             } catch (Throwable $secondInsertError) {
                 respond("error", "Unable to create partner: " . $secondInsertError->getMessage());
@@ -93,9 +99,11 @@ switch ($action) {
         $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
         $stmt->bindValue(':now', $now, SQLITE3_INTEGER);
-        if ($stmt->execute())
-            respond("success", "Partner updated successfully");
-        respond("error", $db->lastErrorMsg());
+        $result = $stmt->execute();
+        if ($result === false) {
+            respond("error", "Unable to update partner");
+        }
+        respond("success", "Partner updated successfully");
         break;
 
 
@@ -111,10 +119,11 @@ switch ($action) {
         $stmt = $db->prepare("DELETE FROM partner WHERE sid = :id AND cid = :cid");
         $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-        if ($stmt->execute()) {
-            respond("success", "Partner deleted successfully");
+        $result = $stmt->execute();
+        if ($result === false) {
+            respond("error", "Unable to delete partner");
         }
-        respond("error", $db->lastErrorMsg());
+        respond("success", "Partner deleted successfully");
         break;
 
         
