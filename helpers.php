@@ -482,11 +482,56 @@ function loadCompany($db, $cid) {
     return $stmt->execute()->fetchArray(SQLITE3_ASSOC);
 }
 
+function parseCloudinaryUrl(string $url): array {
+    $url = trim($url);
+    if ($url === '') {
+        return [];
+    }
+
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return [];
+    }
+
+    return [
+        'cloud_name' => trim((string)($parts['host'] ?? '')),
+        'api_key' => trim((string)($parts['user'] ?? '')),
+        'api_secret' => trim((string)($parts['pass'] ?? '')),
+    ];
+}
+
+function isValidCloudinaryCloudName(string $cloudName): bool {
+    if ($cloudName === '') {
+        return false;
+    }
+
+    if (in_array(strtolower($cloudName), ['root', 'your_cloud_name', 'cloud_name'], true)) {
+        return false;
+    }
+
+    return preg_match('/^[A-Za-z0-9_-]+$/', $cloudName) === 1;
+}
+
 function appCloudinaryConfig(): array {
     $cloudName = trim((string)appEnv('CLOUDINARY_CLOUD_NAME', ''));
     $apiKey = trim((string)appEnv('CLOUDINARY_API_KEY', ''));
     $apiSecret = trim((string)appEnv('CLOUDINARY_API_SECRET', ''));
+    $cloudinaryUrl = trim((string)appEnv('CLOUDINARY_URL', ''));
     $folder = trim((string)appEnv('CLOUDINARY_FOLDER', 'trademeter'));
+
+    // Accept either separate CLOUDINARY_* vars or a single CLOUDINARY_URL.
+    if ($cloudinaryUrl !== '') {
+        $urlCfg = parseCloudinaryUrl($cloudinaryUrl);
+        if ($cloudName === '' || !isValidCloudinaryCloudName($cloudName)) {
+            $cloudName = (string)($urlCfg['cloud_name'] ?? $cloudName);
+        }
+        if ($apiKey === '') {
+            $apiKey = (string)($urlCfg['api_key'] ?? '');
+        }
+        if ($apiSecret === '') {
+            $apiSecret = (string)($urlCfg['api_secret'] ?? '');
+        }
+    }
 
     return [
         'cloud_name' => $cloudName,
@@ -498,7 +543,9 @@ function appCloudinaryConfig(): array {
 
 function appCloudinaryEnabled(): bool {
     $cfg = appCloudinaryConfig();
-    return $cfg['cloud_name'] !== '' && $cfg['api_key'] !== '' && $cfg['api_secret'] !== '';
+    return isValidCloudinaryCloudName((string)$cfg['cloud_name'])
+        && $cfg['api_key'] !== ''
+        && $cfg['api_secret'] !== '';
 }
 
 function uploadImageToCloudinary(string $tmpPath, string $originalName, string $subFolder = ''): ?string {
