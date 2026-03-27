@@ -163,6 +163,25 @@ class AppCore {
     return "₦" + this.formatNumber(amount);
   }
 
+  static isAbsoluteUrl(value) {
+    return /^https?:\/\//i.test(String(value || "").trim());
+  }
+
+  resolveImagePath(value, baseDir, fallback) {
+    const trimmed = String(value || "").trim();
+    if (AppCore.isAbsoluteUrl(trimmed)) {
+      return trimmed;
+    }
+
+    const normalizedFallback = String(fallback || "").trim();
+    if (!trimmed) {
+      return normalizedFallback;
+    }
+
+    const normalizedBase = String(baseDir || "").replace(/\/+$/, "");
+    return `${normalizedBase}/${trimmed}`;
+  }
+
   static safeHideModal(modalSelector) {
     const modalElement = document.querySelector(modalSelector);
     if (!modalElement) return;
@@ -399,7 +418,10 @@ class Auth {
       url: "apiAuthentications.php",
       action: "cLogo",
       onSuccess: res => {
-        if (res.data) $("#cLogo").attr("src", `Images/companyDP/${res.data}`);
+        if (res.data) {
+          const src = this.app.resolveImagePath(res.data, "Images/companyDP", "Images/companyDP/logo.jpg");
+          $("#cLogo").attr("src", src);
+        }
       }
     });
   }

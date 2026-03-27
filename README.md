@@ -492,6 +492,12 @@ heroku config:set SMTP_PASSWORD=your_email_password
 heroku config:set SMTP_ENCRYPTION=tls
 heroku config:set SMTP_FROM_EMAIL=no-reply@yourdomain.com
 heroku config:set SMTP_FROM_NAME=TradeMeter
+
+# Optional but recommended on Heroku (persistent image uploads)
+heroku config:set CLOUDINARY_CLOUD_NAME=your_cloud_name
+heroku config:set CLOUDINARY_API_KEY=your_api_key
+heroku config:set CLOUDINARY_API_SECRET=your_api_secret
+heroku config:set CLOUDINARY_FOLDER=trademeter
 ```
 
 5. Deploy:
@@ -523,7 +529,7 @@ heroku run php exe.php
 - `helpers.php` (and dependent APIs: inventory, partners, request, settings, transactions) now also use `appDbConnectCompat()`.
 - Runtime still supports SQLite by default, with optional `SQLITE_DB_PATH` override.
 - Do not rely on `mysqlitedb.db` persistence on Heroku.
-- Do not rely on local `Images/` folder persistence on Heroku.
+- Local `Images/` writes are fallback-only; configure Cloudinary vars for persistent uploads.
 
 ### Optional: one-off data backup commands
 

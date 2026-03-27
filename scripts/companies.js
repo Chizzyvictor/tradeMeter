@@ -165,7 +165,7 @@ $(document).ready(function () {
     const company = companies.find((c) => String(c.cid) === String(id));
     if (!company) return;
     const logoFile = String(company.cLogo || 'logo.jpg').trim();
-    const logoPath = 'Images/companyDP/' + (logoFile || 'logo.jpg');
+    const logoPath = app.resolveImagePath(logoFile, 'Images/companyDP', 'Images/companyDP/logo.jpg');
     const fallbackLogo = 'Images/companyDP/logo.jpg';
     const regDate = app.formatDateSafe(company.regDate, company.regDate || '-');
 

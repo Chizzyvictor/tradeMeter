@@ -81,11 +81,12 @@ class Partners {
     const cardRows = [];
 
     partners.forEach(p => {
+      const logo = this.app.resolveImagePath(p.sLogo, "Images/partnersDP", "Images/partnersDP/user.jpg");
 
       tableRows.push(`
         <tr class="partnerRow" data-id="${p.sid}">
           <td>
-            <img src="Images/partnersDP/${p.sLogo || 'user.jpg'}"
+            <img src="${logo}"
               width="40"
               class="image rounded-circle"
             >
@@ -100,7 +101,7 @@ class Partners {
       cardRows.push(`
         <div class="card shadow-sm partners-mobile-card mb-3 partnerRow" data-id="${p.sid}">
           <div class="card-body p-3 d-flex align-items-center">
-            <img src="Images/partnersDP/${p.sLogo || 'user.jpg'}" width="44" class="image rounded-circle mr-2">
+            <img src="${logo}" width="44" class="image rounded-circle mr-2">
             <div class="flex-grow-1">
               <h6 class="mb-1">${p.sName}</h6>
               <div>${amountCell(p)}</div>
@@ -170,10 +171,11 @@ class Partners {
 
     if (!partner) return;
 
+    const logo = this.app.resolveImagePath(partner.sLogo, "Images/partnersDP", "Images/partnersDP/user.jpg");
     const html = `
       <div class="card my-3">
       <div class="card-header d-flex align-items-center">
-      <img src="Images/partnersDP/${partner.sLogo || 'user.jpg'}"
+      <img src="${logo}"
         width="50"
         class="image rounded-circle"
       >
@@ -398,11 +400,12 @@ class Partners {
     const cardRows = [];
 
     filtered.forEach(p => {
+      const logo = this.app.resolveImagePath(p.sLogo, "Images/partnersDP", "Images/partnersDP/user.jpg");
 
       tableRows.push(`
         <tr class="partnerRow" data-id="${p.sid}">
           <td>
-            <img src="Images/partnersDP/${p.sLogo || 'user.jpg'}"
+            <img src="${logo}"
               width="40"
               class="image rounded-circle"
             >
@@ -415,7 +418,7 @@ class Partners {
       cardRows.push(`
         <div class="card shadow-sm partners-mobile-card mb-3 partnerRow" data-id="${p.sid}">
           <div class="card-body p-3 d-flex align-items-center">
-            <img src="Images/partnersDP/${p.sLogo || 'user.jpg'}" width="44" class="image rounded-circle mr-2">
+            <img src="${logo}" width="44" class="image rounded-circle mr-2">
             <div class="flex-grow-1">
               <h6 class="mb-1">${p.sName}</h6>
               <div>${amountCell(p)}</div>

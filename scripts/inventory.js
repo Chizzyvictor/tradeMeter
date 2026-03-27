@@ -244,7 +244,7 @@ class Inventory {
     }
 
     const tableHtml = rows.map((p) => {
-      const image = p.product_image ? `Images/productsDP/${p.product_image}` : "Images/productsDP/product.jpg";
+      const image = this.app.resolveImagePath(p.product_image, "Images/productsDP", "Images/productsDP/product.jpg");
       const qty = this.app.toNumber(p.quantity, 0);
       const reorder = this.app.toNumber(p.reorder_level, 0);
       const isActive = Number(p.is_active ?? 1) === 1;
@@ -271,7 +271,7 @@ class Inventory {
     }).join("");
 
     const cardsHtml = rows.map((p) => {
-      const image = p.product_image ? `Images/productsDP/${p.product_image}` : "Images/productsDP/product.jpg";
+      const image = this.app.resolveImagePath(p.product_image, "Images/productsDP", "Images/productsDP/product.jpg");
       const qty = this.app.toNumber(p.quantity, 0);
       const reorder = this.app.toNumber(p.reorder_level, 0);
       const isActive = Number(p.is_active ?? 1) === 1;
@@ -331,7 +331,7 @@ class Inventory {
   }
 
   renderProductDetails(product) {
-    const image = product.product_image ? `Images/productsDP/${product.product_image}` : "Images/productsDP/product.jpg";
+    const image = this.app.resolveImagePath(product.product_image, "Images/productsDP", "Images/productsDP/product.jpg");
     $("#productDetailsTitle").text(product.product_name || "Product Details");
     $("#productImage").attr("src", image);
     $("#productCategory").text(product.category_name || "Uncategorized");

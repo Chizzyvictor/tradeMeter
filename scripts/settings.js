@@ -117,7 +117,8 @@ class SettingsPage {
     $('#settingsCompanyName').text(cName);
     $('#settingsCompanyEmail').text(cEmail);
     $('#settingsRegDate').text(this.app.formatDateSafe(data.regDate, '-'));
-    $('#settingsCompanyLogo').attr('src', `Images/companyDP/${logo}`);
+    const logoSrc = this.app.resolveImagePath(logo, 'Images/companyDP', 'Images/companyDP/logo.jpg');
+    $('#settingsCompanyLogo').attr('src', logoSrc);
 
     $('#companyName').val(cName === '-' ? '' : cName);
     $('#companyEmail').val(cEmail === '-' ? '' : cEmail);

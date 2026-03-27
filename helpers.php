@@ -482,6 +482,81 @@ function loadCompany($db, $cid) {
     return $stmt->execute()->fetchArray(SQLITE3_ASSOC);
 }
 
+function appCloudinaryConfig(): array {
+    $cloudName = trim((string)appEnv('CLOUDINARY_CLOUD_NAME', ''));
+    $apiKey = trim((string)appEnv('CLOUDINARY_API_KEY', ''));
+    $apiSecret = trim((string)appEnv('CLOUDINARY_API_SECRET', ''));
+    $folder = trim((string)appEnv('CLOUDINARY_FOLDER', 'trademeter'));
+
+    return [
+        'cloud_name' => $cloudName,
+        'api_key' => $apiKey,
+        'api_secret' => $apiSecret,
+        'folder' => $folder,
+    ];
+}
+
+function appCloudinaryEnabled(): bool {
+    $cfg = appCloudinaryConfig();
+    return $cfg['cloud_name'] !== '' && $cfg['api_key'] !== '' && $cfg['api_secret'] !== '';
+}
+
+function uploadImageToCloudinary(string $tmpPath, string $originalName, string $subFolder = ''): ?string {
+    if (!appCloudinaryEnabled()) {
+        return null;
+    }
+
+    if (!function_exists('curl_init')) {
+        respond('error', 'cURL extension is required for Cloudinary uploads.');
+    }
+
+    $cfg = appCloudinaryConfig();
+    $timestamp = time();
+    $folder = trim($cfg['folder'], '/');
+    $subFolder = trim($subFolder, '/');
+    if ($subFolder !== '') {
+        $folder .= '/' . $subFolder;
+    }
+
+    $signatureBase = "folder={$folder}&timestamp={$timestamp}{$cfg['api_secret']}";
+    $signature = sha1($signatureBase);
+
+    $endpoint = 'https://api.cloudinary.com/v1_1/' . rawurlencode($cfg['cloud_name']) . '/image/upload';
+
+    $ch = curl_init($endpoint);
+    $postFields = [
+        'file' => new CURLFile($tmpPath, mime_content_type($tmpPath) ?: 'application/octet-stream', $originalName),
+        'api_key' => $cfg['api_key'],
+        'timestamp' => $timestamp,
+        'folder' => $folder,
+        'signature' => $signature,
+    ];
+
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $postFields,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = intval(curl_getinfo($ch, CURLINFO_HTTP_CODE));
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false || $curlError !== '') {
+        respond('error', 'Cloudinary upload failed: ' . ($curlError ?: 'unknown error'));
+    }
+
+    $data = json_decode((string)$response, true);
+    if (!is_array($data) || empty($data['secure_url']) || $httpCode < 200 || $httpCode >= 300) {
+        $cloudinaryError = is_array($data['error'] ?? null) ? ($data['error']['message'] ?? 'upload error') : 'upload error';
+        respond('error', 'Cloudinary upload failed: ' . $cloudinaryError);
+    }
+
+    return (string)$data['secure_url'];
+}
+
 
 
 
@@ -529,6 +604,14 @@ function handleFileUpload($fieldName, $oldFile = null) {
     $ext  = pathinfo($file["name"], PATHINFO_EXTENSION);
     $name = uniqid("img_", true) . "." . $ext;
     $path = UPLOAD_DIR . $name;
+
+    if (appCloudinaryEnabled()) {
+        $dir = trim((string)($_POST['dir'] ?? 'productsDP'));
+        $uploadedUrl = uploadImageToCloudinary($file['tmp_name'], (string)$file['name'], $dir);
+        if ($uploadedUrl) {
+            return $uploadedUrl;
+        }
+    }
 
     if (!move_uploaded_file($file["tmp_name"], $path)) {
         respond("error", "Failed to upload file.");
