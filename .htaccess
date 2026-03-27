@@ -5,6 +5,7 @@
 # ── HTTPS redirect ─────────────────────────────────────────
 RewriteEngine On
 RewriteCond %{HTTPS} off
+RewriteCond %{HTTP:X-Forwarded-Proto} !https [NC]
 RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
 
 # ── Block direct access to sensitive files ─────────────────
