@@ -2,32 +2,12 @@
 session_start();
 require_once __DIR__ . '/INC/db.php';
 
-function ensureVerificationColumns(SQLite3 $db): void {
-    $columns = [];
-    $res = $db->query("PRAGMA table_info(users)");
-    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
-        $columns[] = strtolower((string)($row['name'] ?? ''));
-    }
-
-    if (!in_array('email_verified_at', $columns, true)) {
-        $db->exec("ALTER TABLE users ADD COLUMN email_verified_at INTEGER");
-        $db->exec("UPDATE users SET email_verified_at = strftime('%s','now') WHERE email_verified_at IS NULL");
-    }
-    if (!in_array('email_verification_token_hash', $columns, true)) {
-        $db->exec("ALTER TABLE users ADD COLUMN email_verification_token_hash TEXT");
-    }
-    if (!in_array('email_verification_expires_at', $columns, true)) {
-        $db->exec("ALTER TABLE users ADD COLUMN email_verification_expires_at INTEGER");
-    }
-}
-
 $status = 'error';
 $message = 'Invalid or expired verification link.';
 
 $token = trim((string)($_GET['token'] ?? ''));
 if ($token !== '') {
-    $db = appDbConnect();
-    ensureVerificationColumns($db);
+    $db = appDbConnectCompat();
 
     $tokenHash = hash('sha256', $token);
     $now = time();
@@ -65,8 +45,6 @@ if ($token !== '') {
             }
         }
     }
-
-    $db->close();
 }
 
 include "INC/header.php";

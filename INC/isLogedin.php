@@ -27,7 +27,7 @@ function rememberClientIp(): string {
     return trim((string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
 }
 
-function rememberAudit(SQLite3 $db, string $eventType, int $userId = 0, int $cid = 0, array $details = []): void {
+function rememberAudit(AppDbConnection $db, string $eventType, int $userId = 0, int $cid = 0, array $details = []): void {
     $stmt = $db->prepare("INSERT INTO remember_token_audit (event_type, user_id, cid, ip_address, user_agent, details, created_at)
                           VALUES (:event_type, :user_id, :cid, :ip_address, :user_agent, :details, :created_at)");
     if (!$stmt) {
@@ -51,33 +51,13 @@ function rememberAudit(SQLite3 $db, string $eventType, int $userId = 0, int $cid
     $stmt->execute();
 }
 
-function ensureAuthSecurityTables(SQLite3 $db): void {
-    $db->exec("CREATE TABLE IF NOT EXISTS login_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        cid INTEGER,
-        ip_address TEXT,
-        user_agent TEXT,
-        login_time INTEGER,
-        status TEXT
-    )");
-
-    $db->exec("CREATE TABLE IF NOT EXISTS user_sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        cid INTEGER,
-        session_id TEXT NOT NULL UNIQUE,
-        ip_address TEXT,
-        user_agent TEXT,
-        last_activity INTEGER,
-        created_at INTEGER
-    )");
-
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_login_logs_time ON login_logs(login_time)");
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id, cid)");
+function ensureAuthSecurityTables(AppDbConnection $db): void {
+    // Tables should already exist from migrations
+    // This function is kept for backward compatibility but no longer creates tables
+    // as CREATE TABLE syntax differs between SQLite and PostgreSQL
 }
 
-function rememberLogLoginStatus(SQLite3 $db, int $userId, int $cid, string $status, int $time): void {
+function rememberLogLoginStatus(AppDbConnection $db, int $userId, int $cid, string $status, int $time): void {
     $stmt = $db->prepare("INSERT INTO login_logs (user_id, cid, ip_address, user_agent, login_time, status)
                           VALUES (:uid, :cid, :ip, :ua, :time, :status)");
     if (!$stmt) {
@@ -103,7 +83,7 @@ function rememberLogLoginStatus(SQLite3 $db, int $userId, int $cid, string $stat
     $stmt->execute();
 }
 
-function rememberUpsertUserSession(SQLite3 $db, int $userId, int $cid, string $sessionId, int $now): void {
+function rememberUpsertUserSession(AppDbConnection $db, int $userId, int $cid, string $sessionId, int $now): void {
     if ($userId <= 0 || $cid <= 0 || $sessionId === '') {
         return;
     }
@@ -129,7 +109,7 @@ function rememberUpsertUserSession(SQLite3 $db, int $userId, int $cid, string $s
     $ins->execute();
 }
 
-function rememberTouchSession(SQLite3 $db, string $sessionId, int $now): void {
+function rememberTouchSession(AppDbConnection $db, string $sessionId, int $now): void {
     if ($sessionId === '') {
         return;
     }
@@ -143,7 +123,7 @@ function rememberTouchSession(SQLite3 $db, string $sessionId, int $now): void {
     $stmt->execute();
 }
 
-function rememberSessionExists(SQLite3 $db, string $sessionId, int $userId, int $cid): bool {
+function rememberSessionExists(AppDbConnection $db, string $sessionId, int $userId, int $cid): bool {
     if ($sessionId === '' || $userId <= 0 || $cid <= 0) {
         return false;
     }
@@ -161,7 +141,7 @@ function rememberSessionExists(SQLite3 $db, string $sessionId, int $userId, int 
     return $res && $res->fetchArray(SQLITE3_ASSOC) !== false;
 }
 
-function rememberUserHasAnySession(SQLite3 $db, int $userId, int $cid): bool {
+function rememberUserHasAnySession(AppDbConnection $db, int $userId, int $cid): bool {
     if ($userId <= 0 || $cid <= 0) {
         return false;
     }
@@ -181,35 +161,15 @@ if (empty($_SESSION['isLogedin'])) {
     $autoLoggedIn = false;
 
     if ($rememberToken !== '') {
-        $rdb = appDbConnect();
+        $rdb = appDbConnectCompat();
         $tokenHash = hash('sha256', $rememberToken);
         $now = time();
 
-        // Ensure table exists in case this DB was created before the remember-me upgrade
-        $rdb->exec("CREATE TABLE IF NOT EXISTS remember_tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            cid INTEGER NOT NULL,
-            token_hash TEXT NOT NULL UNIQUE,
-            expires_at INTEGER NOT NULL,
-            created_at INTEGER DEFAULT (strftime('%s','now'))
-        )");
-
-        $rdb->exec("CREATE TABLE IF NOT EXISTS remember_token_audit (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_type TEXT NOT NULL,
-            user_id INTEGER,
-            cid INTEGER,
-            ip_address TEXT,
-            user_agent TEXT,
-            details TEXT,
-            created_at INTEGER DEFAULT (strftime('%s','now'))
-        )");
-
-        $rdb->exec("CREATE INDEX IF NOT EXISTS idx_token_hash ON remember_tokens(token_hash)");
-        $rdb->exec("CREATE INDEX IF NOT EXISTS idx_remember_audit_created_at ON remember_token_audit(created_at)");
-        $rdb->exec("DELETE FROM remember_tokens WHERE expires_at < " . intval($now));
+        // Tables should already exist from migrations
         ensureAuthSecurityTables($rdb);
+        
+        // Clean up expired tokens
+        $rdb->exec("DELETE FROM remember_tokens WHERE expires_at < " . intval($now));
 
         $stmt = $rdb->prepare(
             "SELECT rt.user_id, rt.cid, u.full_name, u.is_active
@@ -327,7 +287,7 @@ if (empty($_SESSION['isLogedin'])) {
 }
 
 if (!empty($_SESSION['isLogedin'])) {
-    $rdb = appDbConnect();
+    $rdb = appDbConnectCompat();
     $now = time();
     ensureAuthSecurityTables($rdb);
     $currentSessionId = session_id();
@@ -342,7 +302,6 @@ if (!empty($_SESSION['isLogedin'])) {
                 rememberUpsertUserSession($rdb, $uid, $cid, $currentSessionId, $now);
             } else {
                 // Session was revoked from another device.
-                $rdb->close();
                 session_unset();
                 session_destroy();
                 header("Location: login.php");
@@ -350,7 +309,5 @@ if (!empty($_SESSION['isLogedin'])) {
             }
         }
     }
-
-    $rdb->close();
 }
 ?>
