@@ -276,6 +276,7 @@ class AppDbConnection {
 
         $normalized = str_replace("strftime('%s','now')", 'EXTRACT(EPOCH FROM NOW())::bigint', $normalized);
         $normalized = preg_replace('/INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/i', 'BIGSERIAL PRIMARY KEY', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\bDATETIME\b/i', 'TIMESTAMP', $normalized) ?? $normalized;
 
         return $normalized;
     }
