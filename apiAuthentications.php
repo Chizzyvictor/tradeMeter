@@ -85,7 +85,9 @@ function sendAppEmail(string $toEmail, string $recipientName, string $subject, s
         $fromDomain = 'trademeter.local';
     }
 
-    $fromEmail = envValue('SMTP_FROM_EMAIL', 'no-reply@' . $fromDomain);
+    $smtpUsername = trim((string)envValue('SMTP_USERNAME', ''));
+    $fallbackFromEmail = $smtpUsername !== '' ? $smtpUsername : ('no-reply@' . $fromDomain);
+    $fromEmail = envValue('SMTP_FROM_EMAIL', $fallbackFromEmail);
     $fromName = envValue('SMTP_FROM_NAME', 'TradeMeter');
 
     // Preferred transport: SMTP via PHPMailer when configured.
@@ -93,30 +95,35 @@ function sendAppEmail(string $toEmail, string $recipientName, string $subject, s
     if ($smtpHost !== '') {
         tryLoadMailer();
         if (class_exists('\\PHPMailer\\PHPMailer\\PHPMailer')) {
-            $mailer = new \PHPMailer\PHPMailer\PHPMailer(true);
-            $mailer->isSMTP();
-            $mailer->Host = $smtpHost;
-            $mailer->Port = intval(envValue('SMTP_PORT', '587'));
-            $mailer->CharSet = 'UTF-8';
-            $mailer->SMTPAuth = boolFromEnv((string)envValue('SMTP_AUTH', 'true'));
-            $mailer->Username = (string)envValue('SMTP_USERNAME', '');
-            $mailer->Password = (string)envValue('SMTP_PASSWORD', '');
+            try {
+                $mailer = new \PHPMailer\PHPMailer\PHPMailer(true);
+                $mailer->isSMTP();
+                $mailer->Host = $smtpHost;
+                $mailer->Port = intval(envValue('SMTP_PORT', '587'));
+                $mailer->CharSet = 'UTF-8';
+                $mailer->SMTPAuth = boolFromEnv((string)envValue('SMTP_AUTH', 'true'));
+                $mailer->Username = $smtpUsername;
+                $mailer->Password = (string)envValue('SMTP_PASSWORD', '');
 
-            $encryption = strtolower(trim((string)envValue('SMTP_ENCRYPTION', 'tls')));
-            if ($encryption === 'ssl') {
-                $mailer->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
-            } else {
-                $mailer->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+                $encryption = strtolower(trim((string)envValue('SMTP_ENCRYPTION', 'tls')));
+                if ($encryption === 'ssl') {
+                    $mailer->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+                } else {
+                    $mailer->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+                }
+
+                $mailer->setFrom((string)$fromEmail, (string)$fromName);
+                $mailer->addAddress($toEmail, $recipientName);
+                $mailer->isHTML($htmlMessage !== '');
+                $mailer->Subject = $subject;
+                $mailer->Body = $htmlMessage !== '' ? $htmlMessage : nl2br(htmlspecialchars($textMessage, ENT_QUOTES, 'UTF-8'));
+                $mailer->AltBody = $textMessage;
+
+                return $mailer->send();
+            } catch (Throwable $mailError) {
+                error_log('TradeMeter mail error: ' . $mailError->getMessage());
+                return false;
             }
-
-            $mailer->setFrom($fromEmail, $fromName);
-            $mailer->addAddress($toEmail, $recipientName);
-            $mailer->isHTML($htmlMessage !== '');
-            $mailer->Subject = $subject;
-            $mailer->Body = $htmlMessage !== '' ? $htmlMessage : nl2br(htmlspecialchars($textMessage, ENT_QUOTES, 'UTF-8'));
-            $mailer->AltBody = $textMessage;
-
-            return $mailer->send();
         }
     }
 
