@@ -162,7 +162,7 @@ switch ($action) {
                 $stockStmt = $db->prepare("INSERT INTO inventory (product_id, cid, quantity, last_updated)
                                            VALUES (:product_id, :cid, :qty, CURRENT_TIMESTAMP)
                                            ON CONFLICT(product_id, cid) DO UPDATE SET
-                                           quantity = quantity + excluded.quantity,
+                                           quantity = inventory.quantity + excluded.quantity,
                                            last_updated = CURRENT_TIMESTAMP");
                 $stockStmt->bindValue(':product_id', $item['product_id'], SQLITE3_INTEGER);
                 $stockStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
