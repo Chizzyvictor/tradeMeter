@@ -20,6 +20,48 @@ class Partners {
     this.bindUI();
   }
 
+  normalizePartner(raw) {
+    const p = raw || {};
+    return {
+      sid: p.sid ?? p.SID ?? p.partner_id ?? p.partnerId ?? null,
+      sName: p.sName ?? p.sname ?? p.name ?? "",
+      sEmail: p.sEmail ?? p.semail ?? p.email ?? "",
+      sPhone: p.sPhone ?? p.sphone ?? p.phone ?? "",
+      sAddress: p.sAddress ?? p.saddress ?? p.address ?? "",
+      sLogo: p.sLogo ?? p.slogo ?? p.logo ?? "user.jpg",
+      outstanding: p.outstanding ?? p.Outstanding ?? 0,
+      advancePayment: p.advancePayment ?? p.advancepayment ?? p.advance_payment ?? 0
+    };
+  }
+
+  normalizeLedger(raw) {
+    const l = raw || {};
+    return {
+      ledger_id: l.ledger_id ?? l.ledgerid ?? l.id ?? null,
+      type: l.type ?? "",
+      debit: l.debit ?? 0,
+      credit: l.credit ?? 0,
+      outstanding: l.outstanding ?? 0,
+      advancePayment: l.advancePayment ?? l.advancepayment ?? l.advance_payment ?? 0,
+      note: l.note ?? "",
+      createdAt: l.createdAt ?? l.createdat ?? l.created_at ?? ""
+    };
+  }
+
+  normalizePurchase(raw) {
+    const p = raw || {};
+    return {
+      purchase_id: p.purchase_id ?? p.purchaseid ?? p.id ?? null,
+      partner_id: p.partner_id ?? p.partnerid ?? null,
+      transaction_type: p.transaction_type ?? p.transactiontype ?? p.type ?? "buy",
+      totalAmount: p.totalAmount ?? p.totalamount ?? p.total_amount ?? 0,
+      amountPaid: p.amountPaid ?? p.amountpaid ?? p.amount_paid ?? 0,
+      status: p.status ?? "",
+      createdAt: p.createdAt ?? p.createdat ?? p.created_at ?? "",
+      items: Array.isArray(p.items) ? p.items : []
+    };
+  }
+
   // ============================
   // LOAD PARTNERS
   // ============================
@@ -32,10 +74,9 @@ class Partners {
       action: action,
 
       onSuccess: res => {
-alert(JSON.stringify(res)); 
         if (!res || res.status !== "success") return;
 
-        this.state.partners = res.data || [];
+        this.state.partners = (res.data || []).map(p => this.normalizePartner(p));
 
         this.renderPartners();
 
@@ -132,11 +173,11 @@ alert(JSON.stringify(res));
         if (!res || res.status !== "success") return;
 
         const data = res || {};
-        
-        this.state.partnerDetails = data.partner || null;
-        this.state.currentPartner = data.partner.sid || null;
-        this.state.ledgers = data.partner_ledger || [];
-        this.state.purchases = data.purchases || [];
+
+        this.state.partnerDetails = data.partner ? this.normalizePartner(data.partner) : null;
+        this.state.currentPartner = this.state.partnerDetails ? this.state.partnerDetails.sid : null;
+        this.state.ledgers = (data.partner_ledger || []).map(l => this.normalizeLedger(l));
+        this.state.purchases = (data.purchases || []).map(p => this.normalizePurchase(p));
 
         this.renderPartnerDetails();
         this.renderLedgers();
