@@ -33,7 +33,7 @@ switch ($action) {
                 INSERT INTO partner
                 (sName, sEmail, sPhone, sAddress, outstanding, advancePayment, sLogo, cid, created_at, updated_at)
                 VALUES
-                (:name, :email, :phone, :address, 0, 0, :logo, :cid, :now, :now)
+                (:name, :email, :phone, :address, 0, 0, :logo, :cid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ");
             $stmt->bindValue(':name', $name, SQLITE3_TEXT);
             $stmt->bindValue(':email', $email, SQLITE3_TEXT);
@@ -41,7 +41,6 @@ switch ($action) {
             $stmt->bindValue(':address', $address, SQLITE3_TEXT);
             $stmt->bindValue(':logo', $logo, SQLITE3_TEXT);
             $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-            $stmt->bindValue(':now', $now, SQLITE3_INTEGER);
             $result = $stmt->execute();
             if ($result === false) {
                 throw new Exception("Insert with timestamps failed");
@@ -95,7 +94,7 @@ switch ($action) {
                 sPhone = :phone,
                 sAddress = :address,
                 sLogo = :logo,
-                updated_at = :now
+                updated_at = CURRENT_TIMESTAMP
             WHERE sid = :id AND cid = :cid
         ");
         $stmt->bindValue(':name', $name, SQLITE3_TEXT);
@@ -105,7 +104,6 @@ switch ($action) {
         $stmt->bindValue(':logo', $logo, SQLITE3_TEXT);
         $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-        $stmt->bindValue(':now', $now, SQLITE3_INTEGER);
         $result = $stmt->execute();
         if ($result === false) {
             respond("error", "Unable to update partner");
@@ -393,23 +391,21 @@ case "loadPartnerDetails":
             $advancePayment += $amount;
         }
 
-        $stmt = $db->prepare("UPDATE partner SET outstanding = :out, advancePayment = :adv, updated_at = :time WHERE sid = :sid AND cid = :cid");
+        $stmt = $db->prepare("UPDATE partner SET outstanding = :out, advancePayment = :adv, updated_at = CURRENT_TIMESTAMP WHERE sid = :sid AND cid = :cid");
         $stmt->bindValue(":out", $outstanding, SQLITE3_FLOAT);
         $stmt->bindValue(":adv", $advancePayment, SQLITE3_FLOAT);
-        $stmt->bindValue(":time", $now, SQLITE3_INTEGER);
         $stmt->bindValue(":sid", $sid, SQLITE3_INTEGER);
         $stmt->bindValue(":cid", $cid, SQLITE3_INTEGER);
         $ok = $stmt->execute();
 
         $stmt = $db->prepare("INSERT INTO partner_ledger (cid, sid, type, debit, credit, outstanding, advancePayment, note, reference_id, createdAt)
-                     VALUES (:cid, :sid, 'payDebt', 0, :amount, :outstanding, :advancePayment, :desc, NULL, :time)");
+                 VALUES (:cid, :sid, 'payDebt', 0, :amount, :outstanding, :advancePayment, :desc, NULL, CURRENT_TIMESTAMP)");
         $stmt->bindValue(":cid", $cid, SQLITE3_INTEGER);
         $stmt->bindValue(":sid", $sid, SQLITE3_INTEGER);
         $stmt->bindValue(":amount", $amount, SQLITE3_FLOAT);        
         $stmt->bindValue(":outstanding", $outstanding, SQLITE3_FLOAT);
         $stmt->bindValue(":advancePayment", $advancePayment, SQLITE3_FLOAT);
         $stmt->bindValue(":desc", $desc, SQLITE3_TEXT);
-        $stmt->bindValue(":time", $now, SQLITE3_INTEGER);
         $stmt->execute();
 
         if ($ok) {
@@ -454,23 +450,21 @@ case "loadPartnerDetails":
             $outstanding += $amount;
         }
 
-        $stmt = $db->prepare("UPDATE partner SET outstanding = :out, advancePayment = :adv, updated_at = :time WHERE sid = :sid AND cid = :cid");
+        $stmt = $db->prepare("UPDATE partner SET outstanding = :out, advancePayment = :adv, updated_at = CURRENT_TIMESTAMP WHERE sid = :sid AND cid = :cid");
         $stmt->bindValue(":out", $outstanding, SQLITE3_FLOAT);
         $stmt->bindValue(":adv", $advancePayment, SQLITE3_FLOAT);
-        $stmt->bindValue(":time", $now, SQLITE3_INTEGER);
         $stmt->bindValue(":sid", $sid, SQLITE3_INTEGER);
         $stmt->bindValue(":cid", $cid, SQLITE3_INTEGER);
         $ok = $stmt->execute();
 
         $stmt = $db->prepare("INSERT INTO partner_ledger (cid, sid, type, debit, credit, outstanding, advancePayment, note, reference_id, createdAt)
-                     VALUES (:cid, :sid, 'addDebt', :amount, 0, :outstanding, :advancePayment, :desc, NULL, :time)");
+                 VALUES (:cid, :sid, 'addDebt', :amount, 0, :outstanding, :advancePayment, :desc, NULL, CURRENT_TIMESTAMP)");
         $stmt->bindValue(":cid", $cid, SQLITE3_INTEGER);
         $stmt->bindValue(":sid", $sid, SQLITE3_INTEGER);
         $stmt->bindValue(":amount", $amount, SQLITE3_FLOAT);        
         $stmt->bindValue(":outstanding", $outstanding, SQLITE3_FLOAT);
         $stmt->bindValue(":advancePayment", $advancePayment, SQLITE3_FLOAT);
         $stmt->bindValue(":desc", $desc, SQLITE3_TEXT);
-        $stmt->bindValue(":time", $now, SQLITE3_INTEGER);
         $stmt->execute();
 
         if ($ok) {

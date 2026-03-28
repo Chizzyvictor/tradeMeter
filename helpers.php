@@ -454,7 +454,7 @@ function updatePartnerBalance($db, $sid, $cid, $out, $adv) {
         UPDATE partner
         SET outstanding = :out,
             advancePayment = :adv,
-            updated_at = strftime('%s','now')
+            updated_at = CURRENT_TIMESTAMP
         WHERE sid = :sid AND cid = :cid
     ");
     $stmt->bindValue(':out', $out, SQLITE3_INTEGER);
