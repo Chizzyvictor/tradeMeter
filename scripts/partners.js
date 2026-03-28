@@ -32,7 +32,7 @@ class Partners {
       action: action,
 
       onSuccess: res => {
-
+alert(JSON.stringify(res)); 
         if (!res || res.status !== "success") return;
 
         this.state.partners = res.data || [];
