@@ -3,7 +3,7 @@ require_once __DIR__ . '/helpers.php';
 
 requirePermission($db, 'manage_users');
 
-function ensureRbacSchemaForSettings(SQLite3 $db): void {
+function ensureRbacSchemaForSettings(AppDbConnection $db): void {
     $db->exec("CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
         cid INTEGER NOT NULL,
@@ -96,7 +96,7 @@ function ensureRbacSchemaForSettings(SQLite3 $db): void {
     $db->exec("CREATE INDEX IF NOT EXISTS idx_login_logs_time ON login_logs(login_time)");
 }
 
-function seedRolesAndPermissionsForSettings(SQLite3 $db, int $cid): void {
+function seedRolesAndPermissionsForSettings(AppDbConnection $db, int $cid): void {
     $permissions = [
         'view_dashboard',
         'manage_products',
@@ -167,7 +167,7 @@ function seedRolesAndPermissionsForSettings(SQLite3 $db, int $cid): void {
     }
 }
 
-function assignSingleRoleToUser(SQLite3 $db, int $userId, int $roleId): bool {
+function assignSingleRoleToUser(AppDbConnection $db, int $userId, int $roleId): bool {
     $del = $db->prepare("DELETE FROM user_roles WHERE user_id = :uid");
     $del->bindValue(':uid', $userId, SQLITE3_INTEGER);
     if (!$del->execute()) {

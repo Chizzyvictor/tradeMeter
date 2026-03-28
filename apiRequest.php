@@ -10,23 +10,50 @@ switch ($action) {
         $cid = intval($cid);
         $range = strtolower(trim($_POST['range'] ?? 'all'));
 
-        $dateFilter = "";
-        $dateFilterAlias = "";
-        $rangeMap = [
-            'today' => "date('now','localtime')",
-            '7d'    => "date('now','-6 day','localtime')",
-            '30d'   => "date('now','-29 day','localtime')"
-        ];
+        // Keep dashboard-heavy paths indexed for faster aggregates and top-N queries.
+        $db->exec("CREATE INDEX IF NOT EXISTS idx_partner_cid ON partner(cid)");
+        $db->exec("CREATE INDEX IF NOT EXISTS idx_sales_cid_createdAt ON sales(cid, createdAt)");
+        $db->exec("CREATE INDEX IF NOT EXISTS idx_purchases_cid_createdAt ON purchases(cid, createdAt)");
+        $db->exec("CREATE INDEX IF NOT EXISTS idx_sales_items_sale_id ON sales_items(sale_id)");
+        $db->exec("CREATE INDEX IF NOT EXISTS idx_purchases_partner_cid ON purchases(partner_id, cid)");
+        $db->exec("CREATE INDEX IF NOT EXISTS idx_sales_partner_cid ON sales(partner_id, cid)");
+        $db->exec("CREATE INDEX IF NOT EXISTS idx_inventory_cid_product_id ON inventory(cid, product_id)");
 
-        if (!array_key_exists($range, $rangeMap) && $range !== 'all') {
+            $dateFilter = "";
+            $dateFilterAlias = "";
+            $rangeMap = ['today', '7d', '30d'];
+            $dateFilterParams = [];
+            $dateFilterAliasParams = [];
+
+            if (!in_array($range, $rangeMap, true) && $range !== 'all') {
             $range = 'all';
         }
 
-        if (isset($rangeMap[$range])) {
-            $operator = $range === 'today' ? '=' : '>=';
-            $dateExpr = $rangeMap[$range];
-            $dateFilter = " AND date(createdAt) {$operator} {$dateExpr}";
-            $dateFilterAlias = " AND date(t.createdAt) {$operator} {$dateExpr}";
+            if ($range !== 'all') {
+                $todayStart = new DateTimeImmutable('today');
+                if ($range === 'today') {
+                    $from = $todayStart;
+                } elseif ($range === '7d') {
+                    $from = $todayStart->modify('-6 days');
+                } else {
+                    $from = $todayStart->modify('-29 days');
+                }
+                $to = $todayStart->modify('+1 day');
+
+                // Use range predicates instead of wrapping columns in date() for index-friendly filtering.
+                $fromStr = $from->format('Y-m-d H:i:s');
+                $toStr = $to->format('Y-m-d H:i:s');
+
+                $dateFilter = " AND createdAt >= :from_created_at AND createdAt < :to_created_at";
+                $dateFilterAlias = " AND t.createdAt >= :from_created_at_alias AND t.createdAt < :to_created_at_alias";
+                $dateFilterParams = [
+                    ':from_created_at' => $fromStr,
+                    ':to_created_at' => $toStr,
+                ];
+                $dateFilterAliasParams = [
+                    ':from_created_at_alias' => $fromStr,
+                    ':to_created_at_alias' => $toStr,
+                ];
         }
 
         $partnerStatsStmt = $db->prepare(" 
@@ -42,18 +69,31 @@ switch ($action) {
         $partnerStatsStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
         $partnerStatsRow = $partnerStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
-        $transactionStatsStmt = $db->prepare(" 
+        $salesStatsStmt = $db->prepare(" 
             SELECT
-                COALESCE((SELECT SUM(totalAmount) FROM sales WHERE cid = :sid {$dateFilter}),0) AS totalSales,
-                COALESCE((SELECT SUM(totalAmount) FROM purchases WHERE cid = :pid {$dateFilter}),0) AS totalPurchases,
-                COALESCE((SELECT COUNT(sale_id) FROM sales WHERE cid = :sidc {$dateFilter}),0) +
-                COALESCE((SELECT COUNT(purchase_id) FROM purchases WHERE cid = :pidc {$dateFilter}),0) AS rangeTransactions
+                COALESCE(SUM(totalAmount),0) AS totalSales,
+                COUNT(sale_id) AS salesCount
+            FROM sales
+            WHERE cid = :sales_cid {$dateFilter}
         ");
-        $transactionStatsStmt->bindValue(':sid', $cid, SQLITE3_INTEGER);
-        $transactionStatsStmt->bindValue(':pid', $cid, SQLITE3_INTEGER);
-        $transactionStatsStmt->bindValue(':sidc', $cid, SQLITE3_INTEGER);
-        $transactionStatsStmt->bindValue(':pidc', $cid, SQLITE3_INTEGER);
-        $transactionStatsRow = $transactionStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+        $salesStatsStmt->bindValue(':sales_cid', $cid, SQLITE3_INTEGER);
+        foreach ($dateFilterParams as $key => $value) {
+            $salesStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
+        }
+        $salesStatsRow = $salesStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+
+        $purchaseStatsStmt = $db->prepare(" 
+            SELECT
+                COALESCE(SUM(totalAmount),0) AS totalPurchases,
+                COUNT(purchase_id) AS purchaseCount
+            FROM purchases
+            WHERE cid = :purchase_cid {$dateFilter}
+        ");
+        $purchaseStatsStmt->bindValue(':purchase_cid', $cid, SQLITE3_INTEGER);
+        foreach ($dateFilterParams as $key => $value) {
+            $purchaseStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
+        }
+        $purchaseStatsRow = $purchaseStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
         $inventoryValueStmt = $db->prepare(" 
             SELECT COALESCE(SUM(COALESCE(inv.qty,0) * COALESCE(p.cost_price,0)),0) AS inventoryValue
@@ -86,6 +126,9 @@ switch ($action) {
             LIMIT 5
         ");
         $topSellingStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        foreach ($dateFilterAliasParams as $key => $value) {
+            $topSellingStmt->bindValue($key, $value, SQLITE3_TEXT);
+        }
         $topSellingRes = $topSellingStmt->execute();
         while($row = $topSellingRes->fetchArray(SQLITE3_ASSOC)){
             $topSellingProducts[] = $row;
@@ -106,6 +149,9 @@ switch ($action) {
             LIMIT 5
         ");
         $topSuppliersStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        foreach ($dateFilterAliasParams as $key => $value) {
+            $topSuppliersStmt->bindValue($key, $value, SQLITE3_TEXT);
+        }
         $topSuppliersRes = $topSuppliersStmt->execute();
         while($row = $topSuppliersRes->fetchArray(SQLITE3_ASSOC)){
             $topSuppliers[] = $row;
@@ -126,6 +172,9 @@ switch ($action) {
             LIMIT 5
         ");
         $topBuyersStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        foreach ($dateFilterAliasParams as $key => $value) {
+            $topBuyersStmt->bindValue($key, $value, SQLITE3_TEXT);
+        }
         $topBuyersRes = $topBuyersStmt->execute();
         while($row = $topBuyersRes->fetchArray(SQLITE3_ASSOC)){
             $topBuyers[] = $row;
@@ -137,9 +186,9 @@ switch ($action) {
         $activeCreditors = intval($partnerStatsRow['activeCreditors'] ?? 0);
         $totalPartners = intval($partnerStatsRow['totalPartners'] ?? 0);
 
-        $totalSales = floatval($transactionStatsRow['totalSales'] ?? 0);
-        $totalPurchases = floatval($transactionStatsRow['totalPurchases'] ?? 0);
-        $rangeTransactions = intval($transactionStatsRow['rangeTransactions'] ?? 0);
+        $totalSales = floatval($salesStatsRow['totalSales'] ?? 0);
+        $totalPurchases = floatval($purchaseStatsRow['totalPurchases'] ?? 0);
+        $rangeTransactions = intval($salesStatsRow['salesCount'] ?? 0) + intval($purchaseStatsRow['purchaseCount'] ?? 0);
 
         $inventoryValue = floatval($inventoryValueRow['inventoryValue'] ?? 0);
         $profit = $totalSales - $totalPurchases;
