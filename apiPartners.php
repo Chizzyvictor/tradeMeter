@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/helpers.php';
 
-
+try {
 switch ($action) {
       
     // ============================
@@ -15,9 +15,16 @@ switch ($action) {
         $logo    = handleFileUpload('partnerImage', 'user.jpg');
         if ($name === '') respond("error", "Partner name required");
         $dup = $db->prepare("SELECT 1 FROM partner WHERE cid=:cid AND lower(sName)=lower(:name)");
+        if (!$dup) {
+            throw new Exception("Unable to prepare duplicate partner lookup");
+        }
         $dup->bindValue(':cid', $cid, SQLITE3_INTEGER);
         $dup->bindValue(':name', $name, SQLITE3_TEXT);
-        if ($dup->execute()->fetchArray())
+        $dupRes = $dup->execute();
+        if ($dupRes === false) {
+            throw new Exception("Unable to execute duplicate partner lookup");
+        }
+        if ($dupRes->fetchArray())
             respond("error", "Partner name already exists");
 
         try {
@@ -133,8 +140,14 @@ switch ($action) {
     case "loadAllPartners":
         $sql = "SELECT * FROM partner WHERE cid = :cid ORDER BY sid DESC";
         $stmt = $db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Unable to prepare partners query");
+        }
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
         $res = $stmt->execute();
+        if ($res === false) {
+            throw new Exception("Unable to load partners");
+        }
         $data = [];
         while ($row = $res->fetchArray(SQLITE3_ASSOC))
             $data[] = $row;
@@ -149,8 +162,14 @@ switch ($action) {
     case "loadActivePartnerDebtors":
         $sql = "SELECT * FROM partner WHERE cid = :cid AND outstanding > 0 ORDER BY sid DESC";
         $stmt = $db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Unable to prepare debtor partners query");
+        }
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
         $res = $stmt->execute();
+        if ($res === false) {
+            throw new Exception("Unable to load active debtors");
+        }
         $data = [];
         while ($row = $res->fetchArray(SQLITE3_ASSOC))
             $data[] = $row;
@@ -165,8 +184,14 @@ switch ($action) {
     case "loadActivePartnerCreditors":
         $sql = "SELECT * FROM partner WHERE cid = :cid AND advancePayment > 0 ORDER BY sid DESC";
         $stmt = $db->prepare($sql);
+        if (!$stmt) {
+            throw new Exception("Unable to prepare creditor partners query");
+        }
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
         $res = $stmt->execute();
+        if ($res === false) {
+            throw new Exception("Unable to load active creditors");
+        }
         $data = [];
         while ($row = $res->fetchArray(SQLITE3_ASSOC))
             $data[] = $row;
@@ -202,9 +227,15 @@ case "loadPartnerDetails":
         WHERE sid = :sid AND cid = :cid
         ORDER BY createdAt DESC
     ");
+    if (!$stmt) {
+        throw new Exception("Unable to prepare partner ledger query");
+    }
     $stmt->bindValue(':sid', $sid, SQLITE3_INTEGER);
     $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
     $res = $stmt->execute();
+    if ($res === false) {
+        throw new Exception("Unable to load partner ledger");
+    }
 
     while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
         $partner_ledger[] = $row;
@@ -255,6 +286,9 @@ case "loadPartnerDetails":
     $pStmt->bindValue(':sid_sell', $sid, SQLITE3_INTEGER);
     $pStmt->bindValue(':cid_sell', $cid, SQLITE3_INTEGER);
     $pRes = $pStmt->execute();
+    if ($pRes === false) {
+        throw new Exception("Unable to load partner transactions");
+    }
 
     while ($purchase = $pRes->fetchArray(SQLITE3_ASSOC)) {
         $items = [];
@@ -277,6 +311,9 @@ case "loadPartnerDetails":
                 WHERE si.sale_id = :transaction_id
                 ORDER BY si.item_id ASC
             ");
+            if (!$iStmt) {
+                throw new Exception("Unable to prepare sale items query");
+            }
             $iStmt->bindValue(':transaction_id', $baseId, SQLITE3_INTEGER);
         } else {
             $iStmt = $db->prepare("
@@ -292,10 +329,16 @@ case "loadPartnerDetails":
                 WHERE pi.purchase_id = :transaction_id
                 ORDER BY pi.item_id ASC
             ");
+            if (!$iStmt) {
+                throw new Exception("Unable to prepare purchase items query");
+            }
             $iStmt->bindValue(':transaction_id', $decodedId, SQLITE3_INTEGER);
         }
 
         $iRes = $iStmt->execute();
+        if ($iRes === false) {
+            throw new Exception("Unable to load transaction items");
+        }
         while ($row = $iRes->fetchArray(SQLITE3_ASSOC)) {
             $items[] = $row;
         }
@@ -444,4 +487,8 @@ case "loadPartnerDetails":
     // ============================
         default:
             respond("error", "Invalid action");     
+}
+} catch (Throwable $e) {
+    error_log('TradeMeter apiPartners error: ' . $e->getMessage());
+    respond('error', 'Partner request failed: ' . $e->getMessage());
 }
