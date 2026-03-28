@@ -247,7 +247,7 @@ switch ($action) {
             $nameStmt = $db->prepare("SELECT sName FROM partner WHERE sid = :sid LIMIT 1");
             $nameStmt->bindValue(':sid', intval($row['partner_id']), SQLITE3_INTEGER);
             $nameRow = $nameStmt->execute()->fetchArray(SQLITE3_ASSOC);
-            $row['partner_name'] = $nameRow['sName'] ?? 'Unknown';
+            $row['partner_name'] = $nameRow['sName'] ?? $nameRow['sname'] ?? 'Unknown';
 
             $rows[] = $row;
         }
@@ -299,8 +299,8 @@ switch ($action) {
         $nameStmt = $db->prepare("SELECT sName, sPhone FROM partner WHERE sid = :sid LIMIT 1");
         $nameStmt->bindValue(':sid', intval($purchase['partner_id']), SQLITE3_INTEGER);
         $nameRow = $nameStmt->execute()->fetchArray(SQLITE3_ASSOC);
-        $purchase['partner_name'] = $nameRow['sName'] ?? 'Unknown';
-        $purchase['partner_phone'] = $nameRow['sPhone'] ?? '';
+        $purchase['partner_name'] = $nameRow['sName'] ?? $nameRow['sname'] ?? 'Unknown';
+        $purchase['partner_phone'] = $nameRow['sPhone'] ?? $nameRow['sphone'] ?? '';
         $purchase['purchase_id'] = $encodedPurchaseId;
         unset($purchase['raw_id']);
 

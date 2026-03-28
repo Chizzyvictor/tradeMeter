@@ -37,6 +37,7 @@ class AppCore {
       cname: "cName",
       cemail: "cEmail",
       clogo: "cLogo",
+      regdate: "regDate",
       // Transaction/report keys
       totalamount: "totalAmount",
       amountpaid: "amountPaid",
@@ -44,7 +45,21 @@ class AppCore {
       updatedat: "updatedAt",
       advancepayment: "advancePayment",
       lastactivity: "lastActivity",
-      fullname: "fullName"
+      fullname: "fullName",
+      transactiontype: "transactionType",
+      partnername: "partnerName",
+      partnerphone: "partnerPhone",
+      purchaseid: "purchaseId",
+      totalsales: "totalSales",
+      totalpurchases: "totalPurchases",
+      rangetransactions: "rangeTransactions",
+      inventoryvalue: "inventoryValue",
+      activedebtors: "activeDebtors",
+      activecreditors: "activeCreditors",
+      totalpartners: "totalPartners",
+      topsellingproducts: "topSellingProducts",
+      topsuppliers: "topSuppliers",
+      topbuyers: "topBuyers"
     };
   }
 
