@@ -12,6 +12,20 @@ $(document).ready(function () {
 
   const escapeHTML = (value) => $('<div>').text(String(value ?? '')).html();
 
+  const normalizeCompany = (raw) => {
+    const company = (app && typeof app.normalizeResponseKeys === 'function')
+      ? app.normalizeResponseKeys(raw || {})
+      : (raw || {});
+
+    return {
+      cid: company.cid ?? company.CID ?? 0,
+      cName: company.cName ?? company.cname ?? '',
+      cEmail: company.cEmail ?? company.cemail ?? '',
+      cLogo: company.cLogo ?? company.clogo ?? 'logo.jpg',
+      regDate: company.regDate ?? company.regdate ?? company.createdAt ?? company.created_at ?? ''
+    };
+  };
+
   function showTableLoading() {
     $('#companiesTable tbody').html(`
       <tr>
@@ -94,7 +108,7 @@ $(document).ready(function () {
       dataType: 'json',
       success: function (response) {
         if (response.status === 'success') {
-          companies = Array.isArray(response.data) ? response.data : [];
+          companies = (Array.isArray(response.data) ? response.data : []).map(normalizeCompany);
           filteredCompanies = [...companies];
           applySort();
           renderTable();
