@@ -180,6 +180,19 @@ function assignSingleRoleToUser(AppDbConnection $db, int $userId, int $roleId): 
     return (bool)$ins->execute();
 }
 
+function toEpochInt($value): int {
+    if ($value === null || $value === '') {
+        return 0;
+    }
+
+    if (is_int($value) || is_float($value) || (is_string($value) && preg_match('/^\d+$/', $value))) {
+        return intval($value);
+    }
+
+    $ts = strtotime((string)$value);
+    return $ts === false ? 0 : intval($ts);
+}
+
 ensureRbacSchemaForSettings($db);
 seedRolesAndPermissionsForSettings($db, $cid);
 
@@ -377,7 +390,7 @@ switch ($action) {
                 'full_name' => $row['full_name'] ?? '',
                 'email' => $row['email'] ?? '',
                 'is_active' => intval($row['is_active'] ?? 0),
-                'created_at' => intval($row['created_at'] ?? 0),
+                'created_at' => toEpochInt($row['created_at'] ?? 0),
                 'role_id' => intval($row['role_id'] ?? 0),
                 'role_name' => $row['role_name'] ?? 'Unassigned'
             ];
@@ -597,7 +610,7 @@ switch ($action) {
                 'ip_address' => (string)($row['ip_address'] ?? '-'),
                 'user_agent' => (string)($row['user_agent'] ?? ''),
                 'details' => (string)($row['details'] ?? ''),
-                'created_at' => intval($row['created_at'] ?? 0)
+                'created_at' => toEpochInt($row['created_at'] ?? 0)
             ];
         }
 
@@ -638,8 +651,8 @@ switch ($action) {
                 'email' => (string)($row['email'] ?? '-'),
                 'ip_address' => (string)($row['ip_address'] ?? '-'),
                 'user_agent' => (string)($row['user_agent'] ?? ''),
-                'last_activity' => intval($row['last_activity'] ?? 0),
-                'created_at' => intval($row['created_at'] ?? 0),
+                'last_activity' => toEpochInt($row['last_activity'] ?? 0),
+                'created_at' => toEpochInt($row['created_at'] ?? 0),
                 'is_current' => ($sessionId !== '' && hash_equals($currentSessionId, $sessionId))
             ];
         }

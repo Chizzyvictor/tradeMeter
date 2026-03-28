@@ -26,6 +26,58 @@ class AppCore {
       { value: "sachet", label: "Sachet" },
       { value: "bundle", label: "Bundle" }
     ];
+
+    this.responseKeyAliases = {
+      // Partner/profile style keys commonly lowercased by PostgreSQL drivers
+      sname: "sName",
+      semail: "sEmail",
+      sphone: "sPhone",
+      saddress: "sAddress",
+      slogo: "sLogo",
+      cname: "cName",
+      cemail: "cEmail",
+      clogo: "cLogo",
+      // Transaction/report keys
+      totalamount: "totalAmount",
+      amountpaid: "amountPaid",
+      createdat: "createdAt",
+      updatedat: "updatedAt",
+      advancepayment: "advancePayment",
+      lastactivity: "lastActivity",
+      fullname: "fullName"
+    };
+  }
+
+  normalizeResponseKeys(payload) {
+    if (Array.isArray(payload)) {
+      return payload.map(item => this.normalizeResponseKeys(item));
+    }
+
+    if (!payload || typeof payload !== "object") {
+      return payload;
+    }
+
+    const out = {};
+    Object.keys(payload).forEach((key) => {
+      const value = this.normalizeResponseKeys(payload[key]);
+      out[key] = value;
+
+      const lower = String(key).toLowerCase();
+
+      const aliased = this.responseKeyAliases[lower];
+      if (aliased && !(aliased in out)) {
+        out[aliased] = value;
+      }
+
+      if (key.includes("_")) {
+        const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+        if (!(camel in out)) {
+          out[camel] = value;
+        }
+      }
+    });
+
+    return out;
   }
 
   // Core utilities: AJAX, alerts, helpers, CSRF, etc.
@@ -66,9 +118,10 @@ class AppCore {
 			contentType: isFormData ? false : "application/x-www-form-urlencoded; charset=UTF-8",
 			dataType: "json",
 			success: (res) => {
-				const ok = res?.status === "success";
+        const normalizedRes = this.normalizeResponseKeys(res || {});
+        const ok = normalizedRes?.status === "success";
 
-				if (!ok && /session expired/i.test(res?.text || "")) {
+        if (!ok && /session expired/i.test(normalizedRes?.text || "")) {
 					alert("Your session has expired. Please log in again.");
                    window.location.href = "login.php";
 					return;
@@ -76,13 +129,13 @@ class AppCore {
 
         if (!silent) {
           this.showAlert(
-            res?.text || (ok ? successMsg : errorMsg),
+          normalizedRes?.text || (ok ? successMsg : errorMsg),
             ok ? "success" : "error"
           );
         }
 
-				if (ok && typeof onSuccess === "function") onSuccess(res);
-				if (typeof onComplete === "function") onComplete(res);
+        if (ok && typeof onSuccess === "function") onSuccess(normalizedRes);
+        if (typeof onComplete === "function") onComplete(normalizedRes);
 			},
 			error: (xhr, status, error) => {
 				const msg = status === "timeout"
