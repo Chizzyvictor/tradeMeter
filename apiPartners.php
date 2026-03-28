@@ -33,7 +33,7 @@ switch ($action) {
                 INSERT INTO partner
                 (sName, sEmail, sPhone, sAddress, outstanding, advancePayment, sLogo, cid, created_at, updated_at)
                 VALUES
-                (:name, :email, :phone, :address, 0, 0, :logo, :cid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                (:name, :email, :phone, :address, 0, 0, :logo, :cid, CURRENT_TIMESTAMP, strftime('%s','now'))
             ");
             $stmt->bindValue(':name', $name, SQLITE3_TEXT);
             $stmt->bindValue(':email', $email, SQLITE3_TEXT);
@@ -94,7 +94,7 @@ switch ($action) {
                 sPhone = :phone,
                 sAddress = :address,
                 sLogo = :logo,
-                updated_at = CURRENT_TIMESTAMP
+                updated_at = strftime('%s','now')
             WHERE sid = :id AND cid = :cid
         ");
         $stmt->bindValue(':name', $name, SQLITE3_TEXT);
@@ -391,7 +391,7 @@ case "loadPartnerDetails":
             $advancePayment += $amount;
         }
 
-        $stmt = $db->prepare("UPDATE partner SET outstanding = :out, advancePayment = :adv, updated_at = CURRENT_TIMESTAMP WHERE sid = :sid AND cid = :cid");
+        $stmt = $db->prepare("UPDATE partner SET outstanding = :out, advancePayment = :adv, updated_at = strftime('%s','now') WHERE sid = :sid AND cid = :cid");
         $stmt->bindValue(":out", $outstanding, SQLITE3_FLOAT);
         $stmt->bindValue(":adv", $advancePayment, SQLITE3_FLOAT);
         $stmt->bindValue(":sid", $sid, SQLITE3_INTEGER);
@@ -450,7 +450,7 @@ case "loadPartnerDetails":
             $outstanding += $amount;
         }
 
-        $stmt = $db->prepare("UPDATE partner SET outstanding = :out, advancePayment = :adv, updated_at = CURRENT_TIMESTAMP WHERE sid = :sid AND cid = :cid");
+        $stmt = $db->prepare("UPDATE partner SET outstanding = :out, advancePayment = :adv, updated_at = strftime('%s','now') WHERE sid = :sid AND cid = :cid");
         $stmt->bindValue(":out", $outstanding, SQLITE3_FLOAT);
         $stmt->bindValue(":adv", $advancePayment, SQLITE3_FLOAT);
         $stmt->bindValue(":sid", $sid, SQLITE3_INTEGER);
