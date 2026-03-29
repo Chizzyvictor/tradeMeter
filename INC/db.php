@@ -91,6 +91,506 @@ function appDbConnect(): SQLite3 {
     return $db;
 }
 
+function appPgLegacyColumnAliases(): array {
+    static $aliases = null;
+    if ($aliases !== null) {
+        return $aliases;
+    }
+
+    $aliases = [
+        'cname' => 'cName',
+        'cemail' => 'cEmail',
+        'cpass' => 'cPass',
+        'clogo' => 'cLogo',
+        'regdate' => 'regDate',
+        'sname' => 'sName',
+        'semail' => 'sEmail',
+        'sphone' => 'sPhone',
+        'saddress' => 'sAddress',
+        'slogo' => 'sLogo',
+        'advancepayment' => 'advancePayment',
+        'createdat' => 'createdAt',
+        'totalamount' => 'totalAmount',
+        'amountpaid' => 'amountPaid',
+        'costprice' => 'costPrice',
+    ];
+
+    return $aliases;
+}
+
+function appNormalizePgAssocRow($row) {
+    if (!is_array($row)) {
+        return $row;
+    }
+
+    foreach (appPgLegacyColumnAliases() as $lowercaseKey => $legacyKey) {
+        if (!array_key_exists($legacyKey, $row) && array_key_exists($lowercaseKey, $row)) {
+            $row[$legacyKey] = $row[$lowercaseKey];
+        }
+    }
+
+    return $row;
+}
+
+function appEnsureUserVerificationColumns(AppDbConnection $db): void {
+    $columns = [];
+    $res = $db->query("PRAGMA table_info(users)");
+    while ($res && ($row = $res->fetchArray(SQLITE3_ASSOC))) {
+        $columns[] = strtolower((string)($row['name'] ?? ''));
+    }
+
+    $addedVerifiedColumn = false;
+    if (!in_array('email_verified_at', $columns, true)) {
+        $db->exec("ALTER TABLE users ADD COLUMN email_verified_at INTEGER");
+        $addedVerifiedColumn = true;
+    }
+    if (!in_array('email_verification_token_hash', $columns, true)) {
+        $db->exec("ALTER TABLE users ADD COLUMN email_verification_token_hash TEXT");
+    }
+    if (!in_array('email_verification_expires_at', $columns, true)) {
+        $db->exec("ALTER TABLE users ADD COLUMN email_verification_expires_at INTEGER");
+    }
+
+    if ($addedVerifiedColumn) {
+        $db->exec("UPDATE users SET email_verified_at = strftime('%s','now') WHERE email_verified_at IS NULL");
+    }
+}
+
+function appEnsureSecurityTables(AppDbConnection $db): void {
+    $db->exec("CREATE TABLE IF NOT EXISTS remember_token_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        user_id INTEGER,
+        cid INTEGER,
+        ip_address TEXT,
+        user_agent TEXT,
+        details TEXT,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+    )");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS user_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        cid INTEGER,
+        session_id TEXT NOT NULL UNIQUE,
+        ip_address TEXT,
+        user_agent TEXT,
+        last_activity INTEGER,
+        created_at INTEGER
+    )");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS login_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        cid INTEGER,
+        ip_address TEXT,
+        user_agent TEXT,
+        login_time INTEGER,
+        status TEXT
+    )");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS login_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip_address TEXT NOT NULL UNIQUE,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_attempt INTEGER NOT NULL
+    )");
+
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_remember_audit_created_at ON remember_token_audit(created_at)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id, cid)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_login_logs_time ON login_logs(login_time)");
+}
+
+function appEnsureRbacSchema(AppDbConnection $db): void {
+    $db->exec("CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER NOT NULL,
+        full_name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        password TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1 CHECK (is_active IN (0,1)),
+        created_at INTEGER DEFAULT (strftime('%s','now')),
+        UNIQUE (cid, email)
+    )");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS roles (
+        role_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER NOT NULL,
+        role_name TEXT NOT NULL,
+        is_system INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (strftime('%s','now')),
+        UNIQUE (cid, role_name)
+    )");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS user_roles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        role_id INTEGER NOT NULL,
+        UNIQUE (user_id, role_id)
+    )");
+
+    appEnsureUserVerificationColumns($db);
+
+    $db->exec("CREATE TABLE IF NOT EXISTS permissions (
+        permission_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        permission_key TEXT NOT NULL UNIQUE
+    )");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS role_permissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role_id INTEGER NOT NULL,
+        permission_id INTEGER NOT NULL,
+        UNIQUE (role_id, permission_id)
+    )");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS remember_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        cid INTEGER NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+    )");
+
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_token_hash ON remember_tokens(token_hash)");
+
+    appEnsureSecurityTables($db);
+}
+
+function appEnsureCoreBusinessSchema(AppDbConnection $db): void {
+    $schema = [
+        "
+        CREATE TABLE IF NOT EXISTS company (
+            cid INTEGER PRIMARY KEY AUTOINCREMENT,
+            cName TEXT NOT NULL UNIQUE,
+            cEmail TEXT NOT NULL UNIQUE,
+            cPass TEXT NOT NULL,
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            cLogo TEXT DEFAULT 'logo.jpg',
+            regDate INTEGER DEFAULT (strftime('%s','now')),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS partner (
+            sid INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER NOT NULL,
+            sName TEXT NOT NULL,
+            sEmail TEXT,
+            sPhone TEXT,
+            sAddress TEXT,
+            outstanding REAL DEFAULT 0.00,
+            advancePayment REAL DEFAULT 0.00,
+            sLogo TEXT DEFAULT 'user.jpg',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at INTEGER DEFAULT (strftime('%s','now')),
+            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE,
+            UNIQUE (cid, sName)
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS product_categories (
+            category_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER NOT NULL,
+            category_name TEXT NOT NULL,
+            category_description TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1 CHECK (is_active IN (0,1)),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE,
+            UNIQUE (cid, category_name)
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS products (
+            product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER NOT NULL,
+            category_id INTEGER,
+            product_name TEXT NOT NULL,
+            product_image TEXT DEFAULT 'product.jpg',
+            product_unit TEXT DEFAULT 'pcs',
+            cost_price REAL DEFAULT 0.00,
+            selling_price REAL DEFAULT 0.00,
+            reorder_level INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1 CHECK (is_active IN (0,1)),
+            timestamp INTEGER DEFAULT (strftime('%s','now')),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE,
+            FOREIGN KEY (category_id) REFERENCES product_categories(category_id),
+            UNIQUE (cid, product_name)
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS inventory (
+            inventory_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            cid INTEGER NOT NULL,
+            quantity INTEGER NOT NULL DEFAULT 0,
+            last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
+            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE,
+            UNIQUE (product_id, cid)
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS stock_ledger (
+            ledger_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            cid INTEGER NOT NULL,
+            reference_type TEXT NOT NULL CHECK(reference_type IN ('purchase','sale','adjustment')),
+            reference_id INTEGER,
+            qty_in INTEGER DEFAULT 0,
+            qty_out INTEGER DEFAULT 0,
+            balance_after INTEGER NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
+            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS purchases (
+            purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER NOT NULL,
+            partner_id INTEGER NOT NULL,
+            totalAmount REAL DEFAULT 0.00,
+            amountPaid REAL DEFAULT 0.00,
+            status TEXT NOT NULL CHECK(status IN ('pending','partial','paid')),
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (partner_id) REFERENCES partner(sid) ON DELETE CASCADE,
+            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS purchases_items (
+            item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            purchase_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            qty INTEGER NOT NULL,
+            costPrice REAL NOT NULL,
+            total REAL GENERATED ALWAYS AS (qty * costPrice) STORED,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (purchase_id) REFERENCES purchases(purchase_id) ON DELETE CASCADE,
+            FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS sales (
+            sale_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER NOT NULL,
+            partner_id INTEGER NOT NULL,
+            totalAmount REAL DEFAULT 0.00,
+            amountPaid REAL DEFAULT 0.00,
+            status TEXT NOT NULL CHECK(status IN ('pending','partial','paid')),
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (partner_id) REFERENCES partner(sid) ON DELETE CASCADE,
+            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS sales_items (
+            item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sale_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            qty INTEGER NOT NULL,
+            costPrice REAL NOT NULL,
+            total REAL GENERATED ALWAYS AS (qty * costPrice) STORED,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (sale_id) REFERENCES sales(sale_id) ON DELETE CASCADE,
+            FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS partner_ledger (
+            ledger_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER,
+            sid INTEGER,
+            type TEXT NOT NULL CHECK(type IN ('sell','buy','addDebt','payDebt')),
+            debit REAL DEFAULT 0,
+            credit REAL DEFAULT 0,
+            outstanding REAL DEFAULT 0,
+            advancePayment REAL DEFAULT 0,
+            note TEXT,
+            reference_id INTEGER,
+            reference_type TEXT,
+            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE,
+            FOREIGN KEY (sid) REFERENCES partner(sid) ON DELETE CASCADE
+        );
+        ",
+    ];
+
+    foreach ($schema as $sql) {
+        $db->exec($sql);
+    }
+}
+
+function appEnsureCoreBusinessIndexes(AppDbConnection $db): void {
+    $indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_partner_company ON partner(cid);",
+        "CREATE INDEX IF NOT EXISTS idx_partner_company_sid ON partner(cid, sid);",
+        "CREATE INDEX IF NOT EXISTS idx_product_company ON products(cid);",
+        "CREATE INDEX IF NOT EXISTS idx_product_category ON products(category_id);",
+        "CREATE INDEX IF NOT EXISTS idx_inventory_company ON inventory(cid);",
+        "CREATE INDEX IF NOT EXISTS idx_stock_ledger_product ON stock_ledger(product_id);",
+        "CREATE INDEX IF NOT EXISTS idx_purchase_company ON purchases(cid);",
+        "CREATE INDEX IF NOT EXISTS idx_purchase_partner ON purchases(partner_id);",
+        "CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchases_items(purchase_id);",
+        "CREATE INDEX IF NOT EXISTS idx_purchase_items_product ON purchases_items(product_id);",
+        "CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase_product ON purchases_items(purchase_id, product_id);",
+        "CREATE INDEX IF NOT EXISTS idx_sales_company ON sales(cid);",
+        "CREATE INDEX IF NOT EXISTS idx_sales_partner ON sales(partner_id);",
+        "CREATE INDEX IF NOT EXISTS idx_sales_items_sale ON sales_items(sale_id);",
+        "CREATE INDEX IF NOT EXISTS idx_sales_items_product ON sales_items(product_id);",
+        "CREATE INDEX IF NOT EXISTS idx_sales_items_sale_product ON sales_items(sale_id, product_id);",
+        "CREATE INDEX IF NOT EXISTS idx_partner_ledger_company ON partner_ledger(cid);",
+        "CREATE INDEX IF NOT EXISTS idx_partner_ledger_partner ON partner_ledger(sid);",
+        "CREATE INDEX IF NOT EXISTS idx_users_cid ON users(cid);",
+        "CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);",
+        "CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions(role_id);"
+    ];
+
+    foreach ($indexes as $index) {
+        $db->exec($index);
+    }
+}
+
+function appRunLegacyPurchaseMigration(AppDbConnection $db): void {
+    if ($db->driver() !== 'sqlite') {
+        return;
+    }
+
+    $legacyTables = [];
+    $tableRes = $db->query("SELECT name FROM sqlite_master WHERE type='table'");
+    while ($tableRes && ($row = $tableRes->fetchArray(SQLITE3_ASSOC))) {
+        $legacyTables[] = (string)($row['name'] ?? '');
+    }
+
+    $hasLegacyPurchase = in_array('purchase', $legacyTables, true);
+    $hasLegacyPurchaseItems = in_array('purchase_items', $legacyTables, true);
+    if (!$hasLegacyPurchase || !$hasLegacyPurchaseItems) {
+        return;
+    }
+
+    $purchaseCount = intval($db->querySingle("SELECT COUNT(1) FROM purchases"));
+    $saleCount = intval($db->querySingle("SELECT COUNT(1) FROM sales"));
+    if ($purchaseCount !== 0 || $saleCount !== 0) {
+        return;
+    }
+
+    $db->exec("INSERT INTO purchases (cid, partner_id, totalAmount, amountPaid, status, createdAt)
+               SELECT cid, partner_id, totalAmount, amountPaid, status, createdAt
+               FROM purchase
+               WHERE LOWER(COALESCE(transaction_type,'buy')) IN ('buy','purchase')");
+
+    $db->exec("INSERT INTO purchases_items (purchase_id, product_id, qty, costPrice, created_at)
+               SELECT p_new.purchase_id, pi.product_id, pi.qty, pi.costPrice, pi.created_at
+               FROM purchase_items pi
+               INNER JOIN purchase p_old ON p_old.purchase_id = pi.purchase_id
+               INNER JOIN purchases p_new
+                   ON p_new.cid = p_old.cid
+                  AND p_new.partner_id = p_old.partner_id
+                  AND p_new.totalAmount = p_old.totalAmount
+                  AND p_new.amountPaid = p_old.amountPaid
+                  AND p_new.status = p_old.status
+                  AND p_new.createdAt = p_old.createdAt
+               WHERE LOWER(COALESCE(p_old.transaction_type,'buy')) IN ('buy','purchase')");
+
+    $db->exec("INSERT INTO sales (cid, partner_id, totalAmount, amountPaid, status, createdAt)
+               SELECT cid, partner_id, totalAmount, amountPaid, status, createdAt
+               FROM purchase
+               WHERE LOWER(COALESCE(transaction_type,'buy')) IN ('sell','sale')");
+
+    $db->exec("INSERT INTO sales_items (sale_id, product_id, qty, costPrice, created_at)
+               SELECT s_new.sale_id, pi.product_id, pi.qty, pi.costPrice, pi.created_at
+               FROM purchase_items pi
+               INNER JOIN purchase p_old ON p_old.purchase_id = pi.purchase_id
+               INNER JOIN sales s_new
+                   ON s_new.cid = p_old.cid
+                  AND s_new.partner_id = p_old.partner_id
+                  AND s_new.totalAmount = p_old.totalAmount
+                  AND s_new.amountPaid = p_old.amountPaid
+                  AND s_new.status = p_old.status
+                  AND s_new.createdAt = p_old.createdAt
+               WHERE LOWER(COALESCE(p_old.transaction_type,'buy')) IN ('sell','sale')");
+}
+
+function appInitializeTradeMeterSchema(AppDbConnection $db): void {
+    appEnsureCoreBusinessSchema($db);
+    appEnsureRbacSchema($db);
+    appRunLegacyPurchaseMigration($db);
+    appEnsureCoreBusinessIndexes($db);
+}
+
+function appSeedRolesAndPermissions(AppDbConnection $db, int $cid): void {
+    $permissions = [
+        'view_dashboard',
+        'manage_products',
+        'manage_inventory',
+        'create_sales',
+        'create_purchases',
+        'view_reports',
+        'delete_records',
+        'manage_users'
+    ];
+
+    foreach ($permissions as $perm) {
+        $stmt = $db->prepare("INSERT OR IGNORE INTO permissions (permission_key) VALUES (:perm)");
+        $stmt->bindValue(':perm', $perm, SQLITE3_TEXT);
+        $stmt->execute();
+    }
+
+    $roleNames = [
+        ['name' => 'Owner', 'system' => 1],
+        ['name' => 'Manager', 'system' => 1],
+        ['name' => 'Staff', 'system' => 1],
+    ];
+
+    foreach ($roleNames as $role) {
+        $stmt = $db->prepare("INSERT OR IGNORE INTO roles (cid, role_name, is_system) VALUES (:cid, :role_name, :is_system)");
+        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $stmt->bindValue(':role_name', $role['name'], SQLITE3_TEXT);
+        $stmt->bindValue(':is_system', $role['system'], SQLITE3_INTEGER);
+        $stmt->execute();
+    }
+
+    $roleMap = [];
+    $stmt = $db->prepare("SELECT role_id, role_name FROM roles WHERE cid = :cid");
+    $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    $res = $stmt->execute();
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $roleMap[strtolower((string)($row['role_name'] ?? ''))] = intval($row['role_id'] ?? 0);
+    }
+
+    $permMap = [];
+    $pres = $db->query("SELECT permission_id, permission_key FROM permissions");
+    while ($row = $pres->fetchArray(SQLITE3_ASSOC)) {
+        $permMap[(string)($row['permission_key'] ?? '')] = intval($row['permission_id'] ?? 0);
+    }
+
+    $assignment = [
+        'owner' => $permissions,
+        'manager' => ['manage_products', 'manage_inventory', 'create_sales', 'create_purchases', 'view_reports'],
+        'staff' => ['create_sales']
+    ];
+
+    foreach ($assignment as $roleName => $permList) {
+        if (!isset($roleMap[$roleName])) {
+            continue;
+        }
+
+        foreach ($permList as $permKey) {
+            if (!isset($permMap[$permKey])) {
+                continue;
+            }
+
+            $stmt = $db->prepare("INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (:role_id, :permission_id)");
+            $stmt->bindValue(':role_id', $roleMap[$roleName], SQLITE3_INTEGER);
+            $stmt->bindValue(':permission_id', $permMap[$permKey], SQLITE3_INTEGER);
+            $stmt->execute();
+        }
+    }
+}
+
 class AppDbResult {
     private string $driver;
     private $native;
@@ -117,7 +617,11 @@ class AppDbResult {
             $row = $this->native->fetch(PDO::FETCH_ASSOC);
         }
 
-        return $row === false ? false : $row;
+        if ($row === false) {
+            return false;
+        }
+
+        return $mode === SQLITE3_NUM ? $row : appNormalizePgAssocRow($row);
     }
 }
 
@@ -134,6 +638,10 @@ class AppDbStatement {
     public function bindValue(string $param, $value, int $type = SQLITE3_TEXT): bool {
         if ($this->driver === 'sqlite') {
             return $this->native->bindValue($param, $value, $type);
+        }
+
+        if ($type === SQLITE3_FLOAT && $value !== null) {
+            $value = is_numeric($value) ? (float)$value : $value;
         }
 
         $this->bound[$param] = $value;
@@ -224,6 +732,8 @@ class AppDbConnection {
             return null;
         }
 
+        $row = appNormalizePgAssocRow($row);
+
         if ($entireRow) {
             return $row;
         }
@@ -274,7 +784,11 @@ class AppDbConnection {
             $normalized .= ' ON CONFLICT DO NOTHING';
         }
 
-        $normalized = str_replace("strftime('%s','now')", 'EXTRACT(EPOCH FROM NOW())::bigint', $normalized);
+        $normalized = preg_replace(
+            '/strftime\(\s*[\'"]%s[\'"]\s*,\s*[\'"]now[\'"]\s*\)/i',
+            'EXTRACT(EPOCH FROM NOW())::bigint',
+            $normalized
+        ) ?? $normalized;
         $normalized = preg_replace('/INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/i', 'BIGSERIAL PRIMARY KEY', $normalized) ?? $normalized;
         $normalized = preg_replace('/\bDATETIME\b/i', 'TIMESTAMP', $normalized) ?? $normalized;
 

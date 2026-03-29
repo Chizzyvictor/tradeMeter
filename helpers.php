@@ -484,7 +484,10 @@ function addTransactionNotification(AppDbConnection $db, int $partnerId, int $ci
     } else {
         $stmt->bindValue(':reference_id', null, SQLITE3_NULL);
     }
-    $stmt->bindValue(':createdAt', $timestamp, SQLITE3_INTEGER);
+    $createdAt = is_numeric($timestamp)
+        ? date('Y-m-d H:i:s', intval($timestamp))
+        : (string)$timestamp;
+    $stmt->bindValue(':createdAt', $createdAt, SQLITE3_TEXT);
 
     if (!$stmt->execute()) {
         throw new Exception("Failed to save transaction ledger entry");
@@ -514,8 +517,8 @@ function updatePartnerBalance($db, $sid, $cid, $out, $adv) {
             updated_at = strftime('%s','now')
         WHERE sid = :sid AND cid = :cid
     ");
-    $stmt->bindValue(':out', $out, SQLITE3_INTEGER);
-    $stmt->bindValue(':adv', $adv, SQLITE3_INTEGER);
+    $stmt->bindValue(':out', $out, SQLITE3_FLOAT);
+    $stmt->bindValue(':adv', $adv, SQLITE3_FLOAT);
     $stmt->bindValue(':sid', $sid, SQLITE3_INTEGER);
     $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
     return $stmt->execute();

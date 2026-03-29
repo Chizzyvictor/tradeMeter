@@ -377,8 +377,8 @@ case "loadPartnerDetails":
             respond("error", "Customer not found");
         }
 
-        $outstanding    = $customer["outstanding"];
-        $advancePayment = $customer["advancePayment"];
+        $outstanding    = floatval($customer["outstanding"] ?? 0);
+        $advancePayment = floatval($customer["advancePayment"] ?? 0);
 
         if ($outstanding > 0) {
             if ($amount >= $outstanding) {
@@ -436,16 +436,15 @@ case "loadPartnerDetails":
             respond("error", "Customer not found");
         }
 
-        $outstanding    = $customer["outstanding"];
-        $advancePayment = $customer["advancePayment"];
+        $outstanding    = floatval($customer["outstanding"] ?? 0);
+        $advancePayment = floatval($customer["advancePayment"] ?? 0);
 
         if ($advancePayment > 0) {
-            $usedFromAdvance = min($advancePayment, $amount);
-            $advancePayment -= $usedFromAdvance;
-            $remainingDebt = $amount - $usedFromAdvance;
-
-            if ($remainingDebt > 0) {
-                $outstanding += $remainingDebt;
+            if ($amount >= $advancePayment) {
+                $outstanding += ($amount - $advancePayment);
+                $advancePayment = 0;
+            } else {
+                $advancePayment -= $amount;
             }
         } else {
             $outstanding += $amount;
