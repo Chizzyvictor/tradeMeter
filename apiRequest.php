@@ -194,8 +194,8 @@ switch ($action) {
         $profit = $totalSales - $totalPurchases;
 
         respond("success", "Dashboard loaded", [
-            "outstanding"      => intval($outstanding),
-            "advancePayment"   => intval($advancePayment),
+            "outstanding"      => floatval($outstanding),
+            "advancePayment"   => floatval($advancePayment),
             "activeDebtors"    => intval($activeDebtors),
             "activeCreditors"  => intval($activeCreditors),
             "totalSales"       => floatval($totalSales),

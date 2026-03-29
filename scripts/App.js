@@ -630,7 +630,6 @@ class Dashboard {
     this.lastUpdatedAt = new Date();
     this.updateLastUpdatedLabel();
     this.startLastUpdatedTicker();
-alert(JSON.stringify(res));
 
      $("#loadOutstanding").html(this.app.formatCurrency(res.outstanding));
      $("#loadAdvancePayments").html(this.app.formatCurrency(res.advancePayment));
