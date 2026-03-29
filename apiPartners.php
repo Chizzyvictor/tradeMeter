@@ -440,11 +440,12 @@ case "loadPartnerDetails":
         $advancePayment = $customer["advancePayment"];
 
         if ($advancePayment > 0) {
-            if ($amount >= $advancePayment) {
-                $outstanding += ($amount - $advancePayment);
-                $advancePayment = 0;
-            } else {
-                $advancePayment -= $amount;
+            $usedFromAdvance = min($advancePayment, $amount);
+            $advancePayment -= $usedFromAdvance;
+            $remainingDebt = $amount - $usedFromAdvance;
+
+            if ($remainingDebt > 0) {
+                $outstanding += $remainingDebt;
             }
         } else {
             $outstanding += $amount;
