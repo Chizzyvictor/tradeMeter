@@ -59,10 +59,10 @@ switch ($action) {
         $partnerStatsStmt = $db->prepare(" 
             SELECT
                 COALESCE(SUM(outstanding),0) AS outstanding,
-                COALESCE(SUM(advancePayment),0) AS advancePayment,
-                COUNT(CASE WHEN outstanding > 0 THEN 1 END) AS activeDebtors,
-                COUNT(CASE WHEN advancePayment > 0 THEN 1 END) AS activeCreditors,
-                COUNT(sid) AS totalPartners
+                COALESCE(SUM(advancePayment),0) AS advance_payment,
+                COUNT(CASE WHEN outstanding > 0 THEN 1 END) AS active_debtors,
+                COUNT(CASE WHEN advancePayment > 0 THEN 1 END) AS active_creditors,
+                COUNT(sid) AS total_partners
             FROM partner
             WHERE cid = :cid
         ");
@@ -71,8 +71,8 @@ switch ($action) {
 
         $salesStatsStmt = $db->prepare(" 
             SELECT
-                COALESCE(SUM(totalAmount),0) AS totalSales,
-                COUNT(sale_id) AS salesCount
+                COALESCE(SUM(totalAmount),0) AS total_sales,
+                COUNT(sale_id) AS sales_count
             FROM sales
             WHERE cid = :sales_cid {$dateFilter}
         ");
@@ -84,8 +84,8 @@ switch ($action) {
 
         $purchaseStatsStmt = $db->prepare(" 
             SELECT
-                COALESCE(SUM(totalAmount),0) AS totalPurchases,
-                COUNT(purchase_id) AS purchaseCount
+                COALESCE(SUM(totalAmount),0) AS total_purchases,
+                COUNT(purchase_id) AS purchase_count
             FROM purchases
             WHERE cid = :purchase_cid {$dateFilter}
         ");
@@ -96,7 +96,7 @@ switch ($action) {
         $purchaseStatsRow = $purchaseStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
         $inventoryValueStmt = $db->prepare(" 
-            SELECT COALESCE(SUM(COALESCE(inv.qty,0) * COALESCE(p.cost_price,0)),0) AS inventoryValue
+            SELECT COALESCE(SUM(COALESCE(inv.qty,0) * COALESCE(p.cost_price,0)),0) AS inventory_value
             FROM products p
             LEFT JOIN (
                 SELECT product_id, cid, SUM(quantity) AS qty
@@ -181,16 +181,16 @@ switch ($action) {
         }
 
         $outstanding = floatval($partnerStatsRow['outstanding'] ?? 0);
-        $advancePayment = floatval($partnerStatsRow['advancePayment'] ?? 0);
-        $activeDebtors = intval($partnerStatsRow['activeDebtors'] ?? 0);
-        $activeCreditors = intval($partnerStatsRow['activeCreditors'] ?? 0);
-        $totalPartners = intval($partnerStatsRow['totalPartners'] ?? 0);
+    $advancePayment = floatval($partnerStatsRow['advance_payment'] ?? 0);
+    $activeDebtors = intval($partnerStatsRow['active_debtors'] ?? 0);
+    $activeCreditors = intval($partnerStatsRow['active_creditors'] ?? 0);
+    $totalPartners = intval($partnerStatsRow['total_partners'] ?? 0);
 
-        $totalSales = floatval($salesStatsRow['totalSales'] ?? 0);
-        $totalPurchases = floatval($purchaseStatsRow['totalPurchases'] ?? 0);
-        $rangeTransactions = intval($salesStatsRow['salesCount'] ?? 0) + intval($purchaseStatsRow['purchaseCount'] ?? 0);
+    $totalSales = floatval($salesStatsRow['total_sales'] ?? 0);
+    $totalPurchases = floatval($purchaseStatsRow['total_purchases'] ?? 0);
+    $rangeTransactions = intval($salesStatsRow['sales_count'] ?? 0) + intval($purchaseStatsRow['purchase_count'] ?? 0);
 
-        $inventoryValue = floatval($inventoryValueRow['inventoryValue'] ?? 0);
+    $inventoryValue = floatval($inventoryValueRow['inventory_value'] ?? 0);
         $profit = $totalSales - $totalPurchases;
 
         respond("success", "Dashboard loaded", [
