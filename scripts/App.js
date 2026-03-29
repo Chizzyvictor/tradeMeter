@@ -153,9 +153,27 @@ class AppCore {
         if (typeof onComplete === "function") onComplete(normalizedRes);
 			},
 			error: (xhr, status, error) => {
-				const msg = status === "timeout"
-					? "Request timeout. Please try again."
-					: "Server error. Please try again.";
+        let msg = status === "timeout"
+          ? "Request timeout. Please try again."
+          : "Server error. Please try again.";
+
+        const payload = xhr?.responseJSON || null;
+        if (payload && typeof payload === "object") {
+          msg = String(payload.text || payload.message || msg);
+          if (payload.reference) {
+            msg += ` (${payload.reference})`;
+          }
+        } else if (xhr?.responseText) {
+          try {
+            const parsed = JSON.parse(xhr.responseText);
+            msg = String(parsed.text || parsed.message || msg);
+            if (parsed.reference) {
+              msg += ` (${parsed.reference})`;
+            }
+          } catch (_parseError) {
+            // Keep generic message when response is not JSON.
+          }
+        }
 
 				this.showAlert(msg, "error");
 				console.error("AJAX Error:", status, error, xhr.responseText);
@@ -612,6 +630,7 @@ class Dashboard {
     this.lastUpdatedAt = new Date();
     this.updateLastUpdatedLabel();
     this.startLastUpdatedTicker();
+alert(JSON.stringify(res));
 
      $("#loadOutstanding").html(this.app.formatCurrency(res.outstanding));
      $("#loadAdvancePayments").html(this.app.formatCurrency(res.advancePayment));

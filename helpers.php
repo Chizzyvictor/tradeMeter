@@ -13,6 +13,63 @@ function respond($status, $text = "", $extra = []) {
     exit;
 }
 
+function appDebugEnabled(): bool {
+    $raw = strtolower(trim((string)(appEnv('APP_DEBUG', 'false') ?? 'false')));
+    return in_array($raw, ['1', 'true', 'yes', 'on'], true);
+}
+
+function respondUnhandledApiError(string $message, array $context = []): void {
+    $reference = 'tm_' . date('Ymd_His') . '_' . substr(bin2hex(random_bytes(6)), 0, 8);
+    $payload = [
+        'status' => 'error',
+        'text' => 'Unexpected server error. Ref: ' . $reference,
+        'reference' => $reference,
+    ];
+
+    if (appDebugEnabled()) {
+        $payload['debug'] = $message;
+        if (!empty($context)) {
+            $payload['context'] = $context;
+        }
+    }
+
+    error_log('TradeMeter API unhandled error [' . $reference . ']: ' . $message . ' | ' . json_encode($context, JSON_UNESCAPED_SLASHES));
+    echo json_encode($payload);
+    exit;
+}
+
+set_exception_handler(function (Throwable $e): void {
+    respondUnhandledApiError($e->getMessage(), [
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+        'action' => (string)($_REQUEST['action'] ?? ''),
+        'cid' => intval($_SESSION['cid'] ?? 0),
+        'uid' => intval($_SESSION['user_id'] ?? 0),
+    ]);
+});
+
+register_shutdown_function(function (): void {
+    $lastError = error_get_last();
+    if (!is_array($lastError)) {
+        return;
+    }
+
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+    if (!in_array(intval($lastError['type'] ?? 0), $fatalTypes, true)) {
+        return;
+    }
+
+    respondUnhandledApiError((string)($lastError['message'] ?? 'Fatal error'), [
+        'file' => (string)($lastError['file'] ?? ''),
+        'line' => intval($lastError['line'] ?? 0),
+        'uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+        'action' => (string)($_REQUEST['action'] ?? ''),
+        'cid' => intval($_SESSION['cid'] ?? 0),
+        'uid' => intval($_SESSION['user_id'] ?? 0),
+    ]);
+});
+
 function safe_input($value) {
     return trim(htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8'));
 }
