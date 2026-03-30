@@ -498,12 +498,14 @@ class Inventory {
     }
 
     const amountPaid = Math.max(0, this.app.toNumber(this.$amountPaid.val(), 0));
+    const transactionDate = new Date().toISOString().slice(0, 10);
 
     this.postTransactions("createPurchase", {
       partner_id: partnerId,
       transaction_type: "buy",
       items: JSON.stringify(items),
-      amountPaid
+      amountPaid,
+      transaction_date: transactionDate
     }, () => {
       AppCore.safeHideModal("#purchaseModal");
       this.state.purchaseProducts = [];
@@ -563,12 +565,14 @@ class Inventory {
     }
 
     const amountPaid = Math.max(0, this.app.toNumber(this.$saleAmountPaid.val(), 0));
+    const transactionDate = new Date().toISOString().slice(0, 10);
 
     this.postTransactions("createSale", {
       partner_id: partnerId,
       transaction_type: "sell",
       items: JSON.stringify(items),
-      amountPaid
+      amountPaid,
+      transaction_date: transactionDate
     }, () => {
       AppCore.safeHideModal("#saleModal");
       this.state.purchaseProducts = [];

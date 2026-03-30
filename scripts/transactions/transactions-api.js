@@ -35,7 +35,7 @@ TransactionManager.prototype.validateTransactionForm = function () {
     this.transactionItems.forEach((item, index) => {
         const qty = parseFloat(item.qty) || 0;
         const rate = parseFloat(item.rate) || 0;
-        if (qty <= 0 || rate < 0) {
+        if (qty <= 0 || rate <= 0) {
             ok = false;
             issues.push(`invalid qty/rate for product ${item.product_id}`);
         }
