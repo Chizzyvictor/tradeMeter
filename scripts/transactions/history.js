@@ -6,7 +6,7 @@ TransactionManager.prototype.loadTransactionHistory = function () {
         data: {},
         onSuccess: (res) => {
             this.historyRows = Array.isArray(res.data) ? res.data : [];
-            this.renderTransactionHistory(this.historyRows);
+            this.renderHistoryForCurrentFilters();
         },
         onComplete: () => {
             $('#transactionsLoader').addClass('d-none');
@@ -124,6 +124,19 @@ TransactionManager.prototype.filterTransactions = function () {
     this.renderTransactionHistory(filtered);
 };
 
+TransactionManager.prototype.renderHistoryForCurrentFilters = function () {
+    const hasFilters = Boolean(String($('#searchPartner').val() || '').trim())
+        || Boolean(String($('#filterStatus').val() || '').trim())
+        || Boolean($('#filterFrom').val())
+        || Boolean($('#filterTo').val());
+
+    if (hasFilters) {
+        this.filterTransactions();
+    } else {
+        this.renderTransactionHistory(this.historyRows);
+    }
+};
+
 TransactionManager.prototype.resetFilters = function () {
     $('#searchPartner').val('');
     $('#filterStatus').val('');
@@ -188,7 +201,7 @@ TransactionManager.prototype.viewTransactionDetails = function (purchaseId) {
             $payAmount.val('');
             $payAmount.attr('max', balance.toFixed(2));
             $payAmountErr.text('');
-            $payPurchaseBtn.prop('disabled', balance <= 0);
+            $payPurchaseBtn.prop('disabled', balance <= 0).toggleClass('d-none', balance <= 0);
             $payStatusNote.toggleClass('d-none', balance > 0);
             $modal.modal('show');
         },
@@ -237,7 +250,7 @@ TransactionManager.prototype.payPurchase = function () {
                 $payAmountErr.text('');
                 const updatedPaid = parseFloat(res.amountPaid) || 0;
                 const nextBalance = Math.max(0, balanceDue - amount);
-                const nextStatus = String(res.status || (nextBalance <= 0 ? 'paid' : 'partial')).toLowerCase();
+                const nextStatus = String(res.paymentStatus || (nextBalance <= 0 ? 'paid' : 'partial')).toLowerCase();
 
                 $('#metaPaid').text(this.app.formatCurrency(updatedPaid));
                 $('#metaBalance').text(this.app.formatCurrency(nextBalance));
@@ -245,7 +258,7 @@ TransactionManager.prototype.payPurchase = function () {
                 $payAmount.val('');
                 $payAmount.attr('max', nextBalance.toFixed(2));
                 $payStatusNote.toggleClass('d-none', nextBalance > 0);
-                $payBtn.prop('disabled', nextBalance <= 0);
+                $payBtn.prop('disabled', nextBalance <= 0).toggleClass('d-none', nextBalance <= 0);
 
                 const target = this.historyRows.find(r => Number(r.purchase_id) === purchaseId);
                 if (target) {
@@ -254,16 +267,7 @@ TransactionManager.prototype.payPurchase = function () {
                     target.status = nextStatus;
                 }
 
-                const hasFilters = Boolean(String($('#searchPartner').val() || '').trim())
-                    || Boolean(String($('#filterStatus').val() || '').trim())
-                    || Boolean($('#filterFrom').val())
-                    || Boolean($('#filterTo').val());
-
-                if (hasFilters) {
-                    this.filterTransactions();
-                } else {
-                    this.renderTransactionHistory(this.historyRows);
-                }
+                this.renderHistoryForCurrentFilters();
 
                 this.loadTransactionHistory();
             } else {
@@ -275,7 +279,8 @@ TransactionManager.prototype.payPurchase = function () {
         },
         onComplete: () => {
             if ($('#purchaseDetailsModal').hasClass('show')) {
-                $payBtn.prop('disabled', false);
+                const currentBalance = parseFloat($payBalanceDue.val()) || 0;
+                $payBtn.prop('disabled', currentBalance <= 0).toggleClass('d-none', currentBalance <= 0);
             }
         }
     });

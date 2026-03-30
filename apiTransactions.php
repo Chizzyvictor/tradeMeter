@@ -432,7 +432,7 @@ switch ($action) {
             $db->exec("COMMIT");
             respond("success", "Transaction payment updated", [
                 "amountPaid" => $amountPaid,
-                "status" => $status
+                "paymentStatus" => $status
             ]);
         } catch (Throwable $e) {
             $db->exec("ROLLBACK");
