@@ -76,28 +76,74 @@ class Inventory {
       this.state.products = rows;
       this.state.filteredProducts = rows;
       this.renderProducts(rows);
-      this.updateLowStockAlert(rows); // Calculate from loaded products
+      this.updateLowStockAlert(rows);
       this.updateStatBadges();
       if (typeof onSuccess === "function") onSuccess(rows);
     });
   }
 
+  getProductStockPrediction(product) {
+    const qty = this.app.toNumber(product.quantity, 0);
+    const reorder = this.app.toNumber(product.reorder_level, 0);
+    const totalSold = this.app.toNumber(product.total_sold, 0);
+    const isActive = Number(product.is_active ?? 1) === 1;
+    let days = 0;
+
+    if (totalSold > 0 && qty > 0 && product.first_sale_date && product.last_sale_date) {
+      const first = new Date(product.first_sale_date);
+      const last = new Date(product.last_sale_date);
+      const firstTime = first.getTime();
+      const lastTime = last.getTime();
+
+      if (!Number.isNaN(firstTime) && !Number.isNaN(lastTime)) {
+        const diffDays = Math.max(1, (lastTime - firstTime) / (1000 * 60 * 60 * 24));
+        const dailySales = totalSold / diffDays;
+
+        if (dailySales > 0) {
+          days = Math.floor(qty / dailySales);
+        }
+      }
+    }
+
+    let statusText = "In Stock";
+    let badge = "success";
+
+    if (!isActive) {
+      statusText = "Inactive";
+      badge = "secondary";
+    } else if (qty <= reorder) {
+      statusText = "Low Stock";
+      badge = "warning";
+    } else if (days > 0 && days <= 7) {
+      statusText = `&#9888;&#65039; ${days} day(s) left`;
+      badge = "danger";
+    }
+
+    return {
+      qty,
+      reorder,
+      totalSold,
+      days,
+      isActive,
+      statusText,
+      badge
+    };
+  }
+
   updateLowStockAlert(rows = null) {
     const productsToCheck = rows || this.state.products;
-    const lowStockItems = productsToCheck.filter((p) => {
-      const qty = this.app.toNumber(p.quantity, 0);
-      const reorder = this.app.toNumber(p.reorder_level, 0);
-      const isActive = Number(p.is_active ?? 1) === 1;
-      return isActive && qty <= reorder;
-    });
 
     this.$lowStockList.empty();
 
-    if (lowStockItems.length > 0) {
-      lowStockItems.forEach((p) => {
-        const qty = this.app.toNumber(p.quantity, 0);
-        const reorder = this.app.toNumber(p.reorder_level, 0);
-        const li = $(`<li>${p.product_name} (Qty: ${qty}, Reorder: ${reorder})</li>`);
+    const alertItems = productsToCheck.filter((p) => {
+      const metrics = this.getProductStockPrediction(p);
+      return metrics.isActive && metrics.days > 0 && metrics.days <= 5;
+    });
+
+    if (alertItems.length > 0) {
+      alertItems.forEach((p) => {
+        const metrics = this.getProductStockPrediction(p);
+        const li = $(`<li>${p.product_name} will finish in ${metrics.days} days</li>`);
         this.$lowStockList.append(li);
       });
       this.$lowStockAlert.show();
@@ -238,18 +284,14 @@ class Inventory {
     this.$productsCards.empty();
 
     if (!rows.length) {
-      this.$productsTable.html("<tr><td colspan='8' class='text-center text-muted'>No products found</td></tr>");
+      this.$productsTable.html("<tr><td colspan='9' class='text-center text-muted'>No products found</td></tr>");
       this.$productsCards.html("<div class='text-center text-muted py-3'>No products found</div>");
       return;
     }
 
     const tableHtml = rows.map((p) => {
       const image = this.app.resolveImagePath(p.product_image, "Images/productsDP", "Images/productsDP/product.jpg");
-      const qty = this.app.toNumber(p.quantity, 0);
-      const reorder = this.app.toNumber(p.reorder_level, 0);
-      const isActive = Number(p.is_active ?? 1) === 1;
-      const statusText = !isActive ? "Inactive" : (qty <= reorder ? "Low Stock" : "In Stock");
-      const badge = !isActive ? "secondary" : (qty <= reorder ? "warning" : "success");
+      const metrics = this.getProductStockPrediction(p);
       const name = p.product_name || "-";
       const category = p.category_name || "Uncategorized";
       const unit = p.product_unit || "pcs";
@@ -260,9 +302,10 @@ class Inventory {
           <td>${name}</td>
           <td>${category}</td>
           <td>${unit}</td>
-          <td>${reorder}</td>
-          <td>${qty}</td>
-          <td><span class="badge badge-${badge}">${statusText}</span></td>
+          <td>${metrics.reorder}</td>
+          <td>${metrics.qty}</td>
+          <td>${metrics.days > 0 ? `${metrics.days} days` : "-"}</td>
+          <td><span class="badge badge-${metrics.badge}">${metrics.statusText}</span></td>
           <td>
             <button type="button" class="btn btn-sm btn-primary productDetailsBtn" data-id="${p.product_id}">Details</button>
           </td>
@@ -272,11 +315,7 @@ class Inventory {
 
     const cardsHtml = rows.map((p) => {
       const image = this.app.resolveImagePath(p.product_image, "Images/productsDP", "Images/productsDP/product.jpg");
-      const qty = this.app.toNumber(p.quantity, 0);
-      const reorder = this.app.toNumber(p.reorder_level, 0);
-      const isActive = Number(p.is_active ?? 1) === 1;
-      const statusText = !isActive ? "Inactive" : (qty <= reorder ? "Low Stock" : "In Stock");
-      const badge = !isActive ? "secondary" : (qty <= reorder ? "warning" : "success");
+      const metrics = this.getProductStockPrediction(p);
       const name = p.product_name || "-";
       const category = p.category_name || "Uncategorized";
       const unit = p.product_unit || "pcs";
@@ -290,13 +329,14 @@ class Inventory {
                 <h6 class="mb-0">${name}</h6>
                 <small class="text-muted">${category}</small>
               </div>
-              <span class="badge badge-${badge}">${statusText}</span>
+              <span class="badge badge-${metrics.badge}">${metrics.statusText}</span>
             </div>
 
             <div class="inventory-product-meta text-muted mb-2">
               <span>Unit: ${unit}</span>
-              <span>Reorder: ${reorder}</span>
-              <span>Qty: ${qty}</span>
+              <span>Reorder: ${metrics.reorder}</span>
+              <span>Qty: ${metrics.qty}</span>
+              <span>Prediction: ${metrics.days > 0 ? `${metrics.days} days` : "-"}</span>
             </div>
 
             <button type="button" class="btn btn-sm btn-primary btn-block productDetailsBtn" data-id="${p.product_id}">Details</button>

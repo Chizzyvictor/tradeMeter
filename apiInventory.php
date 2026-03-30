@@ -173,10 +173,14 @@ p.selling_price,
 p.reorder_level,
 p.is_active,
 pc.category_name,
-i.quantity
+i.quantity,
+COALESCE(SUM(sl.qty_out), 0) as total_sold,
+MIN(sl.created_at) as first_sale_date,
+MAX(sl.created_at) as last_sale_date
 FROM products p
 LEFT JOIN inventory i ON i.product_id=p.product_id AND i.cid=p.cid
 LEFT JOIN product_categories pc ON pc.category_id=p.category_id
+LEFT JOIN stock_ledger sl ON sl.product_id = p.product_id AND sl.cid = p.cid AND sl.reference_type = 'sale'
 WHERE p.cid=:cid
 ";
 
@@ -184,7 +188,19 @@ if($categoryId>0){
 $sql.=" AND p.category_id=:category_id";
 }
 
-$sql.=" ORDER BY p.product_name";
+$sql.="
+GROUP BY
+p.product_id,
+p.product_name,
+p.product_image,
+p.product_unit,
+p.cost_price,
+p.selling_price,
+p.reorder_level,
+p.is_active,
+pc.category_name,
+i.quantity
+ORDER BY p.product_name";
 
 $stmt=$db->prepare($sql);
 $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);

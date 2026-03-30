@@ -81,7 +81,7 @@ include "INC/navbar.php";
 
     <div class="container-fluid" id="lowStockAlert" style="display:none;">
       <div class="alert alert-warning alert-dismissible fade show" role="alert">
-        <strong>Low Stock Alert!</strong> The following products are low in stock:
+        <strong>Stock Prediction Alert!</strong> The following products may finish soon:
         <ul id="lowStockList"></ul>
         <button type="button" class="close" data-dismiss="alert" aria-label="Close">
           <span aria-hidden="true">&times;</span>
@@ -175,6 +175,7 @@ include "INC/navbar.php";
                         <th>Unit</th>
                         <th>Reorder Level</th>
                         <th>Quantity</th>
+                        <th>Stock Prediction</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
