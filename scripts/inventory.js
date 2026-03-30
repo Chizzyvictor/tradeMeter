@@ -39,12 +39,18 @@ class Inventory {
     this.$productSearchInput = $("#productSearchInput");
     this.$searchStatsIndicator = $("#searchStatsIndicator");
     this.$purchaseModal = $("#purchaseModal");
+    this.$purchaseSupplierInput = $("#purchaseSupplierInput");
     this.$purchaseSupplier = $("#purchaseSupplier");
+    this.$purchaseSupplierDatalist = $("#purchaseSupplierDatalist");
+    this.$purchaseProductDatalist = $("#purchaseProductDatalist");
     this.$purchaseItems = $("#purchaseItems");
     this.$purchaseTotal = $("#purchaseTotal");
     this.$amountPaid = $("#amountPaid");
     this.$saleModal = $("#saleModal");
+    this.$saleCustomerInput = $("#saleCustomerInput");
     this.$saleCustomer = $("#saleCustomer");
+    this.$saleCustomerDatalist = $("#saleCustomerDatalist");
+    this.$saleProductDatalist = $("#saleProductDatalist");
     this.$saleItems = $("#saleItems");
     this.$saleTotal = $("#saleTotal");
     this.$saleAmountPaid = $("#saleAmountPaid");
@@ -231,6 +237,7 @@ class Inventory {
     this.postTransactions("loadProducts", {}, (res) => {
       const rows = Array.isArray(res.data) ? res.data : [];
       this.state.purchaseProducts = rows;
+      this.populatePurchaseProductOptions(rows);
       if (typeof onSuccess === "function") onSuccess(rows);
     }, { silent: true });
   }
@@ -248,68 +255,150 @@ class Inventory {
     this.postTransactions("loadProducts", {}, (res) => {
       const rows = Array.isArray(res.data) ? res.data : [];
       this.state.saleProducts = rows;
+      this.populateSaleProductOptions(rows);
       if (typeof onSuccess === "function") onSuccess(rows);
     }, { silent: true });
   }
 
   populatePurchaseSupplierOptions(rows = []) {
-    this.$purchaseSupplier.empty();
-    this.$purchaseSupplier.append('<option value="">Select supplier</option>');
-
+    this.$purchaseSupplierDatalist.empty();
     rows.forEach((partner) => {
-      const partnerId = Number(partner.sid || partner.partner_id || 0);
-      const partnerName = partner.sName || partner.sname || "-";
-      if (partnerId > 0) {
-        this.$purchaseSupplier.append(`<option value="${partnerId}">${partnerName}</option>`);
+      const partnerName = String(partner.sName || partner.sname || "").trim();
+      if (partnerName) {
+        this.$purchaseSupplierDatalist.append(`<option value="${AppCore.escapeHtml(partnerName)}"></option>`);
       }
     });
   }
 
-  buildPurchaseProductOptions(selectedProductId = 0) {
-    const selected = Number(selectedProductId) || 0;
-    const options = ['<option value="">Select product</option>'];
-
-    this.state.purchaseProducts.forEach((product) => {
-      const productId = Number(product.product_id) || 0;
-      const isSelected = productId === selected ? "selected" : "";
-      options.push(`<option value="${productId}" data-cost="${this.app.toNumber(product.cost_price, 0)}" ${isSelected}>${product.product_name || "-"}</option>`);
+  populatePurchaseProductOptions(rows = []) {
+    this.$purchaseProductDatalist.empty();
+    rows.forEach((product) => {
+      const productName = String(product.product_name || "").trim();
+      if (productName) {
+        this.$purchaseProductDatalist.append(`<option value="${AppCore.escapeHtml(productName)}"></option>`);
+      }
     });
-
-    return options.join("");
   }
 
   populateSaleCustomerOptions(rows = []) {
-    this.$saleCustomer.empty();
-    this.$saleCustomer.append('<option value="">Select customer</option>');
-
+    this.$saleCustomerDatalist.empty();
     rows.forEach((partner) => {
-      const partnerId = Number(partner.sid || partner.partner_id || 0);
-      const partnerName = partner.sName || partner.sname || "-";
-      if (partnerId > 0) {
-        this.$saleCustomer.append(`<option value="${partnerId}">${partnerName}</option>`);
+      const partnerName = String(partner.sName || partner.sname || "").trim();
+      if (partnerName) {
+        this.$saleCustomerDatalist.append(`<option value="${AppCore.escapeHtml(partnerName)}"></option>`);
       }
     });
   }
 
-  buildSaleProductOptions(selectedProductId = 0) {
-    const selected = Number(selectedProductId) || 0;
-    const options = ['<option value="">Select product</option>'];
-
-    this.state.saleProducts.forEach((product) => {
-      const productId = Number(product.product_id) || 0;
-      const availableStock = this.app.toNumber(product.available_stock, 0);
-      const isSelected = productId === selected ? "selected" : "";
-      const label = `${product.product_name || "-"} (${availableStock} in stock)`;
-      options.push(`<option value="${productId}" data-price="${this.app.toNumber(product.selling_price, 0)}" data-stock="${availableStock}" ${isSelected}>${label}</option>`);
+  populateSaleProductOptions(rows = []) {
+    this.$saleProductDatalist.empty();
+    rows.forEach((product) => {
+      const productName = String(product.product_name || "").trim();
+      if (productName) {
+        const stockText = `${this.app.toNumber(product.available_stock, 0)} in stock`;
+        this.$saleProductDatalist.append(`<option value="${AppCore.escapeHtml(productName)}" label="${AppCore.escapeHtml(stockText)}"></option>`);
+      }
     });
+  }
 
-    return options.join("");
+  normalizeAutocompleteText(value) {
+    return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+  }
+
+  findPartnerByName(rows, name) {
+    const query = this.normalizeAutocompleteText(name);
+    if (!query) return null;
+    const exact = rows.find((partner) => this.normalizeAutocompleteText(partner.sName || partner.sname) === query);
+    if (exact) return exact;
+    return rows.find((partner) => this.normalizeAutocompleteText(partner.sName || partner.sname).includes(query)) || null;
+  }
+
+  findProductByName(rows, name) {
+    const query = this.normalizeAutocompleteText(name);
+    if (!query) return null;
+    const exact = rows.find((product) => this.normalizeAutocompleteText(product.product_name) === query);
+    if (exact) return exact;
+    return rows.find((product) => this.normalizeAutocompleteText(product.product_name).includes(query)) || null;
+  }
+
+  syncPurchaseSupplierFromInput() {
+    const match = this.findPartnerByName(this.state.purchasePartners, this.$purchaseSupplierInput.val());
+    if (!match) {
+      this.$purchaseSupplier.val("");
+      return null;
+    }
+
+    const partnerId = Number(match.sid || match.partner_id || 0);
+    const partnerName = String(match.sName || match.sname || "").trim();
+    this.$purchaseSupplier.val(partnerId > 0 ? partnerId : "");
+    this.$purchaseSupplierInput.val(partnerName);
+    return match;
+  }
+
+  syncSaleCustomerFromInput() {
+    const match = this.findPartnerByName(this.state.salePartners, this.$saleCustomerInput.val());
+    if (!match) {
+      this.$saleCustomer.val("");
+      return null;
+    }
+
+    const partnerId = Number(match.sid || match.partner_id || 0);
+    const partnerName = String(match.sName || match.sname || "").trim();
+    this.$saleCustomer.val(partnerId > 0 ? partnerId : "");
+    this.$saleCustomerInput.val(partnerName);
+    return match;
+  }
+
+  syncPurchaseProductRow($row) {
+    const $input = $row.find(".purchaseProductInput");
+    const $hidden = $row.find(".productSelect");
+    const match = this.findProductByName(this.state.purchaseProducts, $input.val());
+
+    if (!match) {
+      $hidden.val("");
+      return null;
+    }
+
+    const productId = Number(match.product_id) || 0;
+    $hidden.val(productId > 0 ? productId : "");
+    $input.val(String(match.product_name || ""));
+
+    const $cost = $row.find(".cost");
+    if ($cost.val() === "") {
+      $cost.val(this.app.toNumber(match.cost_price, 0));
+    }
+
+    return match;
+  }
+
+  syncSaleProductRow($row) {
+    const $input = $row.find(".saleProductInput");
+    const $hidden = $row.find(".saleProduct");
+    const match = this.findProductByName(this.state.saleProducts, $input.val());
+
+    if (!match) {
+      $hidden.val("");
+      return null;
+    }
+
+    const productId = Number(match.product_id) || 0;
+    $hidden.val(productId > 0 ? productId : "");
+    $input.val(String(match.product_name || ""));
+
+    const $price = $row.find(".salePrice");
+    if ($price.val() === "") {
+      $price.val(this.app.toNumber(match.selling_price, 0));
+    }
+
+    return match;
   }
 
   appendPurchaseItemRow(item = {}) {
     const productId = Number(item.product_id) || 0;
     const qty = this.app.toNumber(item.qty, 0);
     const costPrice = this.app.toNumber(item.costPrice, 0);
+    const selectedProduct = this.state.purchaseProducts.find((product) => Number(product.product_id) === productId) || null;
+    const productName = selectedProduct ? String(selectedProduct.product_name || "") : "";
     const hasEmptyState = this.$purchaseItems.find("td[colspan='5']").length > 0;
 
     if (hasEmptyState) {
@@ -318,7 +407,10 @@ class Inventory {
 
     const row = $(`
       <tr>
-        <td><select class="form-control productSelect">${this.buildPurchaseProductOptions(productId)}</select></td>
+        <td>
+          <input type="text" class="form-control purchaseProductInput" list="purchaseProductDatalist" placeholder="Type product name" value="${AppCore.escapeHtml(productName)}">
+          <input type="hidden" class="productSelect" value="${productId > 0 ? productId : ""}">
+        </td>
         <td><input type="number" class="form-control qty" min="1" step="1" value="${qty > 0 ? qty : ""}"></td>
         <td><input type="number" class="form-control cost" min="0" step="0.01" value="${costPrice > 0 ? costPrice : ""}"></td>
         <td class="rowTotal">0.00</td>
@@ -327,6 +419,7 @@ class Inventory {
     `);
 
     this.$purchaseItems.append(row);
+    this.syncPurchaseProductRow(row);
     this.updatePurchaseRow(row);
     this.recalculatePurchaseTotal();
   }
@@ -359,6 +452,7 @@ class Inventory {
   }
 
   resetPurchaseModal() {
+    this.$purchaseSupplierInput.val("");
     this.$purchaseSupplier.val("");
     this.$amountPaid.val("");
     this.showEmptyPurchaseItems();
@@ -373,6 +467,8 @@ class Inventory {
     const productId = Number(item.product_id) || 0;
     const qty = this.app.toNumber(item.qty, 0);
     const sellingPrice = this.app.toNumber(item.sellingPrice, 0);
+    const selectedProduct = this.state.saleProducts.find((product) => Number(product.product_id) === productId) || null;
+    const productName = selectedProduct ? String(selectedProduct.product_name || "") : "";
     const hasEmptyState = this.$saleItems.find("td[colspan='5']").length > 0;
 
     if (hasEmptyState) {
@@ -381,7 +477,10 @@ class Inventory {
 
     const row = $(`
       <tr>
-        <td><select class="form-control saleProduct">${this.buildSaleProductOptions(productId)}</select></td>
+        <td>
+          <input type="text" class="form-control saleProductInput" list="saleProductDatalist" placeholder="Type product name" value="${AppCore.escapeHtml(productName)}">
+          <input type="hidden" class="saleProduct" value="${productId > 0 ? productId : ""}">
+        </td>
         <td><input type="number" class="form-control saleQty" min="1" step="1" value="${qty > 0 ? qty : ""}"></td>
         <td><input type="number" class="form-control salePrice" min="0" step="0.01" value="${sellingPrice > 0 ? sellingPrice : ""}"></td>
         <td class="saleRowTotal">0.00</td>
@@ -390,6 +489,7 @@ class Inventory {
     `);
 
     this.$saleItems.append(row);
+    this.syncSaleProductRow(row);
     this.updateSaleRow(row);
     this.recalculateSaleTotal();
   }
@@ -426,6 +526,7 @@ class Inventory {
   }
 
   resetSaleModal() {
+    this.$saleCustomerInput.val("");
     this.$saleCustomer.val("");
     this.$saleAmountPaid.val("");
     this.showEmptySaleItems();
@@ -469,6 +570,7 @@ class Inventory {
   }
 
   savePurchase() {
+    this.syncPurchaseSupplierFromInput();
     const partnerId = Number(this.$purchaseSupplier.val()) || 0;
     const items = [];
 
@@ -521,6 +623,7 @@ class Inventory {
   }
 
   saveSale() {
+    this.syncSaleCustomerFromInput();
     const partnerId = Number(this.$saleCustomer.val()) || 0;
     const items = [];
     let hasStockError = false;
@@ -531,11 +634,12 @@ class Inventory {
       const productId = Number($product.val()) || 0;
       const qty = this.app.toNumber($row.find(".saleQty").val(), 0);
       const sellingPrice = this.app.toNumber($row.find(".salePrice").val(), 0);
-      const availableStock = this.app.toNumber($product.find("option:selected").data("stock"), 0);
+      const selectedProduct = this.state.saleProducts.find((product) => Number(product.product_id) === productId) || null;
+      const availableStock = this.app.toNumber(selectedProduct?.available_stock, 0);
 
       if (productId > 0 && qty > 0 && sellingPrice >= 0) {
         if (qty > availableStock) {
-          this.app.showAlert(`Insufficient stock for ${$product.find("option:selected").text()}.`, "error");
+          this.app.showAlert(`Insufficient stock for ${$row.find(".saleProductInput").val() || "selected product"}.`, "error");
           hasStockError = true;
           items.length = 0;
           return false;
@@ -1180,12 +1284,17 @@ $(document).ready(function () {
     InventoryApp.appendSaleItemRow();
   });
 
-  $(document).on("change", ".productSelect", function () {
+  InventoryApp.$purchaseSupplierInput.on("change blur", function () {
+    InventoryApp.syncPurchaseSupplierFromInput();
+  });
+
+  InventoryApp.$saleCustomerInput.on("change blur", function () {
+    InventoryApp.syncSaleCustomerFromInput();
+  });
+
+  $(document).on("change blur", ".purchaseProductInput", function () {
     const $row = $(this).closest("tr");
-    const selectedCost = $(this).find("option:selected").data("cost");
-    if ($row.find(".cost").val() === "" && selectedCost !== undefined) {
-      $row.find(".cost").val(selectedCost);
-    }
+    InventoryApp.syncPurchaseProductRow($row);
     InventoryApp.updatePurchaseRow($row);
     InventoryApp.recalculatePurchaseTotal();
   });
@@ -1196,12 +1305,9 @@ $(document).ready(function () {
     InventoryApp.recalculatePurchaseTotal();
   });
 
-  $(document).on("change", ".saleProduct", function () {
+  $(document).on("change blur", ".saleProductInput", function () {
     const $row = $(this).closest("tr");
-    const selectedPrice = $(this).find("option:selected").data("price");
-    if ($row.find(".salePrice").val() === "" && selectedPrice !== undefined) {
-      $row.find(".salePrice").val(selectedPrice);
-    }
+    InventoryApp.syncSaleProductRow($row);
     InventoryApp.updateSaleRow($row);
     InventoryApp.recalculateSaleTotal();
   });

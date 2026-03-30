@@ -400,13 +400,14 @@
 
       <div class="modal-body">
         <div class="form-group">
-          <label for="purchaseSupplier">Supplier</label>
-          <select id="purchaseSupplier" class="form-control">
-            <option value="">Select supplier</option>
-          </select>
+          <label for="purchaseSupplierInput">Supplier</label>
+          <input type="text" id="purchaseSupplierInput" class="form-control" list="purchaseSupplierDatalist" placeholder="Type to search supplier" autocomplete="off">
+          <input type="hidden" id="purchaseSupplier" value="">
+          <datalist id="purchaseSupplierDatalist"></datalist>
         </div>
 
         <div class="table-responsive">
+          <datalist id="purchaseProductDatalist"></datalist>
           <table class="table table-bordered table-hover" id="purchaseItemsTable">
             <thead class="thead-light">
               <tr>
@@ -459,13 +460,14 @@
 
       <div class="modal-body">
         <div class="form-group">
-          <label for="saleCustomer">Customer</label>
-          <select id="saleCustomer" class="form-control">
-            <option value="">Select customer</option>
-          </select>
+          <label for="saleCustomerInput">Customer</label>
+          <input type="text" id="saleCustomerInput" class="form-control" list="saleCustomerDatalist" placeholder="Type to search customer" autocomplete="off">
+          <input type="hidden" id="saleCustomer" value="">
+          <datalist id="saleCustomerDatalist"></datalist>
         </div>
 
         <div class="table-responsive">
+          <datalist id="saleProductDatalist"></datalist>
           <table class="table table-bordered table-hover" id="saleItemsTable">
             <thead class="thead-light">
               <tr>
