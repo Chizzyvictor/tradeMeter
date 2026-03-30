@@ -30,8 +30,10 @@ switch ($action) {
 
     case "createTransaction":
     case "createPurchase":
+    case "createSale":
         $partnerId = intval($_POST['partner_id'] ?? ($_POST['supplier_id'] ?? 0));
-        $transactionType = normalizeTransactionType($_POST['transaction_type'] ?? 'sell');
+        $defaultTransactionType = $action === 'createSale' ? 'sell' : ($action === 'createPurchase' ? 'buy' : 'sell');
+        $transactionType = normalizeTransactionType($_POST['transaction_type'] ?? $defaultTransactionType);
         $amountPaid = floatval($_POST['amountPaid'] ?? 0);
         $transactionDate = trim((string)($_POST['transaction_date'] ?? ''));
         $itemsRaw = $_POST['items'] ?? '[]';

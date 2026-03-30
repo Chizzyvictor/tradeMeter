@@ -8,6 +8,10 @@ class Inventory {
       categories: [],
       products: [],
       filteredProducts: [],
+      purchasePartners: [],
+      purchaseProducts: [],
+      salePartners: [],
+      saleProducts: [],
       currentCategoryId: 0,
       currentProduct: null
     };
@@ -17,6 +21,8 @@ class Inventory {
     this.$productsCards = $("#inventoryProductsCards");
     this.$stockMovementTable = $("#stockMovementTable tbody");
     this.$stockMovementCards = $("#stockMovementCards");
+    this.$reorderTableBody = $("#reorderTableBody");
+    this.$reorderSuggestionsCards = $("#reorderSuggestionsCards");
     this.$productTransactionsTable = $("#productTransactionsTable tbody");
     this.$productTransactionsCards = $("#productTransactionsCards");
     this.$productStockMovementTable = $("#productStockMovementTable tbody");
@@ -31,6 +37,16 @@ class Inventory {
     this.$lowStockAlert = $("#lowStockAlert");
     this.$lowStockList = $("#lowStockList");
     this.$searchStatsIndicator = $("#searchStatsIndicator");
+    this.$purchaseModal = $("#purchaseModal");
+    this.$purchaseSupplier = $("#purchaseSupplier");
+    this.$purchaseItems = $("#purchaseItems");
+    this.$purchaseTotal = $("#purchaseTotal");
+    this.$amountPaid = $("#amountPaid");
+    this.$saleModal = $("#saleModal");
+    this.$saleCustomer = $("#saleCustomer");
+    this.$saleItems = $("#saleItems");
+    this.$saleTotal = $("#saleTotal");
+    this.$saleAmountPaid = $("#saleAmountPaid");
     this.searchTimeout = null;
   }
 
@@ -49,6 +65,26 @@ class Inventory {
       action,
       data: formData,
       onSuccess
+    });
+  }
+
+  postTransactions(action, data = {}, onSuccess = null, options = {}) {
+    this.app.ajaxHelper({
+      url: "apiTransactions.php",
+      action,
+      data,
+      onSuccess,
+      ...options
+    });
+  }
+
+  postPartners(action, data = {}, onSuccess = null, options = {}) {
+    this.app.ajaxHelper({
+      url: "apiPartners.php",
+      action,
+      data,
+      onSuccess,
+      ...options
     });
   }
 
@@ -157,6 +193,379 @@ class Inventory {
       const rows = res.data || [];
       this.renderStockMovement(rows);
       this.showSection("stockMovementTab");
+    });
+  }
+
+  loadReorderSuggestions() {
+    this.post("getReorderSuggestions", {}, (res) => {
+      const rows = res.data || [];
+      this.renderReorderSuggestions(rows);
+      this.showSection("reorderTab");
+    });
+  }
+
+  loadPurchasePartners(onSuccess = null) {
+    this.postPartners("loadAllPartners", {}, (res) => {
+      const rows = Array.isArray(res.data) ? res.data : [];
+      this.state.purchasePartners = rows;
+      this.populatePurchaseSupplierOptions(rows);
+      if (typeof onSuccess === "function") onSuccess(rows);
+    }, { silent: true });
+  }
+
+  loadPurchaseProducts(onSuccess = null) {
+    this.postTransactions("loadProducts", {}, (res) => {
+      const rows = Array.isArray(res.data) ? res.data : [];
+      this.state.purchaseProducts = rows;
+      if (typeof onSuccess === "function") onSuccess(rows);
+    }, { silent: true });
+  }
+
+  loadSalePartners(onSuccess = null) {
+    this.postPartners("loadAllPartners", {}, (res) => {
+      const rows = Array.isArray(res.data) ? res.data : [];
+      this.state.salePartners = rows;
+      this.populateSaleCustomerOptions(rows);
+      if (typeof onSuccess === "function") onSuccess(rows);
+    }, { silent: true });
+  }
+
+  loadSaleProducts(onSuccess = null) {
+    this.postTransactions("loadProducts", {}, (res) => {
+      const rows = Array.isArray(res.data) ? res.data : [];
+      this.state.saleProducts = rows;
+      if (typeof onSuccess === "function") onSuccess(rows);
+    }, { silent: true });
+  }
+
+  populatePurchaseSupplierOptions(rows = []) {
+    this.$purchaseSupplier.empty();
+    this.$purchaseSupplier.append('<option value="">Select supplier</option>');
+
+    rows.forEach((partner) => {
+      const partnerId = Number(partner.sid || partner.partner_id || 0);
+      const partnerName = partner.sName || partner.sname || "-";
+      if (partnerId > 0) {
+        this.$purchaseSupplier.append(`<option value="${partnerId}">${partnerName}</option>`);
+      }
+    });
+  }
+
+  buildPurchaseProductOptions(selectedProductId = 0) {
+    const selected = Number(selectedProductId) || 0;
+    const options = ['<option value="">Select product</option>'];
+
+    this.state.purchaseProducts.forEach((product) => {
+      const productId = Number(product.product_id) || 0;
+      const isSelected = productId === selected ? "selected" : "";
+      options.push(`<option value="${productId}" data-cost="${this.app.toNumber(product.cost_price, 0)}" ${isSelected}>${product.product_name || "-"}</option>`);
+    });
+
+    return options.join("");
+  }
+
+  populateSaleCustomerOptions(rows = []) {
+    this.$saleCustomer.empty();
+    this.$saleCustomer.append('<option value="">Select customer</option>');
+
+    rows.forEach((partner) => {
+      const partnerId = Number(partner.sid || partner.partner_id || 0);
+      const partnerName = partner.sName || partner.sname || "-";
+      if (partnerId > 0) {
+        this.$saleCustomer.append(`<option value="${partnerId}">${partnerName}</option>`);
+      }
+    });
+  }
+
+  buildSaleProductOptions(selectedProductId = 0) {
+    const selected = Number(selectedProductId) || 0;
+    const options = ['<option value="">Select product</option>'];
+
+    this.state.saleProducts.forEach((product) => {
+      const productId = Number(product.product_id) || 0;
+      const availableStock = this.app.toNumber(product.available_stock, 0);
+      const isSelected = productId === selected ? "selected" : "";
+      const label = `${product.product_name || "-"} (${availableStock} in stock)`;
+      options.push(`<option value="${productId}" data-price="${this.app.toNumber(product.selling_price, 0)}" data-stock="${availableStock}" ${isSelected}>${label}</option>`);
+    });
+
+    return options.join("");
+  }
+
+  appendPurchaseItemRow(item = {}) {
+    const productId = Number(item.product_id) || 0;
+    const qty = this.app.toNumber(item.qty, 0);
+    const costPrice = this.app.toNumber(item.costPrice, 0);
+    const hasEmptyState = this.$purchaseItems.find("td[colspan='5']").length > 0;
+
+    if (hasEmptyState) {
+      this.$purchaseItems.empty();
+    }
+
+    const row = $(`
+      <tr>
+        <td><select class="form-control productSelect">${this.buildPurchaseProductOptions(productId)}</select></td>
+        <td><input type="number" class="form-control qty" min="1" step="1" value="${qty > 0 ? qty : ""}"></td>
+        <td><input type="number" class="form-control cost" min="0" step="0.01" value="${costPrice > 0 ? costPrice : ""}"></td>
+        <td class="rowTotal">0.00</td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger removePurchaseItemBtn">&times;</button></td>
+      </tr>
+    `);
+
+    this.$purchaseItems.append(row);
+    this.updatePurchaseRow(row);
+    this.recalculatePurchaseTotal();
+  }
+
+  updatePurchaseRow($row) {
+    const qty = this.app.toNumber($row.find(".qty").val(), 0);
+    const cost = this.app.toNumber($row.find(".cost").val(), 0);
+    const rowTotal = qty * cost;
+    $row.find(".rowTotal").text(this.app.formatNumber(rowTotal));
+  }
+
+  recalculatePurchaseTotal() {
+    let total = 0;
+
+    this.$purchaseItems.find("tr").each((_, rowEl) => {
+      const $row = $(rowEl);
+      if ($row.find(".qty").length === 0) {
+        return;
+      }
+
+      const qty = this.app.toNumber($row.find(".qty").val(), 0);
+      const cost = this.app.toNumber($row.find(".cost").val(), 0);
+      const rowTotal = qty * cost;
+
+      $row.find(".rowTotal").text(this.app.formatNumber(rowTotal));
+      total += rowTotal;
+    });
+
+    this.$purchaseTotal.text(this.app.formatNumber(total));
+  }
+
+  resetPurchaseModal() {
+    this.$purchaseSupplier.val("");
+    this.$amountPaid.val("");
+    this.showEmptyPurchaseItems();
+    this.$purchaseTotal.text(this.app.formatNumber(0));
+  }
+
+  showEmptyPurchaseItems() {
+    this.$purchaseItems.html("<tr><td colspan='5' class='text-center text-muted'>No items added</td></tr>");
+  }
+
+  appendSaleItemRow(item = {}) {
+    const productId = Number(item.product_id) || 0;
+    const qty = this.app.toNumber(item.qty, 0);
+    const sellingPrice = this.app.toNumber(item.sellingPrice, 0);
+    const hasEmptyState = this.$saleItems.find("td[colspan='5']").length > 0;
+
+    if (hasEmptyState) {
+      this.$saleItems.empty();
+    }
+
+    const row = $(`
+      <tr>
+        <td><select class="form-control saleProduct">${this.buildSaleProductOptions(productId)}</select></td>
+        <td><input type="number" class="form-control saleQty" min="1" step="1" value="${qty > 0 ? qty : ""}"></td>
+        <td><input type="number" class="form-control salePrice" min="0" step="0.01" value="${sellingPrice > 0 ? sellingPrice : ""}"></td>
+        <td class="saleRowTotal">0.00</td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger removeSaleItemBtn">&times;</button></td>
+      </tr>
+    `);
+
+    this.$saleItems.append(row);
+    this.updateSaleRow(row);
+    this.recalculateSaleTotal();
+  }
+
+  updateSaleRow($row) {
+    const qty = this.app.toNumber($row.find(".saleQty").val(), 0);
+    const price = this.app.toNumber($row.find(".salePrice").val(), 0);
+    const rowTotal = qty * price;
+    $row.find(".saleRowTotal").text(this.app.formatNumber(rowTotal));
+  }
+
+  recalculateSaleTotal() {
+    let total = 0;
+
+    this.$saleItems.find("tr").each((_, rowEl) => {
+      const $row = $(rowEl);
+      if ($row.find(".saleQty").length === 0) {
+        return;
+      }
+
+      const qty = this.app.toNumber($row.find(".saleQty").val(), 0);
+      const price = this.app.toNumber($row.find(".salePrice").val(), 0);
+      const rowTotal = qty * price;
+
+      $row.find(".saleRowTotal").text(this.app.formatNumber(rowTotal));
+      total += rowTotal;
+    });
+
+    this.$saleTotal.text(this.app.formatNumber(total));
+  }
+
+  showEmptySaleItems() {
+    this.$saleItems.html("<tr><td colspan='5' class='text-center text-muted'>No items added</td></tr>");
+  }
+
+  resetSaleModal() {
+    this.$saleCustomer.val("");
+    this.$saleAmountPaid.val("");
+    this.showEmptySaleItems();
+    this.$saleTotal.text(this.app.formatNumber(0));
+  }
+
+  openPurchaseModal() {
+    const finalizeOpen = () => {
+      this.resetPurchaseModal();
+      this.appendPurchaseItemRow();
+      this.$purchaseModal.modal("show");
+    };
+
+    const ensurePartners = () => {
+      if (this.state.purchasePartners.length) {
+        finalizeOpen();
+        return;
+      }
+      this.loadPurchasePartners(() => finalizeOpen());
+    };
+
+    this.loadPurchaseProducts(() => ensurePartners());
+  }
+
+  openSaleModal() {
+    const finalizeOpen = () => {
+      this.resetSaleModal();
+      this.appendSaleItemRow();
+      this.$saleModal.modal("show");
+    };
+
+    const ensurePartners = () => {
+      if (this.state.salePartners.length) {
+        finalizeOpen();
+        return;
+      }
+      this.loadSalePartners(() => finalizeOpen());
+    };
+
+    this.loadSaleProducts(() => ensurePartners());
+  }
+
+  savePurchase() {
+    const partnerId = Number(this.$purchaseSupplier.val()) || 0;
+    const items = [];
+
+    this.$purchaseItems.find("tr").each((_, rowEl) => {
+      const $row = $(rowEl);
+      const productId = Number($row.find(".productSelect").val()) || 0;
+      const qty = this.app.toNumber($row.find(".qty").val(), 0);
+      const costPrice = this.app.toNumber($row.find(".cost").val(), 0);
+
+      if (productId > 0 && qty > 0 && costPrice >= 0) {
+        items.push({
+          product_id: productId,
+          qty,
+          costPrice
+        });
+      }
+    });
+
+    if (partnerId <= 0) {
+      this.app.showAlert("Please select a supplier.", "error");
+      return;
+    }
+
+    if (!items.length) {
+      this.app.showAlert("Add at least one valid purchase item.", "error");
+      return;
+    }
+
+    const amountPaid = Math.max(0, this.app.toNumber(this.$amountPaid.val(), 0));
+
+    this.postTransactions("createPurchase", {
+      partner_id: partnerId,
+      transaction_type: "buy",
+      items: JSON.stringify(items),
+      amountPaid
+    }, () => {
+      AppCore.safeHideModal("#purchaseModal");
+      this.state.purchaseProducts = [];
+      this.state.saleProducts = [];
+      this.loadProducts(this.state.currentCategoryId || 0);
+      if ($("#reorderTab").is(":visible")) {
+        this.loadReorderSuggestions();
+      }
+      if (this.state.currentProduct?.product_id) {
+        this.loadProductDetails(this.state.currentProduct.product_id);
+      }
+    });
+  }
+
+  saveSale() {
+    const partnerId = Number(this.$saleCustomer.val()) || 0;
+    const items = [];
+    let hasStockError = false;
+
+    this.$saleItems.find("tr").each((_, rowEl) => {
+      const $row = $(rowEl);
+      const $product = $row.find(".saleProduct");
+      const productId = Number($product.val()) || 0;
+      const qty = this.app.toNumber($row.find(".saleQty").val(), 0);
+      const sellingPrice = this.app.toNumber($row.find(".salePrice").val(), 0);
+      const availableStock = this.app.toNumber($product.find("option:selected").data("stock"), 0);
+
+      if (productId > 0 && qty > 0 && sellingPrice >= 0) {
+        if (qty > availableStock) {
+          this.app.showAlert(`Insufficient stock for ${$product.find("option:selected").text()}.`, "error");
+          hasStockError = true;
+          items.length = 0;
+          return false;
+        }
+
+        items.push({
+          product_id: productId,
+          qty,
+          costPrice: sellingPrice
+        });
+      }
+      return undefined;
+    });
+
+    if (hasStockError) {
+      return;
+    }
+
+    if (partnerId <= 0) {
+      this.app.showAlert("Please select a customer.", "error");
+      return;
+    }
+
+    if (!items.length) {
+      this.app.showAlert("Add at least one valid sale item.", "error");
+      return;
+    }
+
+    const amountPaid = Math.max(0, this.app.toNumber(this.$saleAmountPaid.val(), 0));
+
+    this.postTransactions("createSale", {
+      partner_id: partnerId,
+      transaction_type: "sell",
+      items: JSON.stringify(items),
+      amountPaid
+    }, () => {
+      AppCore.safeHideModal("#saleModal");
+      this.state.purchaseProducts = [];
+      this.state.saleProducts = [];
+      this.loadProducts(this.state.currentCategoryId || 0);
+      if ($("#reorderTab").is(":visible")) {
+        this.loadReorderSuggestions();
+      }
+      if (this.state.currentProduct?.product_id) {
+        this.loadProductDetails(this.state.currentProduct.product_id);
+      }
     });
   }
 
@@ -272,9 +681,12 @@ class Inventory {
   applyPermissionState() {
     const canManageCatalog = this.app.hasAnyPermission("manage_products", "manage_inventory");
     const canRestock = this.app.hasAnyPermission("manage_inventory", "create_purchases");
+    const canSell = this.app.hasPermission("create_sales");
     const canDelete = this.app.hasPermission("delete_records");
 
     $("#addCategoryBtn, #addProductBtn, #editProductBtn").toggle(canManageCatalog);
+    $("#newSaleBtn").toggle(canSell);
+    $("#newPurchaseBtn").toggle(canRestock);
     $("#restockProductBtn").toggle(canRestock);
     $("#deleteProductBtn").toggle(canDelete);
   }
@@ -548,6 +960,60 @@ class Inventory {
     this.$stockMovementCards.html(cardsHtml);
   }
 
+  renderReorderSuggestions(rows) {
+    this.$reorderTableBody.empty();
+    this.$reorderSuggestionsCards.empty();
+
+    if (!rows.length) {
+      this.$reorderTableBody.html("<tr><td colspan='4' class='text-center text-muted'>No suggestions</td></tr>");
+      this.$reorderSuggestionsCards.html("<div class='text-center text-muted py-3'>No suggestions</div>");
+      return;
+    }
+
+    const tableHtml = rows.map((p) => {
+      const qty = this.app.toNumber(p.quantity, 0);
+      const daysLeft = this.app.toNumber(p.days_left, 0);
+      const suggestedQty = this.app.toNumber(p.suggested_qty, 0);
+
+      return `
+        <tr>
+          <td>${p.product_name || "-"}</td>
+          <td>${qty}</td>
+          <td>${daysLeft > 0 ? daysLeft : "-"}</td>
+          <td><strong>${suggestedQty}</strong></td>
+        </tr>
+      `;
+    }).join("");
+
+    const cardsHtml = rows.map((p) => {
+      const qty = this.app.toNumber(p.quantity, 0);
+      const daysLeft = this.app.toNumber(p.days_left, 0);
+      const suggestedQty = this.app.toNumber(p.suggested_qty, 0);
+
+      return `
+        <div class="card shadow-sm inventory-product-card mb-3">
+          <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div>
+                <h6 class="mb-0">${p.product_name || "-"}</h6>
+                <small class="text-muted">Current Stock: ${qty}</small>
+              </div>
+              <span class="badge badge-warning">${suggestedQty}</span>
+            </div>
+
+            <div class="inventory-product-meta text-muted mb-2">
+              <span>Days Left: ${daysLeft > 0 ? daysLeft : "-"}</span>
+              <span>Suggested Qty: ${suggestedQty}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    this.$reorderTableBody.html(tableHtml);
+    this.$reorderSuggestionsCards.html(cardsHtml);
+  }
+
   updateStatBadges(products = null) {
     const productsForStats = Array.isArray(products) ? products : this.state.products;
     const catCount = this.state.categories.length;
@@ -631,9 +1097,25 @@ $(document).ready(function () {
     InventoryApp.loadStockMovement();
   });
 
+  $("#newSaleBtn").on("click", function () {
+    InventoryApp.openSaleModal();
+  });
+
+  $("#newPurchaseBtn").on("click", function () {
+    InventoryApp.openPurchaseModal();
+  });
+
+  $("#viewReorderBtn").on("click", function () {
+    InventoryApp.loadReorderSuggestions();
+  });
+
   $("#backToCategoriesFromMovementBtn").on("click", function () {
     InventoryApp.loadCategories();
     InventoryApp.loadProducts(0);
+    InventoryApp.showSection("home");
+  });
+
+  $("#backToHomeFromReorder").on("click", function () {
     InventoryApp.showSection("home");
   });
 
@@ -670,6 +1152,74 @@ $(document).ready(function () {
 
   $("#purchaseDetailsModal").on("hidden.bs.modal", function () {
     $(this).find("#payPurchaseForm").closest(".row").removeClass("d-none");
+  });
+
+  $("#addItemRow").on("click", function () {
+    InventoryApp.appendPurchaseItemRow();
+  });
+
+  $("#addSaleItem").on("click", function () {
+    InventoryApp.appendSaleItemRow();
+  });
+
+  $(document).on("change", ".productSelect", function () {
+    const $row = $(this).closest("tr");
+    const selectedCost = $(this).find("option:selected").data("cost");
+    if ($row.find(".cost").val() === "" && selectedCost !== undefined) {
+      $row.find(".cost").val(selectedCost);
+    }
+    InventoryApp.updatePurchaseRow($row);
+    InventoryApp.recalculatePurchaseTotal();
+  });
+
+  $(document).on("input", ".qty, .cost", function () {
+    const $row = $(this).closest("tr");
+    InventoryApp.updatePurchaseRow($row);
+    InventoryApp.recalculatePurchaseTotal();
+  });
+
+  $(document).on("change", ".saleProduct", function () {
+    const $row = $(this).closest("tr");
+    const selectedPrice = $(this).find("option:selected").data("price");
+    if ($row.find(".salePrice").val() === "" && selectedPrice !== undefined) {
+      $row.find(".salePrice").val(selectedPrice);
+    }
+    InventoryApp.updateSaleRow($row);
+    InventoryApp.recalculateSaleTotal();
+  });
+
+  $(document).on("input", ".saleQty, .salePrice", function () {
+    const $row = $(this).closest("tr");
+    InventoryApp.updateSaleRow($row);
+    InventoryApp.recalculateSaleTotal();
+  });
+
+  $(document).on("click", ".removePurchaseItemBtn", function () {
+    $(this).closest("tr").remove();
+    if (!InventoryApp.$purchaseItems.find("tr").length) {
+      InventoryApp.showEmptyPurchaseItems();
+      InventoryApp.recalculatePurchaseTotal();
+    } else {
+      InventoryApp.recalculatePurchaseTotal();
+    }
+  });
+
+  $(document).on("click", ".removeSaleItemBtn", function () {
+    $(this).closest("tr").remove();
+    if (!InventoryApp.$saleItems.find("tr").length) {
+      InventoryApp.showEmptySaleItems();
+      InventoryApp.recalculateSaleTotal();
+    } else {
+      InventoryApp.recalculateSaleTotal();
+    }
+  });
+
+  $("#savePurchaseBtn").on("click", function () {
+    InventoryApp.savePurchase();
+  });
+
+  $("#saveSaleBtn").on("click", function () {
+    InventoryApp.saveSale();
   });
 
   // Product search with debouncing

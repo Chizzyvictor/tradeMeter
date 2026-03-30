@@ -220,6 +220,78 @@ break;
 
 
 // =============================
+// GET REORDER SUGGESTIONS
+// =============================
+case "getReorderSuggestions":
+
+$suggestions = [];
+
+$stmt = $db->prepare("
+SELECT
+p.product_id,
+p.product_name,
+p.reorder_level,
+p.is_active,
+COALESCE(i.quantity, 0) as quantity,
+COALESCE(SUM(sl.qty_out), 0) as total_sold,
+MIN(sl.created_at) as first_sale_date,
+MAX(sl.created_at) as last_sale_date
+FROM products p
+LEFT JOIN inventory i ON i.product_id = p.product_id AND i.cid = p.cid
+LEFT JOIN stock_ledger sl ON sl.product_id = p.product_id AND sl.cid = p.cid AND sl.reference_type = 'sale'
+WHERE p.cid = :cid
+GROUP BY
+p.product_id,
+p.product_name,
+p.reorder_level,
+p.is_active,
+i.quantity
+ORDER BY p.product_name
+");
+$stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+$res = $stmt->execute();
+
+while($row = $res->fetchArray(SQLITE3_ASSOC)){
+    $isActive = intval($row['is_active'] ?? 1) === 1;
+    if(!$isActive){
+        continue;
+    }
+
+    $qty = intval($row['quantity'] ?? 0);
+    $reorder = intval($row['reorder_level'] ?? 0);
+    $totalSold = floatval($row['total_sold'] ?? 0);
+    $days = 0;
+    $suggestedQty = max(0, ($reorder * 2) - $qty);
+
+    if($totalSold > 0 && !empty($row['first_sale_date']) && !empty($row['last_sale_date'])){
+        $first = strtotime($row['first_sale_date']);
+        $last = strtotime($row['last_sale_date']);
+
+        if($first !== false && $last !== false){
+            $diffDays = max(1, ($last - $first) / 86400);
+            $dailySales = $totalSold / $diffDays;
+
+            if($dailySales > 0){
+                $days = (int) floor($qty / $dailySales);
+                $suggestedQty = max(0, (int) ceil(($dailySales * 14) - $qty));
+            }
+        }
+    }
+
+    if($qty <= $reorder || ($days > 0 && $days <= 7)){
+        $row['days_left'] = $days;
+        $row['suggested_qty'] = $suggestedQty;
+        $suggestions[] = $row;
+    }
+}
+
+respond("success","Reorder suggestions",["data"=>$suggestions]);
+
+break;
+
+
+
+// =============================
 // LOAD STOCK LEDGER
 // =============================
 case "loadStockLedger":

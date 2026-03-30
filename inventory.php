@@ -18,6 +18,15 @@ include "INC/navbar.php";
                 <button class="btn btn-outline-secondary" id="viewStockMovementBtn">View Stock Movement</button>
             </li>
             <li class="breadcrumb-item">
+                <button class="btn btn-primary" id="newSaleBtn">&#128176; New Sale</button>
+            </li>
+            <li class="breadcrumb-item">
+                <button class="btn btn-success" id="newPurchaseBtn">&#10133; New Purchase</button>
+            </li>
+            <li class="breadcrumb-item">
+                <button class="btn btn-warning" id="viewReorderBtn">&#128722; Reorder Suggestions</button>
+            </li>
+            <li class="breadcrumb-item">
                 <button class="btn btn-outline-primary" id="addCategoryBtn">Add Category<span class="badge badge-primary badge-pill ml-2" id="badgeCategories">0</span></button>
             </li>
             <li class="breadcrumb-item active">
@@ -119,6 +128,33 @@ include "INC/navbar.php";
         </div>
         <div id="stockMovementCards" class="inventory-stock-movement-cards" aria-live="polite">
             <!-- Mobile stock movement cards will be dynamically loaded here -->
+        </div>
+    </div>
+</div>
+
+<div class="tab-content" id="reorderTab">
+    <div class="card p-3 inventory-section-card">
+        <div class="d-flex justify-content-between align-items-center mb-4 inventory-section-head">
+            <button class="btn btn-secondary" id="backToHomeFromReorder">Back</button>
+            <h3 class="mb-0">Reorder Suggestions</h3>
+        </div>
+        <div class="table-responsive inventory-table-wrap">
+            <table class="table table-bordered table-hover" id="reorderSuggestionsTable">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Product</th>
+                        <th>Current Stock</th>
+                        <th>Days Left</th>
+                        <th>Suggested Qty</th>
+                    </tr>
+                </thead>
+                <tbody id="reorderTableBody">
+                    <!-- Reorder suggestions will be dynamically loaded here -->
+                </tbody>
+            </table>
+        </div>
+        <div id="reorderSuggestionsCards" class="inventory-products-cards" aria-live="polite">
+            <!-- Mobile reorder suggestions will be dynamically loaded here -->
         </div>
     </div>
 </div>

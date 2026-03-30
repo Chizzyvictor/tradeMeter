@@ -385,6 +385,125 @@
 </div>
 
 
+<!-- ============================
+     NEW PURCHASE MODAL
+============================= -->
+<div class="modal fade" id="purchaseModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="purchaseModalLabel">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content shadow rounded">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title" id="purchaseModalLabel">New Purchase</h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close new purchase modal">
+          <span>&times;</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="purchaseSupplier">Supplier</label>
+          <select id="purchaseSupplier" class="form-control">
+            <option value="">Select supplier</option>
+          </select>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover" id="purchaseItemsTable">
+            <thead class="thead-light">
+              <tr>
+                <th>Product</th>
+                <th width="110">Qty</th>
+                <th width="140">Cost</th>
+                <th width="140">Total</th>
+                <th width="80">Action</th>
+              </tr>
+            </thead>
+            <tbody id="purchaseItems">
+              <tr>
+                <td colspan="5" class="text-center text-muted">No items added</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <button class="btn btn-sm btn-primary" id="addItemRow" type="button">+ Add Item</button>
+          <small class="text-muted">Tip: selecting a product pre-fills the current cost price.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="amountPaid">Amount Paid</label>
+          <input type="number" id="amountPaid" class="form-control" min="0" step="0.01" placeholder="Amount Paid">
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Total: <span id="purchaseTotal">0.00</span></h5>
+          <button class="btn btn-success" id="savePurchaseBtn" type="button">Save Purchase</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================
+     NEW SALE MODAL
+============================= -->
+<div class="modal fade" id="saleModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="saleModalLabel">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content shadow rounded">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="saleModalLabel">New Sale</h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close new sale modal">
+          <span>&times;</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="saleCustomer">Customer</label>
+          <select id="saleCustomer" class="form-control">
+            <option value="">Select customer</option>
+          </select>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover" id="saleItemsTable">
+            <thead class="thead-light">
+              <tr>
+                <th>Product</th>
+                <th width="110">Qty</th>
+                <th width="140">Price</th>
+                <th width="140">Total</th>
+                <th width="80">Action</th>
+              </tr>
+            </thead>
+            <tbody id="saleItems">
+              <tr>
+                <td colspan="5" class="text-center text-muted">No items added</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <button class="btn btn-sm btn-primary" id="addSaleItem" type="button">+ Add Item</button>
+          <small class="text-muted">Tip: selecting a product pre-fills the selling price.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="saleAmountPaid">Amount Paid</label>
+          <input type="number" id="saleAmountPaid" class="form-control" min="0" step="0.01" placeholder="Amount Paid">
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Total: <span id="saleTotal">0.00</span></h5>
+          <button class="btn btn-success" id="saveSaleBtn" type="button">Complete Sale</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 
 
 
@@ -715,5 +834,3 @@
     <img class="viewer-content" id="viewerImg">
 
 </div>
-
-
