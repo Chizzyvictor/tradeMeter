@@ -111,6 +111,7 @@ TransactionManager.prototype.saveTransaction = function () {
             if (res.status === 'success') {
                 this.app.showAlert('Transaction saved successfully', 'success');
                 this.loadProducts();
+                this.loadPartners();
                 this.resetTransactionForm();
                 this.showTransactionHistoryTab();
             } else {

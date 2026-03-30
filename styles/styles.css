@@ -975,6 +975,51 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 }
 
 /* ====== TRANSACTIONS MOBILE FALLBACK ====== */
+.transactions-page-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.transactions-page-actions .btn {
+    min-width: 170px;
+    border-radius: 999px;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.transactions-section-card {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+}
+
+.transactions-section-card .card-header {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.96));
+    color: #f8fafc;
+    border-bottom: none;
+}
+
+.transactions-history-filters .form-control,
+.transactions-page-actions .btn,
+#addItemBtn,
+#savePurchaseBtn {
+    min-height: 44px;
+}
+
+.transactions-items-table-wrap table,
+.transactions-history-table-wrap table {
+    margin-bottom: 0;
+}
+
+.transactions-items-table-wrap thead th,
+.transactions-history-table-wrap thead th {
+    white-space: nowrap;
+}
+
 .transactions-items-cards,
 .transactions-history-cards {
     display: block;
@@ -982,7 +1027,8 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 
 .transactions-mobile-card {
     border: 1px solid var(--color-border);
-    border-radius: 10px;
+    border-radius: 16px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
 }
 
 .transactions-mobile-meta {
@@ -990,6 +1036,21 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.4rem;
     font-size: 0.85rem;
+}
+
+.transactions-mobile-meta span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0.5rem 0.65rem;
+    border-radius: 12px;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.dark-mode .transactions-mobile-meta span {
+    background: rgba(51, 65, 85, 0.55);
+    border-color: rgba(100, 116, 139, 0.28);
 }
 
 .transactions-mobile-summary {
@@ -1041,13 +1102,71 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 }
 
 @media (max-width: 767.98px) {
-    .transactions-items-table-wrap,
-    .transactions-history-table-wrap {
-        display: none;
+    .transactions-page-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.65rem;
+        width: 100%;
+    }
+
+    .transactions-page-actions .btn {
+        width: 100%;
+        margin-right: 0 !important;
+    }
+
+    .transactions-section-card {
+        border-radius: 16px;
+    }
+
+    .transactions-section-card .card-body {
+        padding: 1rem;
+    }
+
+    .transactions-history-filters > div {
+        margin-bottom: 0.75rem;
+    }
+
+    .transactions-history-filters .btn,
+    #addItemBtn,
+    #savePurchaseBtn {
+        width: 100%;
+    }
+
+    #savePurchaseBtn {
+        margin-top: 1rem !important;
+    }
+
+    .transactions-mobile-card {
+        margin-bottom: 0 !important;
+    }
+
+    .transactions-mobile-card .card-body {
+        padding: 0.95rem !important;
     }
 
     .transactions-mobile-meta {
         grid-template-columns: 1fr;
+        gap: 0.45rem;
+    }
+
+    .transactions-mobile-summary {
+        border-radius: 16px 16px 0 0;
+        margin-top: 0.75rem;
+    }
+
+    .transactions-items-table-wrap,
+    .transactions-history-table-wrap {
+        display: none;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .transactions-mobile-summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .transactions-mobile-summary-item {
+        padding: 0.15rem 0;
     }
 }
 

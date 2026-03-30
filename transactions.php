@@ -21,7 +21,7 @@ include "INC/navbar.php";
         </div>
 
         <div class="col-sm-6">
-          <div class="float-sm-right">
+          <div class="float-sm-right transactions-page-actions">
 
             <button class="btn btn-outline-secondary mr-2" id="viewTransactionsBtn">
               View Transactions
@@ -49,7 +49,7 @@ include "INC/navbar.php";
         <!-- LEFT SIDE : ADD TRANSACTION -->
         <div class="col-lg-5 mb-4">
 
-          <div class="card shadow-sm">
+          <div class="card shadow-sm transactions-section-card">
 
             <div class="card-header font-weight-bold">
               Add New Transaction
@@ -115,7 +115,7 @@ include "INC/navbar.php";
         <!-- RIGHT SIDE : ITEMS -->
         <div class="col-lg-7 mb-4">
 
-          <div class="card shadow-sm">
+          <div class="card shadow-sm transactions-section-card">
 
             <div class="card-header d-flex justify-content-between align-items-center">
 
@@ -254,7 +254,7 @@ include "INC/navbar.php";
 
       <!-- TRANSACTION HISTORY TABLE -->
 
-      <div class="card shadow-sm mt-4 tab-contents" id="transactionsHistoryTab">
+      <div class="card shadow-sm mt-4 tab-contents transactions-section-card" id="transactionsHistoryTab">
 
         <div class="card-header font-weight-bold">
           Transaction History
@@ -262,7 +262,7 @@ include "INC/navbar.php";
 
 
 <!-- Filters -->
-<div class="row mb-3">
+<div class="row mb-3 transactions-history-filters">
   <div class="col-md-4">
     <input type="text" id="searchPartner" class="form-control" placeholder="Search by partner...">
   </div>

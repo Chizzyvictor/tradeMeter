@@ -235,16 +235,23 @@ TransactionManager.prototype.payPurchase = function () {
         onSuccess: (res) => {
             if (res.status === 'success') {
                 $payAmountErr.text('');
+                const updatedPaid = parseFloat(res.amountPaid) || 0;
                 const nextBalance = Math.max(0, balanceDue - amount);
+                const nextStatus = String(res.status || (nextBalance <= 0 ? 'paid' : 'partial')).toLowerCase();
+
+                $('#metaPaid').text(this.app.formatCurrency(updatedPaid));
+                $('#metaBalance').text(this.app.formatCurrency(nextBalance));
+                $payBalanceDue.val(nextBalance.toFixed(2));
+                $payAmount.val('');
+                $payAmount.attr('max', nextBalance.toFixed(2));
                 $payStatusNote.toggleClass('d-none', nextBalance > 0);
+                $payBtn.prop('disabled', nextBalance <= 0);
 
                 const target = this.historyRows.find(r => Number(r.purchase_id) === purchaseId);
                 if (target) {
                     const totalAmount = parseFloat(target.totalAmount) || 0;
-                    const currentPaid = parseFloat(target.amountPaid) || 0;
-                    const newPaid = Math.min(totalAmount, currentPaid + amount);
-                    target.amountPaid = newPaid;
-                    target.status = newPaid >= totalAmount ? 'paid' : (newPaid > 0 ? 'partial' : 'pending');
+                    target.amountPaid = Math.min(totalAmount, updatedPaid);
+                    target.status = nextStatus;
                 }
 
                 const hasFilters = Boolean(String($('#searchPartner').val() || '').trim())
@@ -258,9 +265,7 @@ TransactionManager.prototype.payPurchase = function () {
                     this.renderTransactionHistory(this.historyRows);
                 }
 
-                AppCore.safeHideModal('#purchaseDetailsModal');
                 this.loadTransactionHistory();
-                this.viewTransactionDetails(purchaseId);
             } else {
                 $payAmountErr.text(res.message || 'Payment failed');
             }
