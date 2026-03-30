@@ -17,7 +17,13 @@ if (!function_exists('asset_ver')) {
 <meta name="description" content="This page has information about signages and all its materials">
 <meta name="keywords" content="HTML, CSS, JAVASCRIPT, PHP, JQUERY, AJAX">
 <meta name="author" content="Chivicks Technology">
-<link rel="shortcut icon" href="Images/companyDP/logo.jpg" type="image/x-icon">
+<meta name="theme-color" content="#1e90ff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TradeMeter">
+<link rel="shortcut icon" href="Images/companyDP/icon-192.png" type="image/png">
+<link rel="manifest" href="manifest.webmanifest?v=<?= asset_ver('manifest.webmanifest') ?>">
+<link rel="apple-touch-icon" href="Images/companyDP/icon-192.png">
 <!-- ✅ Bootstrap 4.6 (local vendor) -->
 <link rel="stylesheet" href="assets/vendor/css/bootstrap-4.6.2.min.css">
 

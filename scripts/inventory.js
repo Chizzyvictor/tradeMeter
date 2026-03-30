@@ -97,7 +97,7 @@ class Inventory {
 
   showSection(sectionId) {
     $(".tab-content").hide();
-    $(`#${sectionId}`).show();
+    $(`#${sectionId}`).stop(true, true).fadeIn(180);
   }
 
   loadCategories(onSuccess = null) {

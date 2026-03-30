@@ -9,3 +9,4 @@
 <!-- Your custom scripts -->
 <script src="scripts/App.js?v=<?= asset_ver('scripts/App.js') ?>"></script>
 <script src="scripts/api.js?v=<?= asset_ver('scripts/api.js') ?>"></script>
+<script src="scripts/pwa.js?v=<?= asset_ver('scripts/pwa.js') ?>"></script>

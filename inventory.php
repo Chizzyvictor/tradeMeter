@@ -39,66 +39,94 @@ include "INC/navbar.php";
   </div>
   <div class="content-body">
 
-    <div class="row mb-3 inventory-stats-grid">
-
-            <div class="col-6 col-md-4 col-xl-3 mb-3">
-                <div class="card shadow-sm inventory-stat-card h-100">
-                    <div class="card-body">
-                        <h6 class="text-muted inventory-stat-label">Categories</h6>
-                        <h3 class="inventory-stat-value" id="statCategories">0</h3>
-                    </div>
-                </div>
+    <div class="row mb-4 inventory-stats-grid">
+      <div class="col-12 col-sm-6 col-xl-4 mb-3">
+        <div class="card shadow-sm inventory-stat-card inventory-stat-card-primary h-100">
+          <div class="card-body d-flex align-items-center">
+            <div class="inventory-stat-icon inventory-stat-icon-primary">
+              <i class="fas fa-layer-group"></i>
             </div>
-
-            <div class="col-6 col-md-4 col-xl-3 mb-3">
-                <div class="card shadow-sm inventory-stat-card h-100">
-                    <div class="card-body">
-                        <h6 class="text-muted inventory-stat-label">Products</h6>
-                        <h3 class="inventory-stat-value" id="statProducts">0</h3>
-                    </div>
-                </div>
+            <div>
+              <h6 class="inventory-stat-label">Categories</h6>
+              <h3 class="inventory-stat-value" id="statCategories">0</h3>
             </div>
-
-            <div class="col-6 col-md-4 col-xl-3 mb-3">
-                <div class="card shadow-sm inventory-stat-card h-100">
-                    <div class="card-body">
-                        <h6 class="text-muted inventory-stat-label">Low Stock</h6>
-                        <h3 class="inventory-stat-value" id="lowStockCount">0</h3>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-6 col-md-4 col-xl-3 mb-3">
-                <div class="card shadow-sm inventory-stat-card h-100">
-                    <div class="card-body">
-                        <h6 class="text-muted inventory-stat-label">Inventory Items</h6>
-                        <h3 class="inventory-stat-value" id="inventoryCount">0</h3>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-6 col-md-4 col-xl-3 mb-3">
-                <div class="card shadow-sm inventory-stat-card h-100">
-                    <div class="card-body">
-                        <h6 class="text-muted inventory-stat-label">Inventory Value</h6>
-                        <h3 class="inventory-stat-value" id="inventoryValue">0</h3>
-                    </div>
-                </div>
-            </div>
-
+          </div>
         </div>
+      </div>
 
-    <div class="container-fluid" id="lowStockAlert" style="display:none;">
-      <div class="alert alert-warning alert-dismissible fade show" role="alert">
-        <strong>Stock Prediction Alert!</strong> The following products may finish soon:
-        <ul id="lowStockList"></ul>
-        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+      <div class="col-12 col-sm-6 col-xl-4 mb-3">
+        <div class="card shadow-sm inventory-stat-card inventory-stat-card-success h-100">
+          <div class="card-body d-flex align-items-center">
+            <div class="inventory-stat-icon inventory-stat-icon-success">
+              <i class="fas fa-boxes"></i>
+            </div>
+            <div>
+              <h6 class="inventory-stat-label">Products</h6>
+              <h3 class="inventory-stat-value" id="statProducts">0</h3>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6 col-xl-4 mb-3">
+        <div class="card shadow-sm inventory-stat-card inventory-stat-card-warning h-100">
+          <div class="card-body d-flex align-items-center">
+            <div class="inventory-stat-icon inventory-stat-icon-warning">
+              <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div>
+              <h6 class="inventory-stat-label">Low Stock</h6>
+              <h3 class="inventory-stat-value" id="lowStockCount">0</h3>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6 col-xl-4 mb-3">
+        <div class="card shadow-sm inventory-stat-card inventory-stat-card-slate h-100">
+          <div class="card-body d-flex align-items-center">
+            <div class="inventory-stat-icon inventory-stat-icon-slate">
+              <i class="fas fa-cubes"></i>
+            </div>
+            <div>
+              <h6 class="inventory-stat-label">Inventory Items</h6>
+              <h3 class="inventory-stat-value" id="inventoryCount">0</h3>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6 col-xl-4 mb-3">
+        <div class="card shadow-sm inventory-stat-card inventory-stat-card-info h-100">
+          <div class="card-body d-flex align-items-center">
+            <div class="inventory-stat-icon inventory-stat-icon-info">
+              <i class="fas fa-dollar-sign"></i>
+            </div>
+            <div>
+              <h6 class="inventory-stat-label">Inventory Value</h6>
+              <h3 class="inventory-stat-value" id="inventoryValue">0</h3>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container-fluid px-0">
+      <div id="lowStockAlert" class="alert alert-warning shadow-sm fade show inventory-alert-card align-items-center" style="display:none;" role="alert">
+        <div class="inventory-alert-icon">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="inventory-alert-copy">
+          <strong>Stock Prediction Alert!</strong>
+          <div class="text-muted small mb-1">The following products may finish soon:</div>
+          <ul id="lowStockList" class="mb-0"></ul>
+        </div>
+        <button type="button" class="close ml-auto" data-dismiss="alert" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
       </div>
     </div>
     </div>
-  </div>
 
 
 
@@ -109,8 +137,8 @@ include "INC/navbar.php";
             <h3 class="mb-0">Stock Movement</h3>
         </div>
         <div class="table-responsive inventory-table-wrap inventory-stock-movement-table-wrap">
-            <table class="table table-bordered table-hover" id="stockMovementTable">
-                <thead class="thead-light">
+            <table class="table table-hover table-striped table-bordered" id="stockMovementTable">
+                <thead class="thead-dark">
                     <tr>
                         <th>Date</th>
                         <th>Product</th>
@@ -139,8 +167,8 @@ include "INC/navbar.php";
             <h3 class="mb-0">Reorder Suggestions</h3>
         </div>
         <div class="table-responsive inventory-table-wrap">
-            <table class="table table-bordered table-hover" id="reorderSuggestionsTable">
-                <thead class="thead-light">
+            <table class="table table-hover table-striped table-bordered" id="reorderSuggestionsTable">
+                <thead class="thead-dark">
                     <tr>
                         <th>Product</th>
                         <th>Current Stock</th>
@@ -166,8 +194,8 @@ include "INC/navbar.php";
             <div> </div>
         </div>
         <div class="table-responsive inventory-table-wrap">
-            <table class="table table-bordered table-hover" id="inventoryCategoriesTable">
-                <thead class="thead-light">
+            <table class="table table-hover table-striped table-bordered" id="inventoryCategoriesTable">
+                <thead class="thead-dark">
                     <tr>
                         <th>Category Name</th>
                         <th>Description</th>
@@ -202,8 +230,8 @@ include "INC/navbar.php";
             <small id="searchStatsIndicator" class="inventory-search-indicator d-none"></small>
         </div>
         <div class="table-responsive inventory-table-wrap inventory-products-table-wrap">
-            <table class="table table-bordered table-hover" id="inventoryProductsTable">
-                <thead class="thead-light">
+            <table class="table table-hover table-striped table-bordered" id="inventoryProductsTable">
+                <thead class="thead-dark">
                     <tr>
                         <th>Product Image</th>
                         <th>Product Name</th>
@@ -237,7 +265,7 @@ include "INC/navbar.php";
     <div class="card p-3 inventory-section-card" id="productDetailsCard">
         <div class="row">
             <div class="col-md-4 text-center">
-                <img id="productImage" src="Images/productsDP/product.jpg" alt="Product Image" class="image img-fluid mb-3" style="max-height: 200px;">
+                <img id="productImage" src="Images/productsDP/product.jpg" alt="Product Image" class="image img-fluid mb-3 inventory-detail-image" style="max-height: 200px;">
             </div>
             <div class="col-md-8">
                 <p><strong>Category:</strong> <span id="productCategory"></span></p>
@@ -258,8 +286,8 @@ include "INC/navbar.php";
         <div id="productTransactionsContainer" class="mt-4" >
             <h4 class="mb-3">Product Transactions</h4>
             <div class="table-responsive inventory-table-wrap inventory-product-transactions-table-wrap">
-                <table class="table table-bordered table-hover" id="productTransactionsTable">
-                    <thead class="thead-light">
+                <table class="table table-hover table-striped table-bordered" id="productTransactionsTable">
+                    <thead class="thead-dark">
                         <tr>
                             <th>Date</th>
                             <th>Type</th>
@@ -282,8 +310,8 @@ include "INC/navbar.php";
         <div id="productStockMovementContainer" class="mt-4">
             <h4 class="mb-3">Product Stock Movement</h4>
             <div class="table-responsive inventory-table-wrap inventory-product-stock-movement-table-wrap">
-                <table class="table table-bordered table-hover" id="productStockMovementTable">
-                    <thead class="thead-light">
+                <table class="table table-hover table-striped table-bordered" id="productStockMovementTable">
+                    <thead class="thead-dark">
                         <tr>
                             <th>Date</th>
                             <th>Type</th>

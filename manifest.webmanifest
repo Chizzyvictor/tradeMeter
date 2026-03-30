@@ -1,0 +1,24 @@
+{
+  "name": "TradeMeter",
+  "short_name": "TradeMeter",
+  "description": "Smart inventory, purchases, sales, and partner tracking for growing businesses.",
+  "start_url": "/TradeMeter/index.php",
+  "scope": "/TradeMeter/",
+  "display": "standalone",
+  "background_color": "#f4f4f4",
+  "theme_color": "#1e90ff",
+  "icons": [
+    {
+      "src": "/TradeMeter/Images/companyDP/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/TradeMeter/Images/companyDP/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
