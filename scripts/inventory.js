@@ -36,6 +36,7 @@ class Inventory {
     this.$badgeProducts = $("#badgeProducts");
     this.$lowStockAlert = $("#lowStockAlert");
     this.$lowStockList = $("#lowStockList");
+    this.$productSearchInput = $("#productSearchInput");
     this.$searchStatsIndicator = $("#searchStatsIndicator");
     this.$purchaseModal = $("#purchaseModal");
     this.$purchaseSupplier = $("#purchaseSupplier");
@@ -111,11 +112,24 @@ class Inventory {
       const rows = res.data || [];
       this.state.products = rows;
       this.state.filteredProducts = rows;
-      this.renderProducts(rows);
       this.updateLowStockAlert(rows);
-      this.updateStatBadges();
+      this.applyCurrentProductSearch();
       if (typeof onSuccess === "function") onSuccess(rows);
     });
+  }
+
+  applyCurrentProductSearch() {
+    const activeSearch = String(this.$productSearchInput.val() || "").trim();
+
+    if (activeSearch) {
+      this.filterProducts(activeSearch);
+      return;
+    }
+
+    this.state.filteredProducts = this.state.products;
+    this.$searchStatsIndicator.addClass("d-none").text("");
+    this.renderProducts(this.state.products);
+    this.updateStatBadges();
   }
 
   getProductStockPrediction(product) {
@@ -1142,7 +1156,7 @@ $(document).ready(function () {
   });
 
   $("#backToCategoriesBtn").on("click", function () {
-    $("#productSearchInput").val("");
+    InventoryApp.$productSearchInput.val("");
     InventoryApp.state.filteredProducts = InventoryApp.state.products;
     InventoryApp.$searchStatsIndicator.addClass("d-none").text("");
     InventoryApp.loadCategories();
@@ -1223,7 +1237,7 @@ $(document).ready(function () {
   });
 
   // Product search with debouncing
-  $("#productSearchInput").on("input", function () {
+  InventoryApp.$productSearchInput.on("input", function () {
     clearTimeout(InventoryApp.searchTimeout);
     const searchTerm = $(this).val();
     InventoryApp.searchTimeout = setTimeout(() => {
