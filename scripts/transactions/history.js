@@ -246,10 +246,13 @@ TransactionManager.prototype.payPurchase = function () {
             amount
         },
         onSuccess: (res) => {
+            alert(JSON.stringify(res)); 
             if (res.status === 'success') {
                 $payAmountErr.text('');
                 const updatedPaid = parseFloat(res.amountPaid) || 0;
-                const nextBalance = Math.max(0, balanceDue - amount);
+                const target = this.historyRows.find(r => Number(r.purchase_id) === purchaseId);
+                const totalAmount = target ? (parseFloat(target.totalAmount) || 0) : 0;
+                const nextBalance = Math.max(0, totalAmount - updatedPaid);
                 const nextStatus = String(res.paymentStatus || (nextBalance <= 0 ? 'paid' : 'partial')).toLowerCase();
 
                 $('#metaPaid').text(this.app.formatCurrency(updatedPaid));
@@ -260,14 +263,16 @@ TransactionManager.prototype.payPurchase = function () {
                 $payStatusNote.toggleClass('d-none', nextBalance > 0);
                 $payBtn.prop('disabled', nextBalance <= 0).toggleClass('d-none', nextBalance <= 0);
 
-                const target = this.historyRows.find(r => Number(r.purchase_id) === purchaseId);
                 if (target) {
-                    const totalAmount = parseFloat(target.totalAmount) || 0;
                     target.amountPaid = Math.min(totalAmount, updatedPaid);
                     target.status = nextStatus;
                 }
 
                 this.renderHistoryForCurrentFilters();
+
+                if (nextStatus === 'paid') {
+                    AppCore.safeHideModal('#purchaseDetailsModal');
+                }
 
                 this.loadTransactionHistory();
             } else {
