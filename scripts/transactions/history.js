@@ -246,12 +246,13 @@ TransactionManager.prototype.payPurchase = function () {
             amount
         },
         onSuccess: (res) => {
-            alert(JSON.stringify(res)); 
             if (res.status === 'success') {
                 $payAmountErr.text('');
                 const updatedPaid = parseFloat(res.amountPaid) || 0;
                 const target = this.historyRows.find(r => Number(r.purchase_id) === purchaseId);
-                const totalAmount = target ? (parseFloat(target.totalAmount) || 0) : 0;
+                const totalAmount = target
+                    ? (parseFloat(target.totalAmount) || 0)
+                    : (parseFloat(String($('#metaTotal').text() || '').replace(/[^0-9.-]+/g, '')) || 0);
                 const nextBalance = Math.max(0, totalAmount - updatedPaid);
                 const nextStatus = String(res.paymentStatus || (nextBalance <= 0 ? 'paid' : 'partial')).toLowerCase();
 
@@ -276,7 +277,7 @@ TransactionManager.prototype.payPurchase = function () {
 
                 this.loadTransactionHistory();
             } else {
-                $payAmountErr.text(res.message || 'Payment failed');
+                $payAmountErr.text(this.app.getResponseText(res, 'Payment failed'));
             }
         },
         onError: () => {

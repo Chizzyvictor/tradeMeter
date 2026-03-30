@@ -95,6 +95,25 @@ class AppCore {
     return out;
   }
 
+  getResponseText(payload, fallback = "") {
+    if (!payload || typeof payload !== "object") {
+      return String(fallback || "");
+    }
+
+    const normalized = this.normalizeResponseKeys(payload);
+    const text = normalized?.text ?? normalized?.message ?? fallback;
+    return String(text || "");
+  }
+
+  getResponseReference(payload, fallback = "") {
+    if (!payload || typeof payload !== "object") {
+      return String(fallback || "");
+    }
+
+    const normalized = this.normalizeResponseKeys(payload);
+    return String(normalized?.reference || fallback || "");
+  }
+
   // Core utilities: AJAX, alerts, helpers, CSRF, etc.
 	ajaxHelper({
 		url = "",
@@ -136,7 +155,7 @@ class AppCore {
         const normalizedRes = this.normalizeResponseKeys(res || {});
         const ok = normalizedRes?.status === "success";
 
-        if (!ok && /session expired/i.test(normalizedRes?.text || "")) {
+        if (!ok && /session expired/i.test(this.getResponseText(normalizedRes))) {
 					alert("Your session has expired. Please log in again.");
                    window.location.href = "login.php";
 					return;
@@ -144,7 +163,7 @@ class AppCore {
 
         if (!silent) {
           this.showAlert(
-          normalizedRes?.text || (ok ? successMsg : errorMsg),
+          this.getResponseText(normalizedRes, ok ? successMsg : errorMsg),
             ok ? "success" : "error"
           );
         }
@@ -159,16 +178,18 @@ class AppCore {
 
         const payload = xhr?.responseJSON || null;
         if (payload && typeof payload === "object") {
-          msg = String(payload.text || payload.message || msg);
-          if (payload.reference) {
-            msg += ` (${payload.reference})`;
+          msg = this.getResponseText(payload, msg);
+          const reference = this.getResponseReference(payload);
+          if (reference) {
+            msg += ` (${reference})`;
           }
         } else if (xhr?.responseText) {
           try {
             const parsed = JSON.parse(xhr.responseText);
-            msg = String(parsed.text || parsed.message || msg);
-            if (parsed.reference) {
-              msg += ` (${parsed.reference})`;
+            msg = this.getResponseText(parsed, msg);
+            const reference = this.getResponseReference(parsed);
+            if (reference) {
+              msg += ` (${reference})`;
             }
           } catch (_parseError) {
             // Keep generic message when response is not JSON.

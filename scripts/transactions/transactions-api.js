@@ -115,7 +115,7 @@ TransactionManager.prototype.saveTransaction = function () {
                 this.resetTransactionForm();
                 this.showTransactionHistoryTab();
             } else {
-                this.app.showAlert(res.message || 'Failed to save transaction', 'error');
+                this.app.showAlert(this.app.getResponseText(res, 'Failed to save transaction'), 'error');
             }
         },
         onComplete: () => {
