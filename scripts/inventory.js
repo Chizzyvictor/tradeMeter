@@ -1228,7 +1228,7 @@ $(document).ready(function () {
     }
   });
 
-  $("#savePurchaseBtn").on("click", function () {
+    $("#saveInventoryPurchaseBtn").on("click", function () {
     InventoryApp.savePurchase();
   });
 

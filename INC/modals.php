@@ -437,7 +437,7 @@
 
         <div class="d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Total: <span id="purchaseTotal">0.00</span></h5>
-          <button class="btn btn-success" id="savePurchaseBtn" type="button">Save Purchase</button>
+            <button class="btn btn-success" id="saveInventoryPurchaseBtn" type="button">Save Purchase</button>
         </div>
       </div>
     </div>
