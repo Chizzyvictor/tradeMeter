@@ -88,9 +88,10 @@ TransactionManager.prototype.saveTransaction = function () {
     if (!this.validateTransactionForm()) return;
 
     const payloadItems = this.buildApiItemsPayload();
+    const type = String($('#transactionType').val() || this.transactionType).toLowerCase();
     const requestData = {
         partner_id: Number($('#partnerId').val() || 0),
-        transaction_type: String($('#transactionType').val() || this.transactionType),
+        transaction_type: type,
         amountPaid: parseFloat($('#paying').val()) || 0,
         transaction_date: $('#transactionDate').val(),
         items: JSON.stringify(payloadItems)
@@ -98,9 +99,12 @@ TransactionManager.prototype.saveTransaction = function () {
 
     this.debug('saveTransaction: request payload', requestData);
 
+    const action = type === 'buy' ? 'createPurchase' : 'createSale';
+    $('#savePurchaseBtn').prop('disabled', true);
+
     this.app.ajaxHelper({
         url: 'apiTransactions.php',
-        action: 'createTransaction',
+        action,
         data: requestData,
         onSuccess: (res) => {
             this.debug('saveTransaction: API success callback', res);
@@ -113,9 +117,8 @@ TransactionManager.prototype.saveTransaction = function () {
                 this.app.showAlert(res.message || 'Failed to save transaction', 'error');
             }
         },
-        onError: (err) => {
-            this.debug('saveTransaction: API error callback', err || 'unknown error');
-            this.app.showAlert('Failed to save transaction. Please try again.', 'error');
+        onComplete: () => {
+            this.updateProcessButtonState();
         }
     });
 };

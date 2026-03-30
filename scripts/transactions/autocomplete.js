@@ -45,9 +45,12 @@ TransactionManager.prototype.resolvePartnerFromInput = function () {
         return 0;
     }
 
-    const match = this.partners.find(p => String(p.sName || '').trim().toLowerCase() === name);
+    const normalize = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const exact = this.partners.find(p => normalize(p.sName) === normalize(name));
+    const match = exact || this.partners.find(p => normalize(p.sName).includes(normalize(name)));
     if (match) {
         $('#partnerId').val(match.sid);
+        $('#partner_name').val(match.sName || '');
         this.clearFieldError('#partner_name');
         return Number(match.sid) || 0;
     }

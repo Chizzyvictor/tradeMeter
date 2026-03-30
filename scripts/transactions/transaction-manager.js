@@ -74,6 +74,7 @@ class TransactionManager {
         $('#transactionType').on('change', function () {
             self.transactionType = String($(this).val() || 'sell').toLowerCase();
             self.updateProductPrices();
+            self.updateProcessButtonState();
         });
 
         $('#partner_name').on('input', function () {
@@ -81,9 +82,11 @@ class TransactionManager {
             if (!query) {
                 $('#partnerSuggestions').hide();
                 $('#partnerId').val('');
+                self.updateProcessButtonState();
                 return;
             }
             self.showPartnerSuggestions(query);
+            self.updateProcessButtonState();
         });
 
         $('#partner_name').on('focus', function () {
@@ -95,6 +98,7 @@ class TransactionManager {
             setTimeout(() => {
                 $('#partnerSuggestions').hide();
                 self.resolvePartnerFromInput();
+                self.updateProcessButtonState();
             }, 150);
         });
 
@@ -106,6 +110,7 @@ class TransactionManager {
             $('#partnerId').val(partnerId);
             $('#partnerSuggestions').hide();
             self.clearFieldError('#partner_name');
+            self.updateProcessButtonState();
         });
 
         $('#purchaseProductInput').on('input', function () {
@@ -162,7 +167,12 @@ class TransactionManager {
             self.removeItem(index);
         });
 
-        $('#paying').on('input', () => self.updateBalance());
+        $('#paying').on('input', () => {
+            self.updateBalance();
+            self.updateProcessButtonState();
+        });
+
+        $('#transactionDate').on('change input', () => self.updateProcessButtonState());
 
         $('#searchPartner').on('input', () => self.filterTransactions());
         $('#filterStatus').on('change', () => self.filterTransactions());
@@ -254,8 +264,29 @@ class TransactionManager {
         $('#productSuggestions').empty().hide();
     }
 
+    canSubmitTransaction() {
+        const type = String($('#transactionType').val() || '').trim().toLowerCase();
+        const partnerId = Number($('#partnerId').val() || 0);
+        const transactionDate = String($('#transactionDate').val() || '').trim();
+        const amountPaid = parseFloat($('#paying').val());
+
+        if (!type) return false;
+        if (!partnerId) return false;
+        if (!transactionDate) return false;
+        if (!this.transactionItems.length) return false;
+        if (!Number.isNaN(amountPaid) && amountPaid < 0) return false;
+
+        return this.transactionItems.every((item, index) => {
+            const qty = parseFloat(item.qty) || 0;
+            const rate = parseFloat(item.rate) || 0;
+
+            if (qty <= 0 || rate <= 0) return false;
+            if (type === 'sell' && !this.validateStockForSell(item.product_id, qty, index)) return false;
+            return true;
+        });
+    }
+
     updateProcessButtonState() {
-        const hasItems = this.transactionItems.length > 0;
-        $('#savePurchaseBtn').prop('disabled', !hasItems);
+        $('#savePurchaseBtn').prop('disabled', !this.canSubmitTransaction());
     }
 }
