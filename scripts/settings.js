@@ -6,6 +6,7 @@ class SettingsPage {
     this.roles = [];
     this.canManageUsers = false;
     this.canManageBackups = false;
+    this.backupSupported = false;
 
     this.bindEvents();
     this.initialize();
@@ -30,8 +31,25 @@ class SettingsPage {
 
           if (this.canManageBackups) {
             $('.settings-backup-section').show();
-            this.loadBackups();
-            this.loadBackupAudit();
+            this.loadBackupCapability((capability) => {
+              this.backupSupported = Boolean(capability?.supported);
+
+              if (this.backupSupported) {
+                this.loadBackups();
+                this.loadBackupAudit();
+              } else {
+                this.disableBackupActions();
+                this.renderBackupPolicy({
+                  supported: false,
+                  retention_days: capability?.retention_days,
+                  scheduler_hint: capability?.scheduler_hint,
+                  message: capability?.message,
+                  last_auto_backup_created_at: 0
+                });
+                this.renderBackups([]);
+                this.renderBackupAudit([]);
+              }
+            });
           } else {
             $('.settings-backup-section').hide();
           }
@@ -720,7 +738,7 @@ class SettingsPage {
   }
 
   loadBackups() {
-    if (!this.canManageUsers) return;
+    if (!this.canManageUsers || !this.canManageBackups || !this.backupSupported) return;
 
     const $btn = $('#refreshBackupsBtn');
     if ($btn.length) $btn.prop('disabled', true);
@@ -746,7 +764,12 @@ class SettingsPage {
 
     const retentionDays = Number(res.retention_days) || 14;
     const lastAuto = this.app.formatDateSafe(res.last_auto_backup_created_at || 0, '-');
-    $note.text(`Auto backups run via scheduler. Retention: ${retentionDays} day(s). Last auto backup: ${lastAuto}.`);
+    if (res.supported === false) {
+      const msg = String(res.message || 'Backup operations are not available in this deployment.');
+      $note.text(msg);
+    } else {
+      $note.text(`Auto backups run via scheduler. Retention: ${retentionDays} day(s). Last auto backup: ${lastAuto}.`);
+    }
 
     if ($scheduler.length) {
       const schedulerHint = String(res.scheduler_hint || 'php tasks/run_backup_scheduler.php').trim();
@@ -796,7 +819,7 @@ class SettingsPage {
   }
 
   createBackup() {
-    if (!this.canManageUsers) return;
+    if (!this.canManageUsers || !this.canManageBackups || !this.backupSupported) return;
 
     const $btn = $('#createBackupBtn');
     $btn.prop('disabled', true);
@@ -816,7 +839,7 @@ class SettingsPage {
   }
 
   restoreBackup(fileName) {
-    if (!this.canManageUsers) return;
+    if (!this.canManageUsers || !this.canManageBackups || !this.backupSupported) return;
 
     const confirmed = window.confirm(`Restore backup ${fileName}? This will replace current data immediately.`);
     if (!confirmed) return;
@@ -834,7 +857,7 @@ class SettingsPage {
   }
 
   downloadBackup(fileName) {
-    if (!this.canManageUsers) return;
+    if (!this.canManageUsers || !this.canManageBackups || !this.backupSupported) return;
 
     const form = document.createElement('form');
     form.method = 'POST';
@@ -864,7 +887,7 @@ class SettingsPage {
   }
 
   downloadEncryptedBackup(fileName) {
-    if (!this.canManageUsers) return;
+    if (!this.canManageUsers || !this.canManageBackups || !this.backupSupported) return;
 
     const passphrase = window.prompt('Enter passphrase for encrypted backup (minimum 8 characters):', '');
     if (passphrase === null) return;
@@ -904,7 +927,7 @@ class SettingsPage {
   }
 
   restoreEncryptedBackup() {
-    if (!this.canManageUsers) return;
+    if (!this.canManageUsers || !this.canManageBackups || !this.backupSupported) return;
 
     const file = $('#encryptedBackupFile')[0]?.files?.[0] || null;
     const passphrase = String($('#encryptedBackupPassphrase').val() || '').trim();
@@ -946,7 +969,7 @@ class SettingsPage {
   }
 
   loadBackupAudit() {
-    if (!this.canManageUsers) return;
+    if (!this.canManageUsers || !this.canManageBackups || !this.backupSupported) return;
 
     const $btn = $('#refreshBackupAuditBtn');
     if ($btn.length) $btn.prop('disabled', true);
@@ -994,6 +1017,23 @@ class SettingsPage {
     }).join('');
 
     $tbody.html(html);
+  }
+
+  loadBackupCapability(onSuccess = null) {
+    this.app.ajaxHelper({
+      url: 'apiSettings.php',
+      action: 'getBackupCapability',
+      data: {},
+      silent: true,
+      onSuccess: (res) => {
+        const data = res.data || {};
+        if (typeof onSuccess === 'function') onSuccess(data);
+      }
+    });
+  }
+
+  disableBackupActions() {
+    $('#createBackupBtn, #refreshBackupsBtn, #refreshBackupAuditBtn, #restoreEncryptedBackupBtn').prop('disabled', true);
   }
 }
 

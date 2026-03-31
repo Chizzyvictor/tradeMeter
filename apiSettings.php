@@ -144,6 +144,49 @@ function settingsRequireBackupAccess(AppDbConnection $db, int $cid): void {
     }
 }
 
+function settingsBackupCapability(AppDbConnection $db, int $cid): array {
+    $driver = strtolower($db->driver());
+    if ($driver !== 'sqlite') {
+        return [
+            'supported' => false,
+            'driver' => $driver,
+            'message' => 'This deployment is using PostgreSQL. Use platform-level backups (for example: Heroku PG Backups).',
+            'scheduler_hint' => settingsBackupSchedulerHint(),
+            'retention_days' => settingsBackupRetentionDays(),
+        ];
+    }
+
+    if (!currentUserHasRole($db, 'Owner')) {
+        return [
+            'supported' => false,
+            'driver' => $driver,
+            'message' => 'Only Owner can use in-app backup and restore operations.',
+            'scheduler_hint' => settingsBackupSchedulerHint(),
+            'retention_days' => settingsBackupRetentionDays(),
+        ];
+    }
+
+    $companyCount = intval($db->querySingle('SELECT COUNT(*) FROM company'));
+    if ($companyCount > 1) {
+        return [
+            'supported' => false,
+            'driver' => $driver,
+            'message' => 'In-app backups are disabled for shared multi-company SQLite databases. Use instance-level backups.',
+            'scheduler_hint' => settingsBackupSchedulerHint(),
+            'retention_days' => settingsBackupRetentionDays(),
+        ];
+    }
+
+    return [
+        'supported' => true,
+        'driver' => $driver,
+        'message' => 'In-app backup and restore are enabled.',
+        'scheduler_hint' => settingsBackupSchedulerHint(),
+        'retention_days' => settingsBackupRetentionDays(),
+        'storage_path' => settingsBackupDir(),
+    ];
+}
+
 function settingsBackupMeta(string $path): array {
     $filename = basename($path);
     $isAuto = strpos($filename, 'auto-') !== false;
@@ -358,6 +401,13 @@ seedRolesAndPermissionsForSettings($db, $cid);
 settingsEnsureBackupAuditTable($db);
 
 switch ($action) {
+    case 'getBackupCapability':
+        requirePermission($db, 'manage_users');
+        respond('success', 'Backup capability loaded', [
+            'data' => settingsBackupCapability($db, $cid)
+        ]);
+        break;
+
     case 'loadSettings':
         $stmt = $db->prepare("SELECT cid, cName, cEmail, question, cLogo, regDate FROM company WHERE cid = :cid LIMIT 1");
         if (!$stmt) {
