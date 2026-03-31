@@ -127,6 +127,32 @@ function settingsBackupMeta(string $path): array {
     ];
 }
 
+function settingsBuildEncryptedBackupPayload(string $plainData, string $passphrase): ?string {
+    if (!function_exists('openssl_encrypt')) {
+        return null;
+    }
+
+    $cipher = 'AES-256-CBC';
+    $ivLength = openssl_cipher_iv_length($cipher);
+    if (!is_int($ivLength) || $ivLength <= 0) {
+        return null;
+    }
+
+    try {
+        $iv = random_bytes($ivLength);
+    } catch (Throwable $e) {
+        return null;
+    }
+
+    $key = hash('sha256', $passphrase, true);
+    $cipherText = openssl_encrypt($plainData, $cipher, $key, OPENSSL_RAW_DATA, $iv);
+    if ($cipherText === false) {
+        return null;
+    }
+
+    return "TMENC1\n" . base64_encode($iv) . "\n" . base64_encode($cipherText);
+}
+
 function settingsCreateBackupFile(int $cid, bool $auto = false): ?string {
     $sourcePath = appSqlitePath();
     if (!is_file($sourcePath)) {
@@ -876,6 +902,59 @@ switch ($action) {
         header('Content-Length: ' . intval(filesize($backupPath) ?: 0));
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         readfile($backupPath);
+        exit;
+
+    case 'downloadEncryptedBackup':
+        requirePermission($db, 'manage_users');
+        settingsEnsureSqliteForBackup($db);
+
+        $filename = basename(trim((string)($_POST['filename'] ?? '')));
+        $passphrase = (string)($_POST['passphrase'] ?? '');
+
+        if ($filename === '') {
+            respond('error', 'Backup filename is required');
+        }
+        if (strlen($passphrase) < 8) {
+            respond('error', 'Passphrase must be at least 8 characters');
+        }
+
+        $prefix = settingsBackupPrefix($cid);
+        if (strpos($filename, $prefix) !== 0 || preg_match('/\.sqlite$/', $filename) !== 1) {
+            respond('error', 'Invalid backup filename');
+        }
+
+        $dir = settingsBackupDir();
+        $backupPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
+        if (!is_file($backupPath)) {
+            respond('error', 'Backup file not found');
+        }
+
+        $plain = @file_get_contents($backupPath);
+        if (!is_string($plain)) {
+            respond('error', 'Failed to read backup file');
+        }
+
+        $payload = settingsBuildEncryptedBackupPayload($plain, $passphrase);
+        if ($payload === null) {
+            respond('error', 'Failed to encrypt backup. OpenSSL support may be unavailable.');
+        }
+
+        $uid = intval($_SESSION['user_id'] ?? 0);
+        settingsAuditBackupEvent(
+            $db,
+            $cid,
+            $uid > 0 ? $uid : null,
+            'backup_encrypted_downloaded',
+            $filename,
+            strlen($payload)
+        );
+
+        $downloadName = preg_replace('/\.sqlite$/', '.sqlite.enc', $filename);
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $downloadName . '"');
+        header('Content-Length: ' . strlen($payload));
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        echo $payload;
         exit;
 
     case 'restoreBackup':

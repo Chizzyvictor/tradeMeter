@@ -134,6 +134,12 @@ class SettingsPage {
       if (!fileName) return;
       this.downloadBackup(fileName);
     });
+
+    $(document).on('click', '.download-encrypted-backup-btn', (e) => {
+      const fileName = String($(e.currentTarget).data('file') || '').trim();
+      if (!fileName) return;
+      this.downloadEncryptedBackup(fileName);
+    });
   }
 
 
@@ -752,6 +758,9 @@ class SettingsPage {
             <button type="button" class="btn btn-sm btn-outline-secondary mr-1 download-backup-btn" data-file="${fileName}">
               Download
             </button>
+            <button type="button" class="btn btn-sm btn-outline-primary mr-1 download-encrypted-backup-btn" data-file="${fileName}">
+              Download Encrypted
+            </button>
             <button type="button" class="btn btn-sm btn-outline-danger restore-backup-btn" data-file="${fileName}">
               Restore
             </button>
@@ -814,6 +823,46 @@ class SettingsPage {
       action: 'downloadBackup',
       csrf_token: this.app.CSRF_TOKEN,
       filename: fileName
+    };
+
+    Object.keys(fields).forEach((key) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = String(fields[key] || '');
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+
+    setTimeout(() => this.loadBackupAudit(), 500);
+  }
+
+  downloadEncryptedBackup(fileName) {
+    if (!this.canManageUsers) return;
+
+    const passphrase = window.prompt('Enter passphrase for encrypted backup (minimum 8 characters):', '');
+    if (passphrase === null) return;
+
+    const normalizedPassphrase = String(passphrase || '').trim();
+    if (normalizedPassphrase.length < 8) {
+      this.app.showAlert('Passphrase must be at least 8 characters', 'error');
+      return;
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'apiSettings.php';
+    form.target = '_blank';
+    form.style.display = 'none';
+
+    const fields = {
+      action: 'downloadEncryptedBackup',
+      csrf_token: this.app.CSRF_TOKEN,
+      filename: fileName,
+      passphrase: normalizedPassphrase
     };
 
     Object.keys(fields).forEach((key) => {

@@ -253,7 +253,7 @@ include "INC/navbar.php";
 											<th>Created</th>
 											<th>File</th>
 											<th>Size</th>
-											<th>Action</th>
+											<th>Actions</th>
 										</tr>
 									</thead>
 									<tbody></tbody>
