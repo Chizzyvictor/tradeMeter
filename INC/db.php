@@ -454,6 +454,173 @@ function appEnsureCoreBusinessIndexes(AppDbConnection $db): void {
     }
 }
 
+function appNormalizeLegacyBusinessDateTimeValue($value): ?string {
+    if ($value === null) {
+        return null;
+    }
+
+    $trimmed = trim((string)$value);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $trimmed) === 1) {
+        return $trimmed;
+    }
+
+    if (preg_match('/^\d{10}$/', $trimmed) === 1) {
+        $seconds = intval($trimmed);
+        return $seconds > 0 ? date('Y-m-d H:i:s', $seconds) : null;
+    }
+
+    if (preg_match('/^\d{13}$/', $trimmed) === 1) {
+        $millis = intval($trimmed);
+        return $millis > 0 ? date('Y-m-d H:i:s', intval(round($millis / 1000))) : null;
+    }
+
+    if (preg_match('/^\d{14}$/', $trimmed, $matches) === 1) {
+        $year = substr($trimmed, 0, 4);
+        $month = substr($trimmed, 4, 2);
+        $day = substr($trimmed, 6, 2);
+        $hour = substr($trimmed, 8, 2);
+        $minute = substr($trimmed, 10, 2);
+        $second = substr($trimmed, 12, 2);
+        $composed = "{$year}-{$month}-{$day} {$hour}:{$minute}:{$second}";
+        $parsed = strtotime($composed);
+        return $parsed === false ? null : date('Y-m-d H:i:s', $parsed);
+    }
+
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $trimmed) === 1) {
+        return $trimmed . ' 00:00:00';
+    }
+
+    $parsed = strtotime($trimmed);
+    if ($parsed !== false) {
+        return date('Y-m-d H:i:s', $parsed);
+    }
+
+    return null;
+}
+
+function appNormalizeExistingBusinessDateTimes(AppDbConnection $db): void {
+    $columns = [
+        ['table' => 'company', 'pk' => 'cid', 'column' => 'created_at'],
+        ['table' => 'partner', 'pk' => 'sid', 'column' => 'created_at'],
+        ['table' => 'product_categories', 'pk' => 'category_id', 'column' => 'created_at'],
+        ['table' => 'products', 'pk' => 'product_id', 'column' => 'created_at'],
+        ['table' => 'inventory', 'pk' => 'inventory_id', 'column' => 'last_updated'],
+        ['table' => 'stock_ledger', 'pk' => 'ledger_id', 'column' => 'created_at'],
+        ['table' => 'purchases', 'pk' => 'purchase_id', 'column' => 'createdAt'],
+        ['table' => 'purchases_items', 'pk' => 'item_id', 'column' => 'created_at'],
+        ['table' => 'sales', 'pk' => 'sale_id', 'column' => 'createdAt'],
+        ['table' => 'sales_items', 'pk' => 'item_id', 'column' => 'created_at'],
+        ['table' => 'partner_ledger', 'pk' => 'ledger_id', 'column' => 'createdAt'],
+    ];
+
+    $sqlitePattern = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]";
+
+    foreach ($columns as $entry) {
+        $table = $entry['table'];
+        $pk = $entry['pk'];
+        $column = $entry['column'];
+
+        if ($db->driver() === 'sqlite') {
+            $sql = "SELECT {$pk} AS row_id, {$column} AS raw_value
+                    FROM {$table}
+                    WHERE {$column} IS NOT NULL
+                      AND TRIM(CAST({$column} AS TEXT)) <> ''
+                      AND CAST({$column} AS TEXT) NOT GLOB '{$sqlitePattern}'";
+        } else {
+            $sql = "SELECT {$pk} AS row_id, {$column} AS raw_value
+                    FROM {$table}
+                    WHERE {$column} IS NOT NULL";
+        }
+
+        $res = $db->query($sql);
+        if (!$res) {
+            continue;
+        }
+
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $rowId = intval($row['row_id'] ?? 0);
+            $rawValue = $row['raw_value'] ?? null;
+            if ($rowId <= 0) {
+                continue;
+            }
+
+            $normalized = appNormalizeLegacyBusinessDateTimeValue($rawValue);
+            if ($normalized === null) {
+                continue;
+            }
+
+            if (trim((string)$rawValue) === $normalized) {
+                continue;
+            }
+
+            $stmt = $db->prepare("UPDATE {$table} SET {$column} = :value WHERE {$pk} = :id");
+            if (!$stmt) {
+                continue;
+            }
+
+            $stmt->bindValue(':value', $normalized, SQLITE3_TEXT);
+            $stmt->bindValue(':id', $rowId, SQLITE3_INTEGER);
+            $stmt->execute();
+        }
+    }
+}
+
+function appEnsureSqliteBusinessDatetimeTriggers(AppDbConnection $db): void {
+    if ($db->driver() !== 'sqlite') {
+        return;
+    }
+
+    $columns = [
+        ['table' => 'company', 'column' => 'created_at'],
+        ['table' => 'partner', 'column' => 'created_at'],
+        ['table' => 'product_categories', 'column' => 'created_at'],
+        ['table' => 'products', 'column' => 'created_at'],
+        ['table' => 'inventory', 'column' => 'last_updated'],
+        ['table' => 'stock_ledger', 'column' => 'created_at'],
+        ['table' => 'purchases', 'column' => 'createdAt'],
+        ['table' => 'purchases_items', 'column' => 'created_at'],
+        ['table' => 'sales', 'column' => 'createdAt'],
+        ['table' => 'sales_items', 'column' => 'created_at'],
+        ['table' => 'partner_ledger', 'column' => 'createdAt'],
+    ];
+
+    $pattern = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]";
+
+    foreach ($columns as $entry) {
+        $table = $entry['table'];
+        $column = $entry['column'];
+        $safeTable = preg_replace('/[^a-zA-Z0-9_]/', '', $table) ?? '';
+        $safeColumn = preg_replace('/[^a-zA-Z0-9_]/', '', $column) ?? '';
+
+        if ($safeTable === '' || $safeColumn === '') {
+            continue;
+        }
+
+        $insertTrigger = "CREATE TRIGGER IF NOT EXISTS trg_{$safeTable}_{$safeColumn}_insert
+            BEFORE INSERT ON {$table}
+            FOR EACH ROW
+            WHEN NEW.{$column} IS NOT NULL AND NEW.{$column} NOT GLOB '{$pattern}'
+            BEGIN
+                SELECT RAISE(ABORT, 'Invalid datetime format for {$table}.{$column}. Expected YYYY-MM-DD HH:MM:SS');
+            END;";
+
+        $updateTrigger = "CREATE TRIGGER IF NOT EXISTS trg_{$safeTable}_{$safeColumn}_update
+            BEFORE UPDATE OF {$column} ON {$table}
+            FOR EACH ROW
+            WHEN NEW.{$column} IS NOT NULL AND NEW.{$column} NOT GLOB '{$pattern}'
+            BEGIN
+                SELECT RAISE(ABORT, 'Invalid datetime format for {$table}.{$column}. Expected YYYY-MM-DD HH:MM:SS');
+            END;";
+
+        $db->exec($insertTrigger);
+        $db->exec($updateTrigger);
+    }
+}
+
 function appRunLegacyPurchaseMigration(AppDbConnection $db): void {
     if ($db->driver() !== 'sqlite') {
         return;
@@ -519,6 +686,8 @@ function appInitializeTradeMeterSchema(AppDbConnection $db): void {
     appEnsureRbacSchema($db);
     appRunLegacyPurchaseMigration($db);
     appEnsureCoreBusinessIndexes($db);
+    appNormalizeExistingBusinessDateTimes($db);
+    appEnsureSqliteBusinessDatetimeTriggers($db);
 }
 
 function appSeedRolesAndPermissions(AppDbConnection $db, int $cid): void {

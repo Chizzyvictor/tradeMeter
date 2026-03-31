@@ -74,6 +74,51 @@ function safe_input($value) {
     return trim(htmlspecialchars($value ?? '', ENT_QUOTES, 'UTF-8'));
 }
 
+function appBusinessDateTimePattern(): string {
+    return '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/';
+}
+
+function appNowBusinessDateTime(): string {
+    return date('Y-m-d H:i:s');
+}
+
+function appIsBusinessDateTime($value): bool {
+    return is_string($value) && preg_match(appBusinessDateTimePattern(), trim($value)) === 1;
+}
+
+function appNormalizeBusinessDateTime($value, bool $allowDateOnly = false, ?string $defaultTime = null): string {
+    if ($value === null || $value === '') {
+        return appNowBusinessDateTime();
+    }
+
+    if (is_int($value) || (is_string($value) && ctype_digit(trim($value)))) {
+        $numeric = intval($value);
+        if ($numeric > 0) {
+            if (strlen((string)$numeric) >= 13) {
+                $numeric = intval(round($numeric / 1000));
+            }
+            return date('Y-m-d H:i:s', $numeric);
+        }
+    }
+
+    $trimmed = trim((string)$value);
+    if (appIsBusinessDateTime($trimmed)) {
+        return $trimmed;
+    }
+
+    if ($allowDateOnly && preg_match('/^\d{4}-\d{2}-\d{2}$/', $trimmed) === 1) {
+        $timePart = $defaultTime ?: date('H:i:s');
+        return $trimmed . ' ' . $timePart;
+    }
+
+    $parsed = strtotime($trimmed);
+    if ($parsed !== false) {
+        return date('Y-m-d H:i:s', $parsed);
+    }
+
+    throw new InvalidArgumentException('Invalid datetime format. Expected YYYY-MM-DD HH:MM:SS.');
+}
+
 
 
 
@@ -222,25 +267,28 @@ function adjustStock(AppDbConnection $db, int $productId, int $cid, int $qtyChan
         }
 
         // 2️⃣ Update or insert inventory
+        $timestamp = appNowBusinessDateTime();
         if ($res) {
-            $update = $db->prepare("UPDATE inventory SET quantity = :qty, last_updated = CURRENT_TIMESTAMP WHERE product_id = :pid AND cid = :cid");
+            $update = $db->prepare("UPDATE inventory SET quantity = :qty, last_updated = :updated_at WHERE product_id = :pid AND cid = :cid");
             $update->bindValue(':qty', $newBalance, SQLITE3_INTEGER);
             $update->bindValue(':pid', $productId, SQLITE3_INTEGER);
             $update->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $update->bindValue(':updated_at', $timestamp, SQLITE3_TEXT);
             $update->execute();
         } else {
-            $insert = $db->prepare("INSERT INTO inventory (product_id, cid, quantity) VALUES (:pid, :cid, :qty)");
+            $insert = $db->prepare("INSERT INTO inventory (product_id, cid, quantity, last_updated) VALUES (:pid, :cid, :qty, :updated_at)");
             $insert->bindValue(':pid', $productId, SQLITE3_INTEGER);
             $insert->bindValue(':cid', $cid, SQLITE3_INTEGER);
             $insert->bindValue(':qty', $newBalance, SQLITE3_INTEGER);
+            $insert->bindValue(':updated_at', $timestamp, SQLITE3_TEXT);
             $insert->execute();
         }
 
         // 3️⃣ Insert into stock_ledger
         $ledger = $db->prepare("
             INSERT INTO stock_ledger 
-            (product_id, cid, reference_type, reference_id, qty_in, qty_out, balance_after)
-            VALUES (:pid, :cid, :refType, :refId, :qtyIn, :qtyOut, :balance)
+            (product_id, cid, reference_type, reference_id, qty_in, qty_out, balance_after, created_at)
+            VALUES (:pid, :cid, :refType, :refId, :qtyIn, :qtyOut, :balance, :created_at)
         ");
         $ledger->bindValue(':pid', $productId, SQLITE3_INTEGER);
         $ledger->bindValue(':cid', $cid, SQLITE3_INTEGER);
@@ -249,6 +297,7 @@ function adjustStock(AppDbConnection $db, int $productId, int $cid, int $qtyChan
         $ledger->bindValue(':qtyIn', $qtyChange > 0 ? $qtyChange : 0, SQLITE3_INTEGER);
         $ledger->bindValue(':qtyOut', $qtyChange < 0 ? abs($qtyChange) : 0, SQLITE3_INTEGER);
         $ledger->bindValue(':balance', $newBalance, SQLITE3_INTEGER);
+        $ledger->bindValue(':created_at', $timestamp, SQLITE3_TEXT);
         $ledger->execute();
 
         $db->exec("COMMIT");
@@ -484,9 +533,7 @@ function addTransactionNotification(AppDbConnection $db, int $partnerId, int $ci
     } else {
         $stmt->bindValue(':reference_id', null, SQLITE3_NULL);
     }
-    $createdAt = is_numeric($timestamp)
-        ? date('Y-m-d H:i:s', intval($timestamp))
-        : (string)$timestamp;
+    $createdAt = appNormalizeBusinessDateTime($timestamp, false);
     $stmt->bindValue(':createdAt', $createdAt, SQLITE3_TEXT);
 
     if (!$stmt->execute()) {

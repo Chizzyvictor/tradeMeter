@@ -28,12 +28,13 @@ switch ($action) {
             respond("error", "Partner name already exists");
 
         try {
+            $createdAt = appNowBusinessDateTime();
             // Primary insert path for schemas that include created_at/updated_at.
             $stmt = $db->prepare("
                 INSERT INTO partner
                 (sName, sEmail, sPhone, sAddress, outstanding, advancePayment, sLogo, cid, created_at, updated_at)
                 VALUES
-                (:name, :email, :phone, :address, 0, 0, :logo, :cid, CURRENT_TIMESTAMP, strftime('%s','now'))
+                (:name, :email, :phone, :address, 0, 0, :logo, :cid, :created_at, strftime('%s','now'))
             ");
             $stmt->bindValue(':name', $name, SQLITE3_TEXT);
             $stmt->bindValue(':email', $email, SQLITE3_TEXT);
@@ -41,6 +42,7 @@ switch ($action) {
             $stmt->bindValue(':address', $address, SQLITE3_TEXT);
             $stmt->bindValue(':logo', $logo, SQLITE3_TEXT);
             $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $stmt->bindValue(':created_at', $createdAt, SQLITE3_TEXT);
             $result = $stmt->execute();
             if ($result === false) {
                 throw new Exception("Insert with timestamps failed");
@@ -398,14 +400,16 @@ case "loadPartnerDetails":
         $stmt->bindValue(":cid", $cid, SQLITE3_INTEGER);
         $ok = $stmt->execute();
 
+        $createdAt = appNowBusinessDateTime();
         $stmt = $db->prepare("INSERT INTO partner_ledger (cid, sid, type, debit, credit, outstanding, advancePayment, note, reference_id, createdAt)
-                 VALUES (:cid, :sid, 'payDebt', 0, :amount, :outstanding, :advancePayment, :desc, NULL, CURRENT_TIMESTAMP)");
+                 VALUES (:cid, :sid, 'payDebt', 0, :amount, :outstanding, :advancePayment, :desc, NULL, :createdAt)");
         $stmt->bindValue(":cid", $cid, SQLITE3_INTEGER);
         $stmt->bindValue(":sid", $sid, SQLITE3_INTEGER);
         $stmt->bindValue(":amount", $amount, SQLITE3_FLOAT);        
         $stmt->bindValue(":outstanding", $outstanding, SQLITE3_FLOAT);
         $stmt->bindValue(":advancePayment", $advancePayment, SQLITE3_FLOAT);
         $stmt->bindValue(":desc", $desc, SQLITE3_TEXT);
+        $stmt->bindValue(":createdAt", $createdAt, SQLITE3_TEXT);
         $stmt->execute();
 
         if ($ok) {
@@ -457,14 +461,16 @@ case "loadPartnerDetails":
         $stmt->bindValue(":cid", $cid, SQLITE3_INTEGER);
         $ok = $stmt->execute();
 
+        $createdAt = appNowBusinessDateTime();
         $stmt = $db->prepare("INSERT INTO partner_ledger (cid, sid, type, debit, credit, outstanding, advancePayment, note, reference_id, createdAt)
-                 VALUES (:cid, :sid, 'addDebt', :amount, 0, :outstanding, :advancePayment, :desc, NULL, CURRENT_TIMESTAMP)");
+                 VALUES (:cid, :sid, 'addDebt', :amount, 0, :outstanding, :advancePayment, :desc, NULL, :createdAt)");
         $stmt->bindValue(":cid", $cid, SQLITE3_INTEGER);
         $stmt->bindValue(":sid", $sid, SQLITE3_INTEGER);
         $stmt->bindValue(":amount", $amount, SQLITE3_FLOAT);        
         $stmt->bindValue(":outstanding", $outstanding, SQLITE3_FLOAT);
         $stmt->bindValue(":advancePayment", $advancePayment, SQLITE3_FLOAT);
         $stmt->bindValue(":desc", $desc, SQLITE3_TEXT);
+        $stmt->bindValue(":createdAt", $createdAt, SQLITE3_TEXT);
         $stmt->execute();
 
         if ($ok) {

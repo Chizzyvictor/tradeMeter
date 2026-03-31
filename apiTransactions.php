@@ -52,9 +52,10 @@ switch ($action) {
             requireAnyPermission($db, ['create_purchases', 'manage_inventory']);
         }
 
-        $createdAt = date('Y-m-d H:i:s');
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $transactionDate)) {
-            $createdAt = $transactionDate . ' ' . date('H:i:s');
+        try {
+            $createdAt = appNormalizeBusinessDateTime($transactionDate, true, date('H:i:s'));
+        } catch (InvalidArgumentException $e) {
+            respond("error", $e->getMessage());
         }
 
         $items = json_decode($itemsRaw, true);
@@ -161,14 +162,16 @@ switch ($action) {
                     }
                 }
 
+                $inventoryTimestamp = appNowBusinessDateTime();
                 $stockStmt = $db->prepare("INSERT INTO inventory (product_id, cid, quantity, last_updated)
-                                           VALUES (:product_id, :cid, :qty, CURRENT_TIMESTAMP)
+                                           VALUES (:product_id, :cid, :qty, :last_updated)
                                            ON CONFLICT(product_id, cid) DO UPDATE SET
                                            quantity = inventory.quantity + excluded.quantity,
-                                           last_updated = CURRENT_TIMESTAMP");
+                                           last_updated = :last_updated");
                 $stockStmt->bindValue(':product_id', $item['product_id'], SQLITE3_INTEGER);
                 $stockStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
                 $stockStmt->bindValue(':qty', $transactionType === 'sell' ? (-1 * $item['qty']) : $item['qty'], SQLITE3_INTEGER);
+                $stockStmt->bindValue(':last_updated', $inventoryTimestamp, SQLITE3_TEXT);
                 $stockStmt->execute();
 
                 $balanceStmt = $db->prepare("SELECT quantity FROM inventory WHERE product_id = :product_id AND cid = :cid LIMIT 1");
@@ -177,8 +180,9 @@ switch ($action) {
                 $balanceRow = $balanceStmt->execute()->fetchArray(SQLITE3_ASSOC);
                 $balanceAfter = intval($balanceRow['quantity'] ?? 0);
 
+                $ledgerTimestamp = appNowBusinessDateTime();
                 $ledgerStmt = $db->prepare("INSERT INTO stock_ledger (product_id, cid, reference_type, reference_id, qty_in, qty_out, balance_after, created_at)
-                                            VALUES (:product_id, :cid, :reference_type, :reference_id, :qty_in, :qty_out, :balance_after, CURRENT_TIMESTAMP)");
+                                             VALUES (:product_id, :cid, :reference_type, :reference_id, :qty_in, :qty_out, :balance_after, :created_at)");
                 $ledgerStmt->bindValue(':product_id', $item['product_id'], SQLITE3_INTEGER);
                 $ledgerStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
                 $ledgerStmt->bindValue(':reference_type', $transactionType === 'sell' ? 'sale' : 'purchase', SQLITE3_TEXT);
@@ -186,6 +190,7 @@ switch ($action) {
                 $ledgerStmt->bindValue(':qty_in', $transactionType === 'sell' ? 0 : $item['qty'], SQLITE3_INTEGER);
                 $ledgerStmt->bindValue(':qty_out', $transactionType === 'sell' ? $item['qty'] : 0, SQLITE3_INTEGER);
                 $ledgerStmt->bindValue(':balance_after', $balanceAfter, SQLITE3_INTEGER);
+                $ledgerStmt->bindValue(':created_at', $ledgerTimestamp, SQLITE3_TEXT);
                 $ledgerStmt->execute();
             }
 

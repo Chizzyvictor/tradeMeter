@@ -250,20 +250,95 @@ class AppCore {
     return Number.isNaN(numeric) ? fallback : numeric;
   }
 
-  formatDateSafe(value, fallback = "-") {
-    if (value === null || value === undefined || value === "") return fallback;
+  padDatePart(value) {
+    return String(value).padStart(2, "0");
+  }
 
-    const numeric = Number(value);
-    if (!Number.isNaN(numeric) && numeric > 0) {
-      return new Date(numeric * 1000).toLocaleString();
+  parseDateSafe(value) {
+    if (value === null || value === undefined || value === "") return null;
+
+    const trimmed = String(value).trim();
+    if (!trimmed) return null;
+
+    const digitsOnly = /^\d+$/.test(trimmed);
+    if (digitsOnly) {
+      if (trimmed.length === 10) {
+        const seconds = Number(trimmed);
+        if (!Number.isNaN(seconds) && seconds > 0) {
+          const parsedSeconds = new Date(seconds * 1000);
+          if (!Number.isNaN(parsedSeconds.getTime())) {
+            return parsedSeconds;
+          }
+        }
+      }
+
+      if (trimmed.length === 13) {
+        const millis = Number(trimmed);
+        if (!Number.isNaN(millis) && millis > 0) {
+          const parsedMillis = new Date(millis);
+          if (!Number.isNaN(parsedMillis.getTime())) {
+            return parsedMillis;
+          }
+        }
+      }
+
+      if (trimmed.length === 14) {
+        const compact = trimmed.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/);
+        if (compact) {
+          const [, year, month, day, hour, minute, second] = compact;
+          const parsedCompact = new Date(
+            Number(year),
+            Number(month) - 1,
+            Number(day),
+            Number(hour),
+            Number(minute),
+            Number(second)
+          );
+
+          if (!Number.isNaN(parsedCompact.getTime())) {
+            return parsedCompact;
+          }
+        }
+      }
     }
 
-    const parsed = new Date(value);
+    const parsed = new Date(trimmed);
     if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toLocaleString();
+      return parsed;
     }
 
-    return fallback;
+    return null;
+  }
+
+  formatDateObject(date, { dateOnly = false } = {}) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return "-";
+    }
+
+    const year = date.getFullYear();
+    const month = this.padDatePart(date.getMonth() + 1);
+    const day = this.padDatePart(date.getDate());
+
+    if (dateOnly) {
+      return `${year}-${month}-${day}`;
+    }
+
+    const hours = this.padDatePart(date.getHours());
+    const minutes = this.padDatePart(date.getMinutes());
+    const seconds = this.padDatePart(date.getSeconds());
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+  formatDateSafe(value, fallback = "-") {
+    const parsed = this.parseDateSafe(value);
+    if (!parsed) return fallback;
+    return this.formatDateObject(parsed);
+  }
+
+  formatDateOnlySafe(value, fallback = "-") {
+    const parsed = this.parseDateSafe(value);
+    if (!parsed) return fallback;
+    return this.formatDateObject(parsed, { dateOnly: true });
   }
 
   formatCurrency(amount) {

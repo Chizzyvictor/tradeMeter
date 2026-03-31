@@ -55,7 +55,7 @@ TransactionManager.prototype.renderTransactionHistory = function (rows) {
         const balance = Math.max(0, total - paid);
         const status = String(row.status || 'pending').toLowerCase();
         const type = this.normalizeTransactionType(row.transaction_type, 'buy');
-        const dateText = row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '-';
+        const dateText = this.app.formatDateOnlySafe(row.createdAt);
         const typeBadge = type === 'sell'
             ? '<span class="badge badge-success">Sell</span>'
             : '<span class="badge badge-warning">Buy</span>';
@@ -112,7 +112,7 @@ TransactionManager.prototype.filterTransactions = function () {
     const filtered = this.historyRows.filter(row => {
         const partnerName = String(row.partner_name || row.supplier_name || '').toLowerCase();
         const type = this.normalizeTransactionType(row.transaction_type, '');
-        const createdAt = row.createdAt ? new Date(row.createdAt) : null;
+        const createdAt = this.app.parseDateSafe(row.createdAt);
 
         if (partnerQuery && !partnerName.includes(partnerQuery)) return false;
         if (typeFilter && type !== typeFilter) return false;
