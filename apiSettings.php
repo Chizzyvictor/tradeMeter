@@ -36,7 +36,12 @@ function toEpochInt($value): int {
 }
 
 function settingsBackupDir(): string {
-    $dir = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'trademeter_backups';
+    $configured = trim((string)(appEnv('TM_BACKUP_DIR', '') ?? ''));
+    $dir = $configured !== ''
+        ? $configured
+        : (__DIR__ . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'backups');
+
+    $dir = rtrim($dir, '/\\');
     if (!is_dir($dir)) {
         mkdir($dir, 0777, true);
     }
@@ -52,7 +57,12 @@ function settingsAutoBackupPrefix(int $cid): string {
 }
 
 function settingsBackupRetentionDays(): int {
-    return 14;
+    $raw = intval(appEnv('TM_BACKUP_RETENTION_DAYS', '14') ?? 14);
+    return max(1, $raw);
+}
+
+function settingsBackupSchedulerHint(): string {
+    return trim((string)(appEnv('TM_BACKUP_SCHEDULER_HINT', 'php tasks/run_backup_scheduler.php') ?? 'php tasks/run_backup_scheduler.php'));
 }
 
 function settingsEnsureBackupAuditTable(AppDbConnection $db): void {
@@ -113,6 +123,24 @@ function settingsAuditBackupEvent(AppDbConnection $db, int $cid, ?int $userId, s
 function settingsEnsureSqliteForBackup(AppDbConnection $db): void {
     if ($db->driver() !== 'sqlite') {
         respond('error', 'Backup and restore are currently available only on SQLite deployments.');
+    }
+}
+
+function settingsRequireBackupAccess(AppDbConnection $db, int $cid): void {
+    requirePermission($db, 'manage_users');
+    settingsEnsureSqliteForBackup($db);
+
+    if (!currentUserHasRole($db, 'Owner')) {
+        respond('error', 'Only Owner can use database backup and restore operations.');
+    }
+
+    $companyCount = intval($db->querySingle('SELECT COUNT(*) FROM company'));
+    if ($companyCount > 1) {
+        respond('error', 'Backup operations are disabled for shared multi-company databases. Use instance-level backups.');
+    }
+
+    if ($cid <= 0) {
+        respond('error', 'Invalid company context for backup operation.');
     }
 }
 
@@ -188,6 +216,76 @@ function settingsDecryptEncryptedBackupPayload(string $payload, string $passphra
     return is_string($plain) ? $plain : null;
 }
 
+function settingsOpenRawSqlite(string $path): SQLite3 {
+    $sqlite = new SQLite3($path);
+    $sqlite->enableExceptions(true);
+    $sqlite->busyTimeout(5000);
+    return $sqlite;
+}
+
+function settingsSnapshotSqliteDatabase(string $sourcePath, string $targetPath): bool {
+    if (!is_file($sourcePath)) {
+        return false;
+    }
+
+    if (is_file($targetPath)) {
+        @unlink($targetPath);
+    }
+
+    $sourceDb = null;
+    $targetDb = null;
+
+    try {
+        $sourceDb = settingsOpenRawSqlite($sourcePath);
+        $targetDb = settingsOpenRawSqlite($targetPath);
+        $ok = $sourceDb->backup($targetDb);
+        $sourceDb->close();
+        $targetDb->close();
+
+        if (!$ok || !is_file($targetPath)) {
+            @unlink($targetPath);
+            return false;
+        }
+
+        return true;
+    } catch (Throwable $e) {
+        if ($sourceDb instanceof SQLite3) {
+            @$sourceDb->close();
+        }
+        if ($targetDb instanceof SQLite3) {
+            @$targetDb->close();
+        }
+        @unlink($targetPath);
+        return false;
+    }
+}
+
+function settingsRestoreSqliteDatabaseFromFile(string $backupPath, string $targetPath): bool {
+    if (!is_file($backupPath)) {
+        return false;
+    }
+
+    $backupDb = null;
+    $targetDb = null;
+
+    try {
+        $backupDb = settingsOpenRawSqlite($backupPath);
+        $targetDb = settingsOpenRawSqlite($targetPath);
+        $ok = $backupDb->backup($targetDb);
+        $backupDb->close();
+        $targetDb->close();
+        return (bool)$ok;
+    } catch (Throwable $e) {
+        if ($backupDb instanceof SQLite3) {
+            @$backupDb->close();
+        }
+        if ($targetDb instanceof SQLite3) {
+            @$targetDb->close();
+        }
+        return false;
+    }
+}
+
 function settingsCreateBackupFile(int $cid, bool $auto = false): ?string {
     $sourcePath = appSqlitePath();
     if (!is_file($sourcePath)) {
@@ -202,7 +300,7 @@ function settingsCreateBackupFile(int $cid, bool $auto = false): ?string {
     }
 
     $targetPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
-    if (!@copy($sourcePath, $targetPath)) {
+    if (!settingsSnapshotSqliteDatabase($sourcePath, $targetPath)) {
         return null;
     }
 
@@ -258,12 +356,6 @@ function settingsRunDailyAutoBackup(AppDbConnection $db, int $cid): void {
 ensureRbacSchemaForSettings($db);
 seedRolesAndPermissionsForSettings($db, $cid);
 settingsEnsureBackupAuditTable($db);
-
-try {
-    settingsRunDailyAutoBackup($db, $cid);
-} catch (Throwable $e) {
-    error_log('TradeMeter backup auto-run failed: ' . $e->getMessage());
-}
 
 switch ($action) {
     case 'loadSettings':
@@ -840,8 +932,7 @@ switch ($action) {
         break;
 
     case 'createBackup':
-        requirePermission($db, 'manage_users');
-        settingsEnsureSqliteForBackup($db);
+        settingsRequireBackupAccess($db, $cid);
 
         $targetPath = settingsCreateBackupFile($cid, false);
         if ($targetPath === null) {
@@ -866,8 +957,7 @@ switch ($action) {
         break;
 
     case 'loadBackups':
-        requirePermission($db, 'manage_users');
-        settingsEnsureSqliteForBackup($db);
+        settingsRequireBackupAccess($db, $cid);
 
         $dir = settingsBackupDir();
         $prefix = settingsBackupPrefix($cid);
@@ -899,12 +989,13 @@ switch ($action) {
             'data' => $rows,
             'retention_days' => settingsBackupRetentionDays(),
             'last_auto_backup_created_at' => $latestAuto['created_at'] ?? 0,
+            'storage_path' => settingsBackupDir(),
+            'scheduler_hint' => settingsBackupSchedulerHint(),
         ]);
         break;
 
     case 'downloadBackup':
-        requirePermission($db, 'manage_users');
-        settingsEnsureSqliteForBackup($db);
+        settingsRequireBackupAccess($db, $cid);
 
         $filename = basename(trim((string)($_POST['filename'] ?? '')));
         if ($filename === '') {
@@ -940,8 +1031,7 @@ switch ($action) {
         exit;
 
     case 'downloadEncryptedBackup':
-        requirePermission($db, 'manage_users');
-        settingsEnsureSqliteForBackup($db);
+        settingsRequireBackupAccess($db, $cid);
 
         $filename = basename(trim((string)($_POST['filename'] ?? '')));
         $passphrase = (string)($_POST['passphrase'] ?? '');
@@ -993,8 +1083,7 @@ switch ($action) {
         exit;
 
     case 'restoreEncryptedBackup':
-        requirePermission($db, 'manage_users');
-        settingsEnsureSqliteForBackup($db);
+        settingsRequireBackupAccess($db, $cid);
 
         $passphrase = (string)($_POST['passphrase'] ?? '');
         if (strlen($passphrase) < 8) {
@@ -1031,11 +1120,18 @@ switch ($action) {
         }
 
         $sourcePath = appSqlitePath();
+        $tempRestorePath = rtrim(settingsBackupDir(), '/\\') . DIRECTORY_SEPARATOR . 'restore-' . uniqid('', true) . '.sqlite';
+        if (@file_put_contents($tempRestorePath, $plain, LOCK_EX) === false) {
+            respond('error', 'Failed to prepare decrypted backup for restore');
+        }
+
         $db->close();
 
-        if (@file_put_contents($sourcePath, $plain, LOCK_EX) === false) {
+        if (!settingsRestoreSqliteDatabaseFromFile($tempRestorePath, $sourcePath)) {
+            @unlink($tempRestorePath);
             respond('error', 'Failed to restore decrypted backup');
         }
+        @unlink($tempRestorePath);
 
         $uid = intval($_SESSION['user_id'] ?? 0);
         $auditDb = appDbConnectCompat();
@@ -1054,8 +1150,7 @@ switch ($action) {
         break;
 
     case 'restoreBackup':
-        requirePermission($db, 'manage_users');
-        settingsEnsureSqliteForBackup($db);
+        settingsRequireBackupAccess($db, $cid);
 
         $filename = basename(trim((string)($_POST['filename'] ?? '')));
         if ($filename === '') {
@@ -1076,26 +1171,28 @@ switch ($action) {
         $sourcePath = appSqlitePath();
         $db->close();
 
-        if (!@copy($backupPath, $sourcePath)) {
+        if (!settingsRestoreSqliteDatabaseFromFile($backupPath, $sourcePath)) {
             respond('error', 'Failed to restore backup');
         }
 
         $uid = intval($_SESSION['user_id'] ?? 0);
+        $auditDb = appDbConnectCompat();
+        settingsEnsureBackupAuditTable($auditDb);
         settingsAuditBackupEvent(
-            $db,
+            $auditDb,
             $cid,
             $uid > 0 ? $uid : null,
             'backup_restored',
             $filename,
             intval(filesize($backupPath) ?: 0)
         );
+        $auditDb->close();
 
         respond('success', 'Backup restored successfully');
         break;
 
     case 'loadBackupAudit':
-        requirePermission($db, 'manage_users');
-        settingsEnsureSqliteForBackup($db);
+        settingsRequireBackupAccess($db, $cid);
 
         $rows = [];
         $stmt = $db->prepare("SELECT a.id,

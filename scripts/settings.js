@@ -5,6 +5,7 @@ class SettingsPage {
     this.AuthApp = new Auth(this.app);
     this.roles = [];
     this.canManageUsers = false;
+    this.canManageBackups = false;
 
     this.bindEvents();
     this.initialize();
@@ -22,8 +23,19 @@ class SettingsPage {
         this.loadRememberAudit();
         this.loadActiveSessions();
         this.loadLoginLogs();
-        this.loadBackups();
-        this.loadBackupAudit();
+
+        this.AuthApp.loadCurrentUserContext((user) => {
+          const roleName = String(user?.role || '').toLowerCase();
+          this.canManageBackups = roleName === 'owner';
+
+          if (this.canManageBackups) {
+            $('.settings-backup-section').show();
+            this.loadBackups();
+            this.loadBackupAudit();
+          } else {
+            $('.settings-backup-section').hide();
+          }
+        });
       } else {
         $('.settings-admin-section').hide();
       }
@@ -729,11 +741,17 @@ class SettingsPage {
 
   renderBackupPolicy(res) {
     const $note = $('#backupPolicyNote');
+    const $scheduler = $('#backupSchedulerNote');
     if (!$note.length) return;
 
     const retentionDays = Number(res.retention_days) || 14;
     const lastAuto = this.app.formatDateSafe(res.last_auto_backup_created_at || 0, '-');
-    $note.text(`Auto daily backup enabled. Retention: ${retentionDays} day(s). Last auto backup: ${lastAuto}.`);
+    $note.text(`Auto backups run via scheduler. Retention: ${retentionDays} day(s). Last auto backup: ${lastAuto}.`);
+
+    if ($scheduler.length) {
+      const schedulerHint = String(res.scheduler_hint || 'php tasks/run_backup_scheduler.php').trim();
+      $scheduler.text(`Scheduler command: ${schedulerHint}`);
+    }
   }
 
   renderBackups(rows) {

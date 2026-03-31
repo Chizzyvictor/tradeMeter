@@ -235,6 +235,54 @@ function requireAnyPermission(AppDbConnection $db, array $permissionKeys): void 
     respond('error', 'Unauthorized');
 }
 
+function getUserPrimaryRole(AppDbConnection $db, int $userId, int $cid): string {
+    if ($cid <= 0) {
+        return 'User';
+    }
+
+    // Backward compatibility: legacy sessions without explicit users act as Owner.
+    if ($userId <= 0) {
+        return 'Owner';
+    }
+
+    $stmt = $db->prepare("SELECT COALESCE((
+                                SELECT r.role_name
+                                FROM user_roles ur
+                                JOIN roles r ON ur.role_id = r.role_id
+                                WHERE ur.user_id = :uid
+                                ORDER BY CASE lower(r.role_name)
+                                    WHEN 'owner' THEN 1
+                                    WHEN 'manager' THEN 2
+                                    WHEN 'staff' THEN 3
+                                    ELSE 4 END,
+                                    r.role_name ASC
+                                LIMIT 1
+                            ), 'User') AS role_name");
+    if (!$stmt) {
+        return 'User';
+    }
+
+    $stmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    return (string)($row['role_name'] ?? 'User');
+}
+
+function currentUserPrimaryRole(AppDbConnection $db): string {
+    return getUserPrimaryRole(
+        $db,
+        intval($_SESSION['user_id'] ?? 0),
+        intval($_SESSION['cid'] ?? 0)
+    );
+}
+
+function currentUserHasRole(AppDbConnection $db, string $roleName): bool {
+    if ($roleName === '') {
+        return false;
+    }
+
+    return strcasecmp(currentUserPrimaryRole($db), $roleName) === 0;
+}
+
 
 /**
  * Adjust stock for a product

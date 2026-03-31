@@ -102,7 +102,7 @@ include "INC/navbar.php";
 						</div>
 					</div>
 
-					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section">
+					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section settings-backup-section">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
 							<span>User Management</span>
 							<button type="button" class="btn btn-sm btn-outline-primary" id="seedDemoUsersBtn">Seed Demo Manager/Staff</button>
@@ -245,7 +245,8 @@ include "INC/navbar.php";
 							<div class="alert alert-info py-2 mb-3" role="alert">
 								Restoring a backup replaces the current database immediately.
 							</div>
-							<small class="text-muted d-block mb-2" id="backupPolicyNote">Auto daily backup is enabled.</small>
+							<small class="text-muted d-block mb-1" id="backupPolicyNote">Automatic backups are managed by scheduler.</small>
+							<small class="text-muted d-block mb-2" id="backupSchedulerNote">Scheduler command: php tasks/run_backup_scheduler.php</small>
 							<div class="table-responsive">
 								<table class="table table-bordered table-striped" id="backupsTable">
 									<thead>
