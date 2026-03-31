@@ -68,12 +68,13 @@ class Inventory {
 
   postForm(action, formData, onSuccess = null) {
     this.app.ajaxHelper({
-      url: "apiInventory.php",
-      action,
-      data: formData,
-      onSuccess
-    });
-  }
+        url: "apiInventory.php",
+        action,
+        data: formData,
+        dir: "productsDP",
+        onSuccess
+      });
+    }
 
   postTransactions(action, data = {}, onSuccess = null, options = {}) {
     this.app.ajaxHelper({

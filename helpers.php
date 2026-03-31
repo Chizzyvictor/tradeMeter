@@ -726,8 +726,6 @@ function uploadImageToCloudinary(string $tmpPath, string $originalName, string $
 
 
 // === File Upload Config ===
-$dir = $_POST['dir'] ?? 'productsDP';  // Fallback to 'productDP'
-define("UPLOAD_DIR", __DIR__ . "/Images/{$dir}/");
 define("MAX_FILE_SIZE", 2 * 1024 * 1024); // 2MB
 $allowedMimeTypes = ["image/jpeg", "image/png", "image/gif"];
 // Files that should never be deleted
@@ -738,8 +736,16 @@ $defaultFiles = [
     "no-image.jpg"
 ];
 // Create directory if it doesn’t exist
-if (!is_dir(UPLOAD_DIR)) {
-    mkdir(UPLOAD_DIR, 0777, true);
+function resolveUploadDir(?string $dir = null): string {
+    $rawDir = trim((string)($dir ?? ($_POST['dir'] ?? 'productsDP')));
+    $safeDir = preg_replace('/[^a-zA-Z0-9_-]/', '', $rawDir) ?: 'productsDP';
+    $uploadDir = __DIR__ . "/Images/{$safeDir}/";
+
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+
+    return $uploadDir;
 }
 
 // === Helper: Safe file upload ===
@@ -764,9 +770,13 @@ function handleFileUpload($fieldName, $oldFile = null) {
         respond("error", "Invalid file type.");
     }
 
-    $ext  = pathinfo($file["name"], PATHINFO_EXTENSION);
+    $ext  = strtolower((string)pathinfo($file["name"], PATHINFO_EXTENSION));
+    if ($ext === '') {
+        $ext = $mime === 'image/png' ? 'png' : ($mime === 'image/gif' ? 'gif' : 'jpg');
+    }
     $name = uniqid("img_", true) . "." . $ext;
-    $path = UPLOAD_DIR . $name;
+    $uploadDir = resolveUploadDir();
+    $path = $uploadDir . $name;
 
     if (appCloudinaryEnabled()) {
         $dir = trim((string)($_POST['dir'] ?? 'productsDP'));
@@ -783,10 +793,11 @@ function handleFileUpload($fieldName, $oldFile = null) {
     // Remove old file ONLY if it's not a default file
     if (
         $oldFile &&
+        !preg_match('/^https?:\/\//i', (string)$oldFile) &&
         !in_array($oldFile, $defaultFiles) &&
-        file_exists(UPLOAD_DIR . $oldFile)
+        file_exists($uploadDir . $oldFile)
     ) {
-        unlink(UPLOAD_DIR . $oldFile);
+        unlink($uploadDir . $oldFile);
     }
 
     return $name;

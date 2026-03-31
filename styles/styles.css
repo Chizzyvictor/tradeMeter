@@ -1516,14 +1516,77 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 }
 
 /* ====== SETTINGS REFINEMENTS ====== */
+.settings-page .content-header {
+    margin-bottom: 0.5rem;
+}
+
+.settings-page .content-header h1 {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.settings-profile-card,
 .settings-section-card {
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 18px;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98));
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.dark-mode .settings-profile-card,
+.dark-mode .settings-section-card {
+    background: linear-gradient(180deg, rgba(24,31,42,0.98), rgba(15,23,42,0.98));
+    border-color: rgba(71, 85, 105, 0.52);
+}
+
+.settings-profile-card .card-header,
+.settings-section-card .card-header {
+    background: transparent;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+}
+
+.settings-profile-card .card-body,
+.settings-section-card .card-body {
+    padding: 1.15rem 1.2rem;
+}
+
+.settings-profile-card img {
+    border-radius: 22px;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
 }
 
 .settings-form-actions {
     display: flex;
     justify-content: flex-start;
+    gap: 0.75rem;
+}
+
+.settings-form-actions .btn,
+.settings-section-card .btn {
+    border-radius: 999px;
+    min-height: 42px;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+}
+
+.settings-section-card .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.settings-section-card table {
+    margin-bottom: 0;
+}
+
+.settings-section-card thead th {
+    white-space: nowrap;
+}
+
+.settings-admin-section {
+    display: none;
 }
 
 @media (max-width: 767.98px) {
@@ -1533,5 +1596,18 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 
     .settings-form-actions .btn {
         width: 100%;
+    }
+
+    .settings-section-card .card-body,
+    .settings-profile-card .card-body {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .settings-section-card .d-flex,
+    .settings-profile-card .d-flex {
+        flex-direction: column;
+        align-items: stretch !important;
     }
 }

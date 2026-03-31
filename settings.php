@@ -5,7 +5,7 @@ include "INC/header.php";
 include "INC/navbar.php";
 ?>
 
-<div class="content">
+<div class="content settings-page">
 	<div class="content-header">
 		<div class="container-fluid">
 			<div class="row mb-2">
@@ -20,7 +20,7 @@ include "INC/navbar.php";
 		<div class="container-fluid">
 			<div class="row">
 				<div class="col-lg-4 mb-4">
-					<div class="card shadow-sm h-100">
+					<div class="card shadow-sm h-100 settings-profile-card">
 						<div class="card-header font-weight-bold">Company Profile</div>
 						<div class="card-body text-center">
 							<img id="settingsCompanyLogo" src="Images/companyDP/logo.jpg" alt="Company Logo" class="image img-thumbnail mb-3" style="max-width: 160px; max-height: 160px;">
@@ -31,7 +31,7 @@ include "INC/navbar.php";
 					</div>
 				</div>
 
-				<div class="col-lg-8 mb-4">
+				<div class="col-lg-8 mb-4 settings-main-column">
 					<div class="card shadow-sm mb-4 settings-section-card">
 						<div class="card-header font-weight-bold">Update Company Details</div>
 						<div class="card-body">
@@ -102,7 +102,7 @@ include "INC/navbar.php";
 						</div>
 					</div>
 
-					<div class="card shadow-sm settings-section-card mt-4">
+					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
 							<span>User Management</span>
 							<button type="button" class="btn btn-sm btn-outline-primary" id="seedDemoUsersBtn">Seed Demo Manager/Staff</button>
@@ -150,7 +150,7 @@ include "INC/navbar.php";
 						</div>
 					</div>
 
-					<div class="card shadow-sm settings-section-card mt-4">
+					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
 							<span>Remember Me Audit (Last 50)</span>
 							<button type="button" class="btn btn-sm btn-outline-secondary" id="refreshRememberAuditBtn">Refresh</button>
@@ -173,7 +173,7 @@ include "INC/navbar.php";
 						</div>
 					</div>
 
-					<div class="card shadow-sm settings-section-card mt-4">
+					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
 							<span>Active Device Sessions</span>
 							<div>
@@ -200,7 +200,7 @@ include "INC/navbar.php";
 						</div>
 					</div>
 
-					<div class="card shadow-sm settings-section-card mt-4">
+					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
 							<span>Login Activity Logs</span>
 							<div class="d-flex align-items-center">

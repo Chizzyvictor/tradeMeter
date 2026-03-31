@@ -4,13 +4,28 @@ class SettingsPage {
     this.app     = new AppCore(csrf);
     this.AuthApp = new Auth(this.app);
     this.roles = [];
+    this.canManageUsers = false;
 
     this.bindEvents();
+    this.initialize();
+  }
+
+  initialize() {
     this.loadSettings();
-    this.loadRoles(() => this.loadUsers());
-    this.loadRememberAudit();
-    this.loadActiveSessions();
-    this.loadLoginLogs();
+
+    this.app.loadUserPermissions(() => {
+      this.canManageUsers = this.app.hasPermission('manage_users');
+
+      if (this.canManageUsers) {
+        $('.settings-admin-section').show();
+        this.loadRoles(() => this.loadUsers());
+        this.loadRememberAudit();
+        this.loadActiveSessions();
+        this.loadLoginLogs();
+      } else {
+        $('.settings-admin-section').hide();
+      }
+    });
   }
 
   bindEvents() {

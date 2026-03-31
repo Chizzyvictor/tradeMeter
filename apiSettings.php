@@ -1,8 +1,6 @@
 <?php
 require_once __DIR__ . '/helpers.php';
 
-requirePermission($db, 'manage_users');
-
 function ensureRbacSchemaForSettings(AppDbConnection $db): void {
     appEnsureRbacSchema($db);
 }
@@ -191,6 +189,7 @@ switch ($action) {
         break;
 
     case 'loadRoles':
+        requirePermission($db, 'manage_users');
         $roles = [];
         $stmt = $db->prepare("SELECT role_id, role_name
                               FROM roles
@@ -213,6 +212,7 @@ switch ($action) {
         break;
 
     case 'loadUsers':
+        requirePermission($db, 'manage_users');
         $users = [];
         $stmt = $db->prepare("SELECT u.user_id,
                                      u.full_name,
@@ -244,6 +244,7 @@ switch ($action) {
         break;
 
     case 'createUser':
+        requirePermission($db, 'manage_users');
         $fullName = safe_input($_POST['full_name'] ?? '');
         $email = strtolower(safe_input($_POST['email'] ?? ''));
         $password = $_POST['password'] ?? '';
@@ -298,6 +299,7 @@ switch ($action) {
         break;
 
     case 'updateUserRole':
+        requirePermission($db, 'manage_users');
         $userId = intval($_POST['user_id'] ?? 0);
         $roleId = intval($_POST['role_id'] ?? 0);
 
@@ -327,6 +329,7 @@ switch ($action) {
         break;
 
     case 'toggleUserStatus':
+        requirePermission($db, 'manage_users');
         $userId = intval($_POST['user_id'] ?? 0);
         $isActive = intval($_POST['is_active'] ?? 0) === 1 ? 1 : 0;
         $currentUserId = intval($_SESSION['user_id'] ?? 0);
@@ -354,6 +357,7 @@ switch ($action) {
         break;
 
     case 'seedDemoUsers':
+        requirePermission($db, 'manage_users');
         $managerPassword = 'Manager123!';
         $staffPassword = 'Staff123!';
 
@@ -422,6 +426,7 @@ switch ($action) {
         break;
 
     case 'loadRememberAudit':
+        requirePermission($db, 'manage_users');
         $rows = [];
         $stmt = $db->prepare("SELECT a.id,
                                      a.event_type,
@@ -462,6 +467,7 @@ switch ($action) {
         break;
 
     case 'loadActiveSessions':
+        requirePermission($db, 'manage_users');
         $sessions = [];
         $currentSessionId = session_id();
 
@@ -505,6 +511,7 @@ switch ($action) {
         break;
 
     case 'revokeSession':
+        requirePermission($db, 'manage_users');
         $sessionId = trim((string)($_POST['session_id'] ?? ''));
         if ($sessionId === '') {
             respond('error', 'Session ID is required');
@@ -541,6 +548,7 @@ switch ($action) {
         break;
 
     case 'loadLoginLogs':
+        requirePermission($db, 'manage_users');
         $allowedStatuses = ['all', 'success', 'failed', 'blocked', 'success_auto', 'failed_auto'];
         $status = strtolower(trim((string)($_POST['status'] ?? 'all')));
         if (!in_array($status, $allowedStatuses, true)) {
