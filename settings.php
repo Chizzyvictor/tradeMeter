@@ -263,6 +263,21 @@ include "INC/navbar.php";
 								<strong>Backup Audit</strong>
 								<button type="button" class="btn btn-sm btn-outline-secondary" id="refreshBackupAuditBtn">Refresh Audit</button>
 							</div>
+							<form id="restoreEncryptedBackupForm" class="border rounded p-3 mb-3">
+								<div class="form-row">
+									<div class="form-group col-md-6 mb-2">
+										<label class="mb-1" for="encryptedBackupFile">Encrypted Backup File</label>
+										<input type="file" id="encryptedBackupFile" name="encryptedBackupFile" class="form-control" accept=".enc" required>
+									</div>
+									<div class="form-group col-md-4 mb-2">
+										<label class="mb-1" for="encryptedBackupPassphrase">Passphrase</label>
+										<input type="password" id="encryptedBackupPassphrase" class="form-control" minlength="8" required>
+									</div>
+									<div class="form-group col-md-2 mb-2 d-flex align-items-end">
+										<button type="submit" class="btn btn-outline-danger w-100" id="restoreEncryptedBackupBtn">Restore Encrypted</button>
+									</div>
+								</div>
+							</form>
 							<div class="table-responsive">
 								<table class="table table-bordered table-striped" id="backupAuditTable">
 									<thead>

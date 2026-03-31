@@ -153,6 +153,41 @@ function settingsBuildEncryptedBackupPayload(string $plainData, string $passphra
     return "TMENC1\n" . base64_encode($iv) . "\n" . base64_encode($cipherText);
 }
 
+function settingsDecryptEncryptedBackupPayload(string $payload, string $passphrase): ?string {
+    if (!function_exists('openssl_decrypt')) {
+        return null;
+    }
+
+    $parts = preg_split('/\r\n|\n|\r/', $payload);
+    if (!is_array($parts) || count($parts) < 3) {
+        return null;
+    }
+
+    $version = trim((string)$parts[0]);
+    $ivB64 = trim((string)$parts[1]);
+    $cipherB64 = trim((string)$parts[2]);
+
+    if ($version !== 'TMENC1' || $ivB64 === '' || $cipherB64 === '') {
+        return null;
+    }
+
+    $iv = base64_decode($ivB64, true);
+    $cipherText = base64_decode($cipherB64, true);
+    if (!is_string($iv) || !is_string($cipherText)) {
+        return null;
+    }
+
+    $cipher = 'AES-256-CBC';
+    $ivLength = openssl_cipher_iv_length($cipher);
+    if (!is_int($ivLength) || $ivLength <= 0 || strlen($iv) !== $ivLength) {
+        return null;
+    }
+
+    $key = hash('sha256', $passphrase, true);
+    $plain = openssl_decrypt($cipherText, $cipher, $key, OPENSSL_RAW_DATA, $iv);
+    return is_string($plain) ? $plain : null;
+}
+
 function settingsCreateBackupFile(int $cid, bool $auto = false): ?string {
     $sourcePath = appSqlitePath();
     if (!is_file($sourcePath)) {
@@ -956,6 +991,67 @@ switch ($action) {
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         echo $payload;
         exit;
+
+    case 'restoreEncryptedBackup':
+        requirePermission($db, 'manage_users');
+        settingsEnsureSqliteForBackup($db);
+
+        $passphrase = (string)($_POST['passphrase'] ?? '');
+        if (strlen($passphrase) < 8) {
+            respond('error', 'Passphrase must be at least 8 characters');
+        }
+
+        $file = $_FILES['encryptedBackupFile'] ?? null;
+        if (!is_array($file) || intval($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            respond('error', 'Encrypted backup file is required');
+        }
+
+        $originalName = basename((string)($file['name'] ?? ''));
+        if ($originalName === '' || preg_match('/\.sqlite\.enc$/i', $originalName) !== 1) {
+            respond('error', 'Invalid encrypted backup file name');
+        }
+
+        $tmpPath = (string)($file['tmp_name'] ?? '');
+        if ($tmpPath === '' || !is_file($tmpPath)) {
+            respond('error', 'Uploaded encrypted backup is unavailable');
+        }
+
+        $payload = @file_get_contents($tmpPath);
+        if (!is_string($payload) || trim($payload) === '') {
+            respond('error', 'Failed to read encrypted backup file');
+        }
+
+        $plain = settingsDecryptEncryptedBackupPayload($payload, $passphrase);
+        if (!is_string($plain)) {
+            respond('error', 'Failed to decrypt backup. Check your passphrase and file.');
+        }
+
+        if (strncmp($plain, 'SQLite format 3', 15) !== 0) {
+            respond('error', 'Decrypted content is not a valid SQLite backup');
+        }
+
+        $sourcePath = appSqlitePath();
+        $db->close();
+
+        if (@file_put_contents($sourcePath, $plain, LOCK_EX) === false) {
+            respond('error', 'Failed to restore decrypted backup');
+        }
+
+        $uid = intval($_SESSION['user_id'] ?? 0);
+        $auditDb = appDbConnectCompat();
+        settingsEnsureBackupAuditTable($auditDb);
+        settingsAuditBackupEvent(
+            $auditDb,
+            $cid,
+            $uid > 0 ? $uid : null,
+            'backup_encrypted_restored',
+            $originalName,
+            strlen($plain)
+        );
+        $auditDb->close();
+
+        respond('success', 'Encrypted backup restored successfully');
+        break;
 
     case 'restoreBackup':
         requirePermission($db, 'manage_users');

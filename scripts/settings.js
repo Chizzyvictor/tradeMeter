@@ -94,6 +94,11 @@ class SettingsPage {
       this.loadBackupAudit();
     });
 
+    $('#restoreEncryptedBackupForm').on('submit', (e) => {
+      e.preventDefault();
+      this.restoreEncryptedBackup();
+    });
+
     $('#loginLogsStatusFilter').on('change', () => {
       this.loadLoginLogs();
     });
@@ -878,6 +883,48 @@ class SettingsPage {
     form.remove();
 
     setTimeout(() => this.loadBackupAudit(), 500);
+  }
+
+  restoreEncryptedBackup() {
+    if (!this.canManageUsers) return;
+
+    const file = $('#encryptedBackupFile')[0]?.files?.[0] || null;
+    const passphrase = String($('#encryptedBackupPassphrase').val() || '').trim();
+    const $btn = $('#restoreEncryptedBackupBtn');
+
+    if (!file) {
+      this.app.showAlert('Select an encrypted backup file', 'error');
+      return;
+    }
+
+    if (passphrase.length < 8) {
+      this.app.showAlert('Passphrase must be at least 8 characters', 'error');
+      return;
+    }
+
+    const confirmed = window.confirm('Restore encrypted backup now? This will replace current data immediately.');
+    if (!confirmed) return;
+
+    $btn.prop('disabled', true);
+
+    const formData = new FormData();
+    formData.append('encryptedBackupFile', file);
+    formData.append('passphrase', passphrase);
+
+    this.app.ajaxHelper({
+      url: 'apiSettings.php',
+      action: 'restoreEncryptedBackup',
+      data: formData,
+      onSuccess: () => {
+        $('#restoreEncryptedBackupForm')[0].reset();
+        this.loadBackups();
+        this.loadBackupAudit();
+        this.loadSettings();
+      },
+      onComplete: () => {
+        $btn.prop('disabled', false);
+      }
+    });
   }
 
   loadBackupAudit() {
