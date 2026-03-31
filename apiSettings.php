@@ -47,6 +47,14 @@ function settingsBackupPrefix(int $cid): string {
     return 'tm-backup-cid' . $cid . '-';
 }
 
+function settingsAutoBackupPrefix(int $cid): string {
+    return settingsBackupPrefix($cid) . 'auto-';
+}
+
+function settingsBackupRetentionDays(): int {
+    return 14;
+}
+
 function settingsEnsureSqliteForBackup(AppDbConnection $db): void {
     if ($db->driver() !== 'sqlite') {
         respond('error', 'Backup and restore are currently available only on SQLite deployments.');
@@ -54,15 +62,81 @@ function settingsEnsureSqliteForBackup(AppDbConnection $db): void {
 }
 
 function settingsBackupMeta(string $path): array {
+    $filename = basename($path);
+    $isAuto = strpos($filename, 'auto-') !== false;
     return [
-        'filename' => basename($path),
+        'filename' => $filename,
         'size' => is_file($path) ? intval(filesize($path)) : 0,
         'created_at' => is_file($path) ? intval(filemtime($path)) : 0,
+        'is_auto' => $isAuto,
     ];
+}
+
+function settingsCreateBackupFile(int $cid, bool $auto = false): ?string {
+    $sourcePath = appSqlitePath();
+    if (!is_file($sourcePath)) {
+        return null;
+    }
+
+    $dir = settingsBackupDir();
+    if ($auto) {
+        $filename = settingsAutoBackupPrefix($cid) . date('Ymd') . '.sqlite';
+    } else {
+        $filename = settingsBackupPrefix($cid) . date('Ymd_His') . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.sqlite';
+    }
+
+    $targetPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
+    if (!@copy($sourcePath, $targetPath)) {
+        return null;
+    }
+
+    return $targetPath;
+}
+
+function settingsApplyAutoBackupRetention(int $cid): void {
+    $dir = settingsBackupDir();
+    $autoPrefix = settingsAutoBackupPrefix($cid);
+    $matches = glob(rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $autoPrefix . '*.sqlite');
+    $files = is_array($matches) ? $matches : [];
+
+    usort($files, function (string $a, string $b): int {
+        return intval(@filemtime($b)) <=> intval(@filemtime($a));
+    });
+
+    $keep = settingsBackupRetentionDays();
+    if (count($files) <= $keep) {
+        return;
+    }
+
+    foreach (array_slice($files, $keep) as $oldFile) {
+        if (is_file($oldFile)) {
+            @unlink($oldFile);
+        }
+    }
+}
+
+function settingsRunDailyAutoBackup(AppDbConnection $db, int $cid): void {
+    if ($db->driver() !== 'sqlite') {
+        return;
+    }
+
+    $dir = settingsBackupDir();
+    $todayPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . settingsAutoBackupPrefix($cid) . date('Ymd') . '.sqlite';
+    if (!is_file($todayPath)) {
+        settingsCreateBackupFile($cid, true);
+    }
+
+    settingsApplyAutoBackupRetention($cid);
 }
 
 ensureRbacSchemaForSettings($db);
 seedRolesAndPermissionsForSettings($db, $cid);
+
+try {
+    settingsRunDailyAutoBackup($db, $cid);
+} catch (Throwable $e) {
+    error_log('TradeMeter backup auto-run failed: ' . $e->getMessage());
+}
 
 switch ($action) {
     case 'loadSettings':
@@ -642,18 +716,12 @@ switch ($action) {
         requirePermission($db, 'manage_users');
         settingsEnsureSqliteForBackup($db);
 
-        $sourcePath = appSqlitePath();
-        if (!is_file($sourcePath)) {
-            respond('error', 'Source database file not found');
-        }
-
-        $dir = settingsBackupDir();
-        $filename = settingsBackupPrefix($cid) . date('Ymd_His') . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.sqlite';
-        $targetPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
-
-        if (!@copy($sourcePath, $targetPath)) {
+        $targetPath = settingsCreateBackupFile($cid, false);
+        if ($targetPath === null) {
             respond('error', 'Failed to create backup file');
         }
+
+        settingsApplyAutoBackupRetention($cid);
 
         respond('success', 'Backup created successfully', [
             'data' => settingsBackupMeta($targetPath)
@@ -681,7 +749,20 @@ switch ($action) {
             }
         }
 
-        respond('success', 'Backups loaded', ['data' => $rows]);
+        $autoPrefix = settingsAutoBackupPrefix($cid);
+        $latestAuto = null;
+        foreach ($rows as $entry) {
+            if (strpos((string)$entry['filename'], $autoPrefix) === 0) {
+                $latestAuto = $entry;
+                break;
+            }
+        }
+
+        respond('success', 'Backups loaded', [
+            'data' => $rows,
+            'retention_days' => settingsBackupRetentionDays(),
+            'last_auto_backup_created_at' => $latestAuto['created_at'] ?? 0,
+        ]);
         break;
 
     case 'restoreBackup':

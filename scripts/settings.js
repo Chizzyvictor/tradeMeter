@@ -696,12 +696,22 @@ class SettingsPage {
       action: 'loadBackups',
       data: {},
       onSuccess: (res) => {
+        this.renderBackupPolicy(res);
         this.renderBackups(Array.isArray(res.data) ? res.data : []);
       },
       onComplete: () => {
         if ($btn.length) $btn.prop('disabled', false);
       }
     });
+  }
+
+  renderBackupPolicy(res) {
+    const $note = $('#backupPolicyNote');
+    if (!$note.length) return;
+
+    const retentionDays = Number(res.retention_days) || 14;
+    const lastAuto = this.app.formatDateSafe(res.last_auto_backup_created_at || 0, '-');
+    $note.text(`Auto daily backup enabled. Retention: ${retentionDays} day(s). Last auto backup: ${lastAuto}.`);
   }
 
   renderBackups(rows) {
@@ -717,11 +727,15 @@ class SettingsPage {
       const when = this.app.formatDateSafe(row.created_at, '-');
       const fileName = String(row.filename || '');
       const size = this.formatFileSize(row.size || 0);
+      const isAuto = Boolean(row.is_auto);
+      const fileLabel = isAuto
+        ? `${fileName} <span class="badge badge-info ml-1">Auto</span>`
+        : fileName;
 
       return `
         <tr>
           <td>${when}</td>
-          <td>${fileName || '-'}</td>
+          <td>${fileLabel || '-'}</td>
           <td>${size}</td>
           <td>
             <button type="button" class="btn btn-sm btn-outline-danger restore-backup-btn" data-file="${fileName}">

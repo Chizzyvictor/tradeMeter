@@ -245,6 +245,7 @@ include "INC/navbar.php";
 							<div class="alert alert-info py-2 mb-3" role="alert">
 								Restoring a backup replaces the current database immediately.
 							</div>
+							<small class="text-muted d-block mb-2" id="backupPolicyNote">Auto daily backup is enabled.</small>
 							<div class="table-responsive">
 								<table class="table table-bordered table-striped" id="backupsTable">
 									<thead>
