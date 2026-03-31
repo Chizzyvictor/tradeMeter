@@ -259,6 +259,24 @@ include "INC/navbar.php";
 									<tbody></tbody>
 								</table>
 							</div>
+							<div class="d-flex justify-content-between align-items-center mt-3 mb-2">
+								<strong>Backup Audit</strong>
+								<button type="button" class="btn btn-sm btn-outline-secondary" id="refreshBackupAuditBtn">Refresh Audit</button>
+							</div>
+							<div class="table-responsive">
+								<table class="table table-bordered table-striped" id="backupAuditTable">
+									<thead>
+										<tr>
+											<th>Time</th>
+											<th>Event</th>
+											<th>File</th>
+											<th>Actor</th>
+											<th>IP</th>
+										</tr>
+									</thead>
+									<tbody></tbody>
+								</table>
+							</div>
 						</div>
 					</div>
 

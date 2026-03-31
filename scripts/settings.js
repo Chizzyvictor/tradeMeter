@@ -23,6 +23,7 @@ class SettingsPage {
         this.loadActiveSessions();
         this.loadLoginLogs();
         this.loadBackups();
+        this.loadBackupAudit();
       } else {
         $('.settings-admin-section').hide();
       }
@@ -89,6 +90,10 @@ class SettingsPage {
       this.loadBackups();
     });
 
+    $('#refreshBackupAuditBtn').on('click', () => {
+      this.loadBackupAudit();
+    });
+
     $('#loginLogsStatusFilter').on('change', () => {
       this.loadLoginLogs();
     });
@@ -122,6 +127,12 @@ class SettingsPage {
       const fileName = String($(e.currentTarget).data('file') || '').trim();
       if (!fileName) return;
       this.restoreBackup(fileName);
+    });
+
+    $(document).on('click', '.download-backup-btn', (e) => {
+      const fileName = String($(e.currentTarget).data('file') || '').trim();
+      if (!fileName) return;
+      this.downloadBackup(fileName);
     });
   }
 
@@ -738,6 +749,9 @@ class SettingsPage {
           <td>${fileLabel || '-'}</td>
           <td>${size}</td>
           <td>
+            <button type="button" class="btn btn-sm btn-outline-secondary mr-1 download-backup-btn" data-file="${fileName}">
+              Download
+            </button>
             <button type="button" class="btn btn-sm btn-outline-danger restore-backup-btn" data-file="${fileName}">
               Restore
             </button>
@@ -761,6 +775,7 @@ class SettingsPage {
       data: {},
       onSuccess: () => {
         this.loadBackups();
+        this.loadBackupAudit();
       },
       onComplete: () => {
         $btn.prop('disabled', false);
@@ -780,9 +795,91 @@ class SettingsPage {
       data: { filename: fileName },
       onSuccess: () => {
         this.loadBackups();
+        this.loadBackupAudit();
         this.loadSettings();
       }
     });
+  }
+
+  downloadBackup(fileName) {
+    if (!this.canManageUsers) return;
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'apiSettings.php';
+    form.target = '_blank';
+    form.style.display = 'none';
+
+    const fields = {
+      action: 'downloadBackup',
+      csrf_token: this.app.CSRF_TOKEN,
+      filename: fileName
+    };
+
+    Object.keys(fields).forEach((key) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = String(fields[key] || '');
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+
+    setTimeout(() => this.loadBackupAudit(), 500);
+  }
+
+  loadBackupAudit() {
+    if (!this.canManageUsers) return;
+
+    const $btn = $('#refreshBackupAuditBtn');
+    if ($btn.length) $btn.prop('disabled', true);
+
+    this.app.ajaxHelper({
+      url: 'apiSettings.php',
+      action: 'loadBackupAudit',
+      data: {},
+      onSuccess: (res) => {
+        this.renderBackupAudit(Array.isArray(res.data) ? res.data : []);
+      },
+      onComplete: () => {
+        if ($btn.length) $btn.prop('disabled', false);
+      }
+    });
+  }
+
+  renderBackupAudit(rows) {
+    const $tbody = $('#backupAuditTable tbody');
+    if (!$tbody.length) return;
+
+    if (!rows.length) {
+      $tbody.html('<tr><td colspan="5" class="text-center text-muted">No backup audit entries yet</td></tr>');
+      return;
+    }
+
+    const html = rows.map((row) => {
+      const when = this.app.formatDateSafe(row.created_at, '-');
+      const eventLabel = String(row.event_type || '-').replace(/_/g, ' ');
+      const actor = row.full_name && row.email && row.full_name !== '-'
+        ? `${row.full_name} (${row.email})`
+        : 'System';
+      const fileName = String(row.filename || '-');
+      const ip = String(row.ip_address || '-');
+
+      return `
+        <tr>
+          <td>${when}</td>
+          <td>${eventLabel}</td>
+          <td>${fileName}</td>
+          <td>${actor}</td>
+          <td>${ip}</td>
+        </tr>
+      `;
+    }).join('');
+
+    $tbody.html(html);
   }
 }
 

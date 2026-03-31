@@ -55,6 +55,61 @@ function settingsBackupRetentionDays(): int {
     return 14;
 }
 
+function settingsEnsureBackupAuditTable(AppDbConnection $db): void {
+    $db->exec("CREATE TABLE IF NOT EXISTS backup_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER NOT NULL,
+        user_id INTEGER,
+        event_type TEXT NOT NULL,
+        filename TEXT,
+        size_bytes INTEGER DEFAULT 0,
+        ip_address TEXT,
+        user_agent TEXT,
+        details TEXT,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+    )");
+}
+
+function settingsAuditBackupEvent(AppDbConnection $db, int $cid, ?int $userId, string $eventType, ?string $filename = null, int $sizeBytes = 0, array $details = []): void {
+    $stmt = $db->prepare("INSERT INTO backup_audit (
+            cid, user_id, event_type, filename, size_bytes, ip_address, user_agent, details, created_at
+        ) VALUES (
+            :cid, :user_id, :event_type, :filename, :size_bytes, :ip_address, :user_agent, :details, :created_at
+        )");
+
+    if (!$stmt) {
+        return;
+    }
+
+    $uid = $userId !== null && $userId > 0 ? $userId : null;
+    $ipAddress = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    $userAgent = substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
+    $detailsJson = empty($details) ? null : json_encode($details, JSON_UNESCAPED_SLASHES);
+
+    $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    if ($uid === null) {
+        $stmt->bindValue(':user_id', null, SQLITE3_NULL);
+    } else {
+        $stmt->bindValue(':user_id', $uid, SQLITE3_INTEGER);
+    }
+    $stmt->bindValue(':event_type', $eventType, SQLITE3_TEXT);
+    if ($filename === null || $filename === '') {
+        $stmt->bindValue(':filename', null, SQLITE3_NULL);
+    } else {
+        $stmt->bindValue(':filename', $filename, SQLITE3_TEXT);
+    }
+    $stmt->bindValue(':size_bytes', max(0, $sizeBytes), SQLITE3_INTEGER);
+    $stmt->bindValue(':ip_address', $ipAddress, SQLITE3_TEXT);
+    $stmt->bindValue(':user_agent', $userAgent, SQLITE3_TEXT);
+    if ($detailsJson === null || $detailsJson === false) {
+        $stmt->bindValue(':details', null, SQLITE3_NULL);
+    } else {
+        $stmt->bindValue(':details', $detailsJson, SQLITE3_TEXT);
+    }
+    $stmt->bindValue(':created_at', time(), SQLITE3_INTEGER);
+    $stmt->execute();
+}
+
 function settingsEnsureSqliteForBackup(AppDbConnection $db): void {
     if ($db->driver() !== 'sqlite') {
         respond('error', 'Backup and restore are currently available only on SQLite deployments.');
@@ -123,7 +178,17 @@ function settingsRunDailyAutoBackup(AppDbConnection $db, int $cid): void {
     $dir = settingsBackupDir();
     $todayPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . settingsAutoBackupPrefix($cid) . date('Ymd') . '.sqlite';
     if (!is_file($todayPath)) {
-        settingsCreateBackupFile($cid, true);
+        $created = settingsCreateBackupFile($cid, true);
+        if ($created !== null && is_file($created)) {
+            settingsAuditBackupEvent(
+                $db,
+                $cid,
+                null,
+                'auto_backup_created',
+                basename($created),
+                intval(filesize($created) ?: 0)
+            );
+        }
     }
 
     settingsApplyAutoBackupRetention($cid);
@@ -131,6 +196,7 @@ function settingsRunDailyAutoBackup(AppDbConnection $db, int $cid): void {
 
 ensureRbacSchemaForSettings($db);
 seedRolesAndPermissionsForSettings($db, $cid);
+settingsEnsureBackupAuditTable($db);
 
 try {
     settingsRunDailyAutoBackup($db, $cid);
@@ -721,6 +787,16 @@ switch ($action) {
             respond('error', 'Failed to create backup file');
         }
 
+        $uid = intval($_SESSION['user_id'] ?? 0);
+        settingsAuditBackupEvent(
+            $db,
+            $cid,
+            $uid > 0 ? $uid : null,
+            'manual_backup_created',
+            basename($targetPath),
+            intval(filesize($targetPath) ?: 0)
+        );
+
         settingsApplyAutoBackupRetention($cid);
 
         respond('success', 'Backup created successfully', [
@@ -765,6 +841,43 @@ switch ($action) {
         ]);
         break;
 
+    case 'downloadBackup':
+        requirePermission($db, 'manage_users');
+        settingsEnsureSqliteForBackup($db);
+
+        $filename = basename(trim((string)($_POST['filename'] ?? '')));
+        if ($filename === '') {
+            respond('error', 'Backup filename is required');
+        }
+
+        $prefix = settingsBackupPrefix($cid);
+        if (strpos($filename, $prefix) !== 0 || preg_match('/\.sqlite$/', $filename) !== 1) {
+            respond('error', 'Invalid backup filename');
+        }
+
+        $dir = settingsBackupDir();
+        $backupPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
+        if (!is_file($backupPath)) {
+            respond('error', 'Backup file not found');
+        }
+
+        $uid = intval($_SESSION['user_id'] ?? 0);
+        settingsAuditBackupEvent(
+            $db,
+            $cid,
+            $uid > 0 ? $uid : null,
+            'backup_downloaded',
+            $filename,
+            intval(filesize($backupPath) ?: 0)
+        );
+
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . intval(filesize($backupPath) ?: 0));
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        readfile($backupPath);
+        exit;
+
     case 'restoreBackup':
         requirePermission($db, 'manage_users');
         settingsEnsureSqliteForBackup($db);
@@ -792,7 +905,57 @@ switch ($action) {
             respond('error', 'Failed to restore backup');
         }
 
+        $uid = intval($_SESSION['user_id'] ?? 0);
+        settingsAuditBackupEvent(
+            $db,
+            $cid,
+            $uid > 0 ? $uid : null,
+            'backup_restored',
+            $filename,
+            intval(filesize($backupPath) ?: 0)
+        );
+
         respond('success', 'Backup restored successfully');
+        break;
+
+    case 'loadBackupAudit':
+        requirePermission($db, 'manage_users');
+        settingsEnsureSqliteForBackup($db);
+
+        $rows = [];
+        $stmt = $db->prepare("SELECT a.id,
+                                     a.event_type,
+                                     a.filename,
+                                     a.size_bytes,
+                                     a.ip_address,
+                                     a.created_at,
+                                     COALESCE(u.full_name, '-') AS full_name,
+                                     COALESCE(u.email, '-') AS email
+                              FROM backup_audit a
+                              LEFT JOIN users u ON u.user_id = a.user_id
+                              WHERE a.cid = :cid
+                              ORDER BY a.created_at DESC, a.id DESC
+                              LIMIT 50");
+        if (!$stmt) {
+            respond('error', 'Failed to load backup audit');
+        }
+
+        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $res = $stmt->execute();
+        while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+            $rows[] = [
+                'id' => intval($row['id'] ?? 0),
+                'event_type' => (string)($row['event_type'] ?? ''),
+                'filename' => (string)($row['filename'] ?? ''),
+                'size_bytes' => intval($row['size_bytes'] ?? 0),
+                'ip_address' => (string)($row['ip_address'] ?? '-'),
+                'created_at' => intval($row['created_at'] ?? 0),
+                'full_name' => (string)($row['full_name'] ?? '-'),
+                'email' => (string)($row['email'] ?? '-'),
+            ];
+        }
+
+        respond('success', 'Backup audit loaded', ['data' => $rows]);
         break;
 
 
