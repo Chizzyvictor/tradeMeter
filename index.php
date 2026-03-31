@@ -8,16 +8,19 @@ include "INC/navbar.php";
 <div class="content">
 <div class="container-fluid">
 
-<div class="tab-content" id="home">
+<div class="tab-content dashboard-home" id="home">
 
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mt-3 mb-2 dashboard-filter-wrap">
-    <div class="mb-2 mb-md-0">
-        <h5 class="mb-1">Performance Overview</h5>
-        <small id="dashboardUserContext" class="text-muted">User: - | Role: -</small>
-        <br>
-        <small id="dashboardRangeLabel" class="text-muted">Showing: All Time</small>
-        <br>
-        <small id="dashboardLastUpdated" class="text-muted">Last updated: --</small>
+<div class="dashboard-hero panel-box mt-3 mb-4">
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center dashboard-filter-wrap">
+    <div class="mb-3 mb-md-0 dashboard-hero-copy">
+        <span class="dashboard-hero-kicker">TradeMeter Command Center</span>
+        <h3 class="mb-2 dashboard-hero-title">Performance Overview</h3>
+        <p class="mb-2 text-muted dashboard-hero-text">Stay on top of revenue, stock value, debt exposure, and your strongest trading relationships from one premium dashboard.</p>
+        <div class="dashboard-context-list">
+            <span id="dashboardUserContext" class="dashboard-context-pill">User: - | Role: -</span>
+            <span id="dashboardRangeLabel" class="dashboard-context-pill">Showing: All Time</span>
+            <span id="dashboardLastUpdated" class="dashboard-context-pill">Last updated: --</span>
+        </div>
     </div>
     <div class="dashboard-controls">
         <div class="dashboard-range-control">
@@ -35,19 +38,21 @@ include "INC/navbar.php";
         </div>
     </div>
 </div>
+</div>
 
 <!-- SUMMARY CARDS -->
-<div class="row g-4 my-4">
+<div class="row g-4 my-4 dashboard-stats-grid">
 
     <!-- Total Outstanding -->
     <div class="col-md-3 col-sm-6">
-        <div class="card dashboard-card shadow-sm h-100">
+        <div class="card dashboard-card dashboard-stat-card dashboard-stat-card-danger shadow-sm h-100">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <p class="text-muted mb-1">Total Outstanding</p>
-                    <h4 id="loadOutstanding" class="counter text-danger">Loading...</h4>
+                    <p class="dashboard-stat-label text-muted mb-1">Total Outstanding</p>
+                    <h4 id="loadOutstanding" class="counter dashboard-stat-value text-danger">Loading...</h4>
+                    <span class="dashboard-trend-badge dashboard-trend-badge-danger" id="trendOutstanding">Needs attention</span>
                 </div>
-                <div class="dashboard-icon bg-danger bg-opacity-10 text-danger">
+                <div class="dashboard-icon dashboard-icon-danger">
                     <i class="fas fa-exclamation-circle fa-lg"></i>
                 </div>
             </div>
@@ -56,13 +61,14 @@ include "INC/navbar.php";
 
     <!-- Advance Payments -->
     <div class="col-md-3 col-sm-6">
-        <div class="card dashboard-card shadow-sm h-100">
+        <div class="card dashboard-card dashboard-stat-card dashboard-stat-card-primary shadow-sm h-100">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <p class="text-muted mb-1">Advance Payments</p>
-                    <h4 id="loadAdvancePayments" class="counter text-primary">Loading...</h4>
+                    <p class="dashboard-stat-label text-muted mb-1">Advance Payments</p>
+                    <h4 id="loadAdvancePayments" class="counter dashboard-stat-value text-primary">Loading...</h4>
+                    <span class="dashboard-trend-badge dashboard-trend-badge-primary" id="trendAdvancePayments">Cash buffer</span>
                 </div>
-                <div class="dashboard-icon bg-primary bg-opacity-10 text-primary">
+                <div class="dashboard-icon dashboard-icon-primary">
                     <i class="fas fa-wallet fa-lg"></i>
                 </div>
             </div>
@@ -71,13 +77,14 @@ include "INC/navbar.php";
 
     <!-- Active Debtors -->
     <div class="col-md-3 col-sm-6">
-        <div class="card dashboard-card shadow-sm h-100">
+        <div class="card dashboard-card dashboard-stat-card dashboard-stat-card-warning shadow-sm h-100">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <p class="text-muted mb-1">Active Debtors</p>
-                    <h4 id="loadActiveDebtors" class="counter text-warning">Loading...</h4>
+                    <p class="dashboard-stat-label text-muted mb-1">Active Debtors</p>
+                    <h4 id="loadActiveDebtors" class="counter dashboard-stat-value text-warning">Loading...</h4>
+                    <span class="dashboard-trend-badge dashboard-trend-badge-warning" id="trendActiveDebtors">Collections watch</span>
                 </div>
-                <div class="dashboard-icon bg-warning bg-opacity-10 text-warning">
+                <div class="dashboard-icon dashboard-icon-warning">
                     <i class="fas fa-user-clock fa-lg"></i>
                 </div>
             </div>
@@ -86,13 +93,14 @@ include "INC/navbar.php";
 
     <!-- Active Creditors -->
     <div class="col-md-3 col-sm-6">
-        <div class="card dashboard-card shadow-sm h-100">
+        <div class="card dashboard-card dashboard-stat-card dashboard-stat-card-success shadow-sm h-100">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <p class="text-muted mb-1">Active Creditors</p>
-                    <h4 id="loadActiveCreditors" class="counter text-success">Loading...</h4>
+                    <p class="dashboard-stat-label text-muted mb-1">Active Creditors</p>
+                    <h4 id="loadActiveCreditors" class="counter dashboard-stat-value text-success">Loading...</h4>
+                    <span class="dashboard-trend-badge dashboard-trend-badge-success" id="trendActiveCreditors">Supplier trust</span>
                 </div>
-                <div class="dashboard-icon bg-success bg-opacity-10 text-success">
+                <div class="dashboard-icon dashboard-icon-success">
                     <i class="fas fa-hand-holding-usd fa-lg"></i>
                 </div>
             </div>
@@ -102,15 +110,16 @@ include "INC/navbar.php";
 </div>
 
 <!-- EXTRA KPI CARDS -->
-<div class="row g-4 mb-4">
+<div class="row g-4 mb-4 dashboard-stats-grid">
     <div class="col-md-3 col-sm-6">
-        <div class="card dashboard-card shadow-sm h-100">
+        <div class="card dashboard-card dashboard-stat-card dashboard-stat-card-success shadow-sm h-100">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <p class="text-muted mb-1">Total Sales</p>
-                    <h4 id="loadTotalSales" class="counter text-success">Loading...</h4>
+                    <p class="dashboard-stat-label text-muted mb-1">Total Sales</p>
+                    <h4 id="loadTotalSales" class="counter dashboard-stat-value text-success">Loading...</h4>
+                    <span class="dashboard-trend-badge dashboard-trend-badge-success" id="trendTotalSales">Loading trend</span>
                 </div>
-                <div class="dashboard-icon bg-success bg-opacity-10 text-success">
+                <div class="dashboard-icon dashboard-icon-success">
                     <i class="fas fa-chart-line fa-lg"></i>
                 </div>
             </div>
@@ -118,13 +127,14 @@ include "INC/navbar.php";
     </div>
 
     <div class="col-md-3 col-sm-6">
-        <div class="card dashboard-card shadow-sm h-100">
+        <div class="card dashboard-card dashboard-stat-card dashboard-stat-card-info shadow-sm h-100">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <p class="text-muted mb-1">Total Purchases</p>
-                    <h4 id="loadTotalPurchases" class="counter text-info">Loading...</h4>
+                    <p class="dashboard-stat-label text-muted mb-1">Total Purchases</p>
+                    <h4 id="loadTotalPurchases" class="counter dashboard-stat-value text-info">Loading...</h4>
+                    <span class="dashboard-trend-badge dashboard-trend-badge-info" id="trendTotalPurchases">Loading trend</span>
                 </div>
-                <div class="dashboard-icon bg-info bg-opacity-10 text-info">
+                <div class="dashboard-icon dashboard-icon-info">
                     <i class="fas fa-shopping-cart fa-lg"></i>
                 </div>
             </div>
@@ -132,13 +142,14 @@ include "INC/navbar.php";
     </div>
 
     <div class="col-md-3 col-sm-6">
-        <div class="card dashboard-card shadow-sm h-100">
+        <div class="card dashboard-card dashboard-stat-card dashboard-stat-card-primary shadow-sm h-100">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <p class="text-muted mb-1">Transactions (Range)</p>
-                    <h4 id="loadTodayTransactions" class="counter text-primary">Loading...</h4>
+                    <p class="dashboard-stat-label text-muted mb-1">Transactions (Range)</p>
+                    <h4 id="loadTodayTransactions" class="counter dashboard-stat-value text-primary">Loading...</h4>
+                    <span class="dashboard-trend-badge dashboard-trend-badge-primary" id="trendRangeTransactions">Loading trend</span>
                 </div>
-                <div class="dashboard-icon bg-primary bg-opacity-10 text-primary">
+                <div class="dashboard-icon dashboard-icon-primary">
                     <i class="fas fa-calendar-day fa-lg"></i>
                 </div>
             </div>
@@ -146,13 +157,14 @@ include "INC/navbar.php";
     </div>
 
     <div class="col-md-3 col-sm-6">
-        <div class="card dashboard-card shadow-sm h-100">
+        <div class="card dashboard-card dashboard-stat-card dashboard-stat-card-slate shadow-sm h-100">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <p class="text-muted mb-1">Inventory Value</p>
-                    <h4 id="loadInventoryValue" class="counter text-dark">Loading...</h4>
+                    <p class="dashboard-stat-label text-muted mb-1">Inventory Value</p>
+                    <h4 id="loadInventoryValue" class="counter dashboard-stat-value text-dark">Loading...</h4>
+                    <span class="dashboard-trend-badge dashboard-trend-badge-slate" id="trendInventoryValue">Warehouse value</span>
                 </div>
-                <div class="dashboard-icon bg-dark bg-opacity-10 text-dark">
+                <div class="dashboard-icon dashboard-icon-slate">
                     <i class="fas fa-boxes fa-lg"></i>
                 </div>
             </div>
@@ -160,13 +172,14 @@ include "INC/navbar.php";
     </div>
 
     <div class="col-md-3 col-sm-6">
-        <div class="card dashboard-card shadow-sm h-100">
+        <div class="card dashboard-card dashboard-stat-card dashboard-stat-card-success shadow-sm h-100">
             <div class="card-body d-flex justify-content-between align-items-center">
                 <div>
-                    <p class="text-muted mb-1">Profit</p>
-                    <h4 id="loadProfit" class="counter text-success">Loading...</h4>
+                    <p class="dashboard-stat-label text-muted mb-1">Profit</p>
+                    <h4 id="loadProfit" class="counter dashboard-stat-value text-success">Loading...</h4>
+                    <span class="dashboard-trend-badge dashboard-trend-badge-success" id="trendProfit">Loading trend</span>
                 </div>
-                <div class="dashboard-icon bg-success bg-opacity-10 text-success" id="loadProfitIconWrap">
+                <div class="dashboard-icon dashboard-icon-success" id="loadProfitIconWrap">
                     <i class="fas fa-coins fa-lg"></i>
                 </div>
             </div>
@@ -177,12 +190,16 @@ include "INC/navbar.php";
 <!-- TOP METRICS TABLES -->
 <div class="row g-4 mb-4">
     <div class="col-lg-4 col-md-6">
-        <div class="card dashboard-card shadow-sm h-100">
-            <div class="card-header bg-transparent border-0 pb-0">
-                <h5 class="mb-0">Top Selling Products</h5>
+        <div class="card dashboard-card dashboard-section-card shadow-sm h-100">
+            <div class="card-header bg-transparent border-0 pb-0 dashboard-section-head">
+                <div>
+                    <span class="dashboard-section-kicker">High Performers</span>
+                    <h5 class="mb-0">Top Selling Products</h5>
+                </div>
+                <span class="dashboard-section-icon dashboard-icon-success"><i class="fas fa-fire"></i></span>
             </div>
             <div class="card-body pt-2">
-                <div class="table-responsive">
+                <div class="table-responsive dashboard-table-wrap">
                     <table class="table table-sm mb-0 dashboard-mini-table" id="topSellingProductsTable">
                         <thead>
                             <tr>
@@ -199,12 +216,16 @@ include "INC/navbar.php";
     </div>
 
     <div class="col-lg-4 col-md-6">
-        <div class="card dashboard-card shadow-sm h-100">
-            <div class="card-header bg-transparent border-0 pb-0">
-                <h5 class="mb-0">Top Suppliers</h5>
+        <div class="card dashboard-card dashboard-section-card shadow-sm h-100">
+            <div class="card-header bg-transparent border-0 pb-0 dashboard-section-head">
+                <div>
+                    <span class="dashboard-section-kicker">Supply Network</span>
+                    <h5 class="mb-0">Top Suppliers</h5>
+                </div>
+                <span class="dashboard-section-icon dashboard-icon-info"><i class="fas fa-truck-loading"></i></span>
             </div>
             <div class="card-body pt-2">
-                <div class="table-responsive">
+                <div class="table-responsive dashboard-table-wrap">
                     <table class="table table-sm mb-0 dashboard-mini-table" id="topSuppliersTable">
                         <thead>
                             <tr>
@@ -221,12 +242,16 @@ include "INC/navbar.php";
     </div>
 
     <div class="col-lg-4 col-md-12">
-        <div class="card dashboard-card shadow-sm h-100">
-            <div class="card-header bg-transparent border-0 pb-0">
-                <h5 class="mb-0">Top Buyers</h5>
+        <div class="card dashboard-card dashboard-section-card shadow-sm h-100">
+            <div class="card-header bg-transparent border-0 pb-0 dashboard-section-head">
+                <div>
+                    <span class="dashboard-section-kicker">Customer Momentum</span>
+                    <h5 class="mb-0">Top Buyers</h5>
+                </div>
+                <span class="dashboard-section-icon dashboard-icon-primary"><i class="fas fa-user-friends"></i></span>
             </div>
             <div class="card-body pt-2">
-                <div class="table-responsive">
+                <div class="table-responsive dashboard-table-wrap">
                     <table class="table table-sm mb-0 dashboard-mini-table" id="topBuyersTable">
                         <thead>
                             <tr>

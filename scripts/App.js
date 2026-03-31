@@ -654,10 +654,10 @@ class Auth {
 // Dashboard
 // ============================
 class Dashboard {
-  constructor(appCore) {
-    this.app = appCore;
-    this.lastUpdatedAt = null;
-    this.lastUpdatedTicker = null;
+    constructor(appCore) {
+      this.app = appCore;
+      this.lastUpdatedAt = null;
+      this.lastUpdatedTicker = null;
   }
 
   formatRelativeTime() {
@@ -690,19 +690,95 @@ class Dashboard {
     }, 1000);
   }
 
-  rangeLabel(range) {
-    const labels = {
-      today: "Today",
-      "7d": "Last 7 Days",
-      "30d": "Last 30 Days",
-      all: "All Time"
-    };
-    return labels[range] || "All Time";
-  }
+    rangeLabel(range) {
+      const labels = {
+        today: "Today",
+        "7d": "Last 7 Days",
+        "30d": "Last 30 Days",
+        all: "All Time"
+      };
+      return labels[range] || "All Time";
+    }
 
-  renderTopTable(selector, rows, mapRow, colspan = 3) {
-    const $tbody = $(selector);
-    if (!$tbody.length) return;
+    setLoadingState(isLoading = true) {
+      $(".dashboard-stat-card, .dashboard-section-card").toggleClass("dashboard-loading", Boolean(isLoading));
+      if (isLoading) {
+        $(".dashboard-trend-badge").addClass("dashboard-trend-badge-muted").text("Refreshing...");
+      }
+    }
+
+    getTrendMeta(current, previous, higherIsBetter = true) {
+      const currentValue = this.app.toNumber(current, 0);
+      const previousValue = this.app.toNumber(previous, 0);
+
+      if (previousValue === 0) {
+        if (currentValue === 0) {
+          return { label: "No change", tone: "muted" };
+        }
+
+        return { label: "New activity", tone: higherIsBetter ? "success" : "warning" };
+      }
+
+      const delta = currentValue - previousValue;
+      const percentage = Math.round(Math.abs(delta / previousValue) * 100);
+      if (Math.abs(delta) < 0.0001) {
+        return { label: "Flat vs previous", tone: "muted" };
+      }
+
+      const improved = higherIsBetter ? delta > 0 : delta < 0;
+      const direction = delta > 0 ? "up" : "down";
+      return {
+        label: `${direction} ${percentage}% vs previous`,
+        tone: improved ? "success" : "danger"
+      };
+    }
+
+    setBadge(selector, label, tone = "muted") {
+      const $badge = $(selector);
+      if (!$badge.length) return;
+
+      $badge
+        .removeClass("dashboard-trend-badge-success dashboard-trend-badge-danger dashboard-trend-badge-warning dashboard-trend-badge-primary dashboard-trend-badge-info dashboard-trend-badge-slate dashboard-trend-badge-muted")
+        .addClass(`dashboard-trend-badge-${tone}`)
+        .text(label);
+    }
+
+    updateDashboardBadges(res, range) {
+      const outstanding = this.app.toNumber(res.outstanding, 0);
+      const advancePayment = this.app.toNumber(res.advancePayment, 0);
+      const activeDebtors = this.app.toNumber(res.activeDebtors, 0);
+      const activeCreditors = this.app.toNumber(res.activeCreditors, 0);
+      const inventoryValue = this.app.toNumber(res.inventoryValue, 0);
+      const trendSummary = res.trendSummary || {};
+
+      this.setBadge("#trendOutstanding", outstanding > 0 ? "Needs attention" : "All settled", outstanding > 0 ? "danger" : "success");
+      this.setBadge("#trendAdvancePayments", advancePayment > 0 ? "Cash buffer active" : "No prepayments", advancePayment > 0 ? "primary" : "muted");
+      this.setBadge("#trendActiveDebtors", activeDebtors > 0 ? `${activeDebtors} account(s) to follow up` : "No active debtors", activeDebtors > 0 ? "warning" : "success");
+      this.setBadge("#trendActiveCreditors", activeCreditors > 0 ? `${activeCreditors} supplier credit line(s)` : "No active creditors", activeCreditors > 0 ? "success" : "muted");
+      this.setBadge("#trendInventoryValue", inventoryValue > 0 ? "Warehouse value secured" : "No inventory value", inventoryValue > 0 ? "slate" : "muted");
+
+      if (range === "all") {
+        this.setBadge("#trendTotalSales", "All-time total", "success");
+        this.setBadge("#trendTotalPurchases", "All-time total", "info");
+        this.setBadge("#trendRangeTransactions", "All-time activity", "primary");
+        this.setBadge("#trendProfit", "All-time margin", this.app.toNumber(res.profit, 0) >= 0 ? "success" : "danger");
+        return;
+      }
+
+      const salesTrend = this.getTrendMeta(trendSummary.totalSales?.current, trendSummary.totalSales?.previous, true);
+      const purchasesTrend = this.getTrendMeta(trendSummary.totalPurchases?.current, trendSummary.totalPurchases?.previous, false);
+      const transactionsTrend = this.getTrendMeta(trendSummary.rangeTransactions?.current, trendSummary.rangeTransactions?.previous, true);
+      const profitTrend = this.getTrendMeta(trendSummary.profit?.current, trendSummary.profit?.previous, true);
+
+      this.setBadge("#trendTotalSales", salesTrend.label, salesTrend.tone);
+      this.setBadge("#trendTotalPurchases", purchasesTrend.label, purchasesTrend.tone);
+      this.setBadge("#trendRangeTransactions", transactionsTrend.label, transactionsTrend.tone);
+      this.setBadge("#trendProfit", profitTrend.label, profitTrend.tone);
+    }
+
+   renderTopTable(selector, rows, mapRow, colspan = 3) {
+      const $tbody = $(selector);
+      if (!$tbody.length) return;
 
     if (!Array.isArray(rows) || !rows.length) {
       $tbody.html(`<tr><td colspan="${colspan}" class="empty-row">No data found</td></tr>`);
@@ -713,13 +789,14 @@ class Dashboard {
     $tbody.html(html);
   }
 
-  loadDashboard(range = "all") {
-    const selectedRange = String(range || "all").toLowerCase();
-    this.app.ajaxHelper({
-      url: "apiRequest.php",
-      action: "loadDashboard",
-      data: { range: selectedRange },
-      onSuccess: res => {
+   loadDashboard(range = "all") {
+      const selectedRange = String(range || "all").toLowerCase();
+      this.setLoadingState(true);
+      this.app.ajaxHelper({
+        url: "apiRequest.php",
+        action: "loadDashboard",
+        data: { range: selectedRange },
+        onSuccess: res => {
         if (!res || res.status !== "success") return;
 
     $("#dashboardRangeLabel").text(`Showing: ${this.rangeLabel(selectedRange)}`);
@@ -741,11 +818,13 @@ class Dashboard {
      $("#loadProfit")
        .removeClass("text-success text-danger")
        .addClass(profitIsPositive ? "text-success" : "text-danger");
-     $("#loadProfitIconWrap")
-       .removeClass("bg-success bg-danger text-success text-danger")
-       .addClass(profitIsPositive ? "bg-success text-success" : "bg-danger text-danger");
+      $("#loadProfitIconWrap")
+        .removeClass("dashboard-icon-success dashboard-icon-danger")
+        .addClass(profitIsPositive ? "dashboard-icon-success" : "dashboard-icon-danger");
 
-     this.renderTopTable("#topSellingProductsTable tbody", res.topSellingProducts, (item) => {
+      this.updateDashboardBadges(res, selectedRange);
+
+      this.renderTopTable("#topSellingProductsTable tbody", res.topSellingProducts, (item) => {
        const qty = this.app.toNumber(item.total_qty, 0);
        const amount = this.app.formatCurrency(item.total_amount || 0);
        return `
@@ -769,21 +848,24 @@ class Dashboard {
        `;
      });
 
-     this.renderTopTable("#topBuyersTable tbody", res.topBuyers, (item) => {
-       const txns = this.app.toNumber(item.transactions, 0);
-       const amount = this.app.formatCurrency(item.total_amount || 0);
-       return `
+      this.renderTopTable("#topBuyersTable tbody", res.topBuyers, (item) => {
+        const txns = this.app.toNumber(item.transactions, 0);
+        const amount = this.app.formatCurrency(item.total_amount || 0);
+        return `
          <tr>
            <td>${item.sName || "-"}</td>
            <td class="text-right">${txns}</td>
            <td class="text-right">${amount}</td>
-         </tr>
-       `;
-     });
-      }
-    });
+          </tr>
+        `;
+      });
+       },
+       onComplete: () => {
+         this.setLoadingState(false);
+       }
+      });
+    }
   }
-}
 
 $(document).on('hide.bs.modal', '.modal', function () {
   const activeElement = document.activeElement;

@@ -21,9 +21,13 @@ switch ($action) {
 
             $dateFilter = "";
             $dateFilterAlias = "";
+            $previousDateFilter = "";
+            $previousDateFilterAlias = "";
             $rangeMap = ['today', '7d', '30d'];
             $dateFilterParams = [];
             $dateFilterAliasParams = [];
+            $previousDateFilterParams = [];
+            $previousDateFilterAliasParams = [];
 
             if (!in_array($range, $rangeMap, true) && $range !== 'all') {
             $range = 'all';
@@ -53,6 +57,23 @@ switch ($action) {
                 $dateFilterAliasParams = [
                     ':from_created_at_alias' => $fromStr,
                     ':to_created_at_alias' => $toStr,
+                ];
+
+                $periodSeconds = max(1, $to->getTimestamp() - $from->getTimestamp());
+                $previousFrom = $from->modify('-' . $periodSeconds . ' seconds');
+                $previousTo = $from;
+                $previousFromStr = $previousFrom->format('Y-m-d H:i:s');
+                $previousToStr = $previousTo->format('Y-m-d H:i:s');
+
+                $previousDateFilter = " AND createdAt >= :prev_from_created_at AND createdAt < :prev_to_created_at";
+                $previousDateFilterAlias = " AND t.createdAt >= :prev_from_created_at_alias AND t.createdAt < :prev_to_created_at_alias";
+                $previousDateFilterParams = [
+                    ':prev_from_created_at' => $previousFromStr,
+                    ':prev_to_created_at' => $previousToStr,
+                ];
+                $previousDateFilterAliasParams = [
+                    ':prev_from_created_at_alias' => $previousFromStr,
+                    ':prev_to_created_at_alias' => $previousToStr,
                 ];
         }
 
@@ -94,6 +115,36 @@ switch ($action) {
             $purchaseStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
         }
         $purchaseStatsRow = $purchaseStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+
+        $previousSalesStatsRow = [];
+        $previousPurchaseStatsRow = [];
+        if ($range !== 'all') {
+            $previousSalesStatsStmt = $db->prepare(" 
+                SELECT
+                    COALESCE(SUM(totalAmount),0) AS total_sales,
+                    COUNT(sale_id) AS sales_count
+                FROM sales
+                WHERE cid = :sales_cid {$previousDateFilter}
+            ");
+            $previousSalesStatsStmt->bindValue(':sales_cid', $cid, SQLITE3_INTEGER);
+            foreach ($previousDateFilterParams as $key => $value) {
+                $previousSalesStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
+            }
+            $previousSalesStatsRow = $previousSalesStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+
+            $previousPurchaseStatsStmt = $db->prepare(" 
+                SELECT
+                    COALESCE(SUM(totalAmount),0) AS total_purchases,
+                    COUNT(purchase_id) AS purchase_count
+                FROM purchases
+                WHERE cid = :purchase_cid {$previousDateFilter}
+            ");
+            $previousPurchaseStatsStmt->bindValue(':purchase_cid', $cid, SQLITE3_INTEGER);
+            foreach ($previousDateFilterParams as $key => $value) {
+                $previousPurchaseStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
+            }
+            $previousPurchaseStatsRow = $previousPurchaseStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+        }
 
         $inventoryValueStmt = $db->prepare(" 
             SELECT COALESCE(SUM(COALESCE(inv.qty,0) * COALESCE(p.cost_price,0)),0) AS inventory_value
@@ -190,8 +241,31 @@ switch ($action) {
     $totalPurchases = floatval($purchaseStatsRow['total_purchases'] ?? 0);
     $rangeTransactions = intval($salesStatsRow['sales_count'] ?? 0) + intval($purchaseStatsRow['purchase_count'] ?? 0);
 
-    $inventoryValue = floatval($inventoryValueRow['inventory_value'] ?? 0);
+        $inventoryValue = floatval($inventoryValueRow['inventory_value'] ?? 0);
+        $previousTotalSales = floatval($previousSalesStatsRow['total_sales'] ?? 0);
+        $previousTotalPurchases = floatval($previousPurchaseStatsRow['total_purchases'] ?? 0);
+        $previousRangeTransactions = intval($previousSalesStatsRow['sales_count'] ?? 0) + intval($previousPurchaseStatsRow['purchase_count'] ?? 0);
+        $previousProfit = $previousTotalSales - $previousTotalPurchases;
         $profit = $totalSales - $totalPurchases;
+
+        $trendSummary = [
+            "totalSales" => [
+                "current" => floatval($totalSales),
+                "previous" => floatval($previousTotalSales),
+            ],
+            "totalPurchases" => [
+                "current" => floatval($totalPurchases),
+                "previous" => floatval($previousTotalPurchases),
+            ],
+            "rangeTransactions" => [
+                "current" => intval($rangeTransactions),
+                "previous" => intval($previousRangeTransactions),
+            ],
+            "profit" => [
+                "current" => floatval($profit),
+                "previous" => floatval($previousProfit),
+            ],
+        ];
 
         respond("success", "Dashboard loaded", [
             "outstanding"      => floatval($outstanding),
@@ -225,7 +299,8 @@ switch ($action) {
             "topSellingProducts" => $topSellingProducts,
             "topSuppliers"       => $topSuppliers,
             "topBuyers"          => $topBuyers,
-            "selectedRange"      => $range
+            "selectedRange"      => $range,
+            "trendSummary"       => $trendSummary
         ]);
 
     } catch (Exception $e) {
