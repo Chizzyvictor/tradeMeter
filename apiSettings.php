@@ -35,6 +35,32 @@ function toEpochInt($value): int {
     return $ts === false ? 0 : intval($ts);
 }
 
+function settingsBackupDir(): string {
+    $dir = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'trademeter_backups';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0777, true);
+    }
+    return $dir;
+}
+
+function settingsBackupPrefix(int $cid): string {
+    return 'tm-backup-cid' . $cid . '-';
+}
+
+function settingsEnsureSqliteForBackup(AppDbConnection $db): void {
+    if ($db->driver() !== 'sqlite') {
+        respond('error', 'Backup and restore are currently available only on SQLite deployments.');
+    }
+}
+
+function settingsBackupMeta(string $path): array {
+    return [
+        'filename' => basename($path),
+        'size' => is_file($path) ? intval(filesize($path)) : 0,
+        'created_at' => is_file($path) ? intval(filemtime($path)) : 0,
+    ];
+}
+
 ensureRbacSchemaForSettings($db);
 seedRolesAndPermissionsForSettings($db, $cid);
 
@@ -610,6 +636,82 @@ switch ($action) {
         }
 
         respond('success', 'Login logs loaded', ['data' => $rows]);
+        break;
+
+    case 'createBackup':
+        requirePermission($db, 'manage_users');
+        settingsEnsureSqliteForBackup($db);
+
+        $sourcePath = appSqlitePath();
+        if (!is_file($sourcePath)) {
+            respond('error', 'Source database file not found');
+        }
+
+        $dir = settingsBackupDir();
+        $filename = settingsBackupPrefix($cid) . date('Ymd_His') . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.sqlite';
+        $targetPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
+
+        if (!@copy($sourcePath, $targetPath)) {
+            respond('error', 'Failed to create backup file');
+        }
+
+        respond('success', 'Backup created successfully', [
+            'data' => settingsBackupMeta($targetPath)
+        ]);
+        break;
+
+    case 'loadBackups':
+        requirePermission($db, 'manage_users');
+        settingsEnsureSqliteForBackup($db);
+
+        $dir = settingsBackupDir();
+        $prefix = settingsBackupPrefix($cid);
+        $matches = glob(rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $prefix . '*.sqlite');
+        $files = is_array($matches) ? $matches : [];
+
+        usort($files, function (string $a, string $b): int {
+            return intval(@filemtime($b)) <=> intval(@filemtime($a));
+        });
+
+        $rows = [];
+        $maxItems = 30;
+        foreach (array_slice($files, 0, $maxItems) as $file) {
+            if (is_file($file)) {
+                $rows[] = settingsBackupMeta($file);
+            }
+        }
+
+        respond('success', 'Backups loaded', ['data' => $rows]);
+        break;
+
+    case 'restoreBackup':
+        requirePermission($db, 'manage_users');
+        settingsEnsureSqliteForBackup($db);
+
+        $filename = basename(trim((string)($_POST['filename'] ?? '')));
+        if ($filename === '') {
+            respond('error', 'Backup filename is required');
+        }
+
+        $prefix = settingsBackupPrefix($cid);
+        if (strpos($filename, $prefix) !== 0 || preg_match('/\.sqlite$/', $filename) !== 1) {
+            respond('error', 'Invalid backup filename');
+        }
+
+        $dir = settingsBackupDir();
+        $backupPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
+        if (!is_file($backupPath)) {
+            respond('error', 'Backup file not found');
+        }
+
+        $sourcePath = appSqlitePath();
+        $db->close();
+
+        if (!@copy($backupPath, $sourcePath)) {
+            respond('error', 'Failed to restore backup');
+        }
+
+        respond('success', 'Backup restored successfully');
         break;
 
 

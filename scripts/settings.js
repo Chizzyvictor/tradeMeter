@@ -22,6 +22,7 @@ class SettingsPage {
         this.loadRememberAudit();
         this.loadActiveSessions();
         this.loadLoginLogs();
+        this.loadBackups();
       } else {
         $('.settings-admin-section').hide();
       }
@@ -80,6 +81,14 @@ class SettingsPage {
       this.loadLoginLogs();
     });
 
+    $('#createBackupBtn').on('click', () => {
+      this.createBackup();
+    });
+
+    $('#refreshBackupsBtn').on('click', () => {
+      this.loadBackups();
+    });
+
     $('#loginLogsStatusFilter').on('change', () => {
       this.loadLoginLogs();
     });
@@ -107,6 +116,12 @@ class SettingsPage {
       const sessionId = String($(e.currentTarget).data('session') || '').trim();
       if (!sessionId) return;
       this.revokeSession(sessionId);
+    });
+
+    $(document).on('click', '.restore-backup-btn', (e) => {
+      const fileName = String($(e.currentTarget).data('file') || '').trim();
+      if (!fileName) return;
+      this.restoreBackup(fileName);
     });
   }
 
@@ -650,6 +665,108 @@ class SettingsPage {
       data: { email },
       onComplete: () => {
         $btn.prop('disabled', false);
+      }
+    });
+  }
+
+  formatFileSize(sizeBytes) {
+    const size = Number(sizeBytes) || 0;
+    if (size <= 0) return '0 B';
+
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let value = size;
+    let index = 0;
+
+    while (value >= 1024 && index < units.length - 1) {
+      value /= 1024;
+      index += 1;
+    }
+
+    return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+  }
+
+  loadBackups() {
+    if (!this.canManageUsers) return;
+
+    const $btn = $('#refreshBackupsBtn');
+    if ($btn.length) $btn.prop('disabled', true);
+
+    this.app.ajaxHelper({
+      url: 'apiSettings.php',
+      action: 'loadBackups',
+      data: {},
+      onSuccess: (res) => {
+        this.renderBackups(Array.isArray(res.data) ? res.data : []);
+      },
+      onComplete: () => {
+        if ($btn.length) $btn.prop('disabled', false);
+      }
+    });
+  }
+
+  renderBackups(rows) {
+    const $tbody = $('#backupsTable tbody');
+    if (!$tbody.length) return;
+
+    if (!rows.length) {
+      $tbody.html('<tr><td colspan="4" class="text-center text-muted">No backups available</td></tr>');
+      return;
+    }
+
+    const html = rows.map((row) => {
+      const when = this.app.formatDateSafe(row.created_at, '-');
+      const fileName = String(row.filename || '');
+      const size = this.formatFileSize(row.size || 0);
+
+      return `
+        <tr>
+          <td>${when}</td>
+          <td>${fileName || '-'}</td>
+          <td>${size}</td>
+          <td>
+            <button type="button" class="btn btn-sm btn-outline-danger restore-backup-btn" data-file="${fileName}">
+              Restore
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    $tbody.html(html);
+  }
+
+  createBackup() {
+    if (!this.canManageUsers) return;
+
+    const $btn = $('#createBackupBtn');
+    $btn.prop('disabled', true);
+
+    this.app.ajaxHelper({
+      url: 'apiSettings.php',
+      action: 'createBackup',
+      data: {},
+      onSuccess: () => {
+        this.loadBackups();
+      },
+      onComplete: () => {
+        $btn.prop('disabled', false);
+      }
+    });
+  }
+
+  restoreBackup(fileName) {
+    if (!this.canManageUsers) return;
+
+    const confirmed = window.confirm(`Restore backup ${fileName}? This will replace current data immediately.`);
+    if (!confirmed) return;
+
+    this.app.ajaxHelper({
+      url: 'apiSettings.php',
+      action: 'restoreBackup',
+      data: { filename: fileName },
+      onSuccess: () => {
+        this.loadBackups();
+        this.loadSettings();
       }
     });
   }

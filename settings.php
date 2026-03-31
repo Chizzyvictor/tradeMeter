@@ -233,6 +233,34 @@ include "INC/navbar.php";
 						</div>
 					</div>
 
+					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section">
+						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
+							<span>Data Backup & Restore</span>
+							<div>
+								<button type="button" class="btn btn-sm btn-outline-secondary mr-2" id="refreshBackupsBtn">Refresh</button>
+								<button type="button" class="btn btn-sm btn-primary" id="createBackupBtn">Create Backup</button>
+							</div>
+						</div>
+						<div class="card-body">
+							<div class="alert alert-info py-2 mb-3" role="alert">
+								Restoring a backup replaces the current database immediately.
+							</div>
+							<div class="table-responsive">
+								<table class="table table-bordered table-striped" id="backupsTable">
+									<thead>
+										<tr>
+											<th>Created</th>
+											<th>File</th>
+											<th>Size</th>
+											<th>Action</th>
+										</tr>
+									</thead>
+									<tbody></tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+
 					<div class="card shadow-sm settings-section-card mt-4">
 						<div class="card-header font-weight-bold">SMTP Test Email</div>
 						<div class="card-body">
