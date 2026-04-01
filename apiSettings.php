@@ -511,9 +511,14 @@ switch ($action) {
         $currentPassword = $_POST['currentPassword'] ?? '';
         $newPassword = $_POST['newPassword'] ?? '';
         $confirmPassword = $_POST['confirmPassword'] ?? '';
+        $currentUserId = intval($_SESSION['user_id'] ?? 0);
 
         if ($currentPassword === '' || $newPassword === '' || $confirmPassword === '') {
             respond('error', 'All password fields are required');
+        }
+
+        if ($currentUserId <= 0) {
+            respond('error', 'Session expired. Please log in again');
         }
 
         if (strlen($newPassword) < 6) {
@@ -524,30 +529,49 @@ switch ($action) {
             respond('error', 'New password and confirm password do not match');
         }
 
-        $stmt = $db->prepare("SELECT cPass FROM company WHERE cid = :cid LIMIT 1");
+        $stmt = $db->prepare("SELECT password FROM users WHERE user_id = :uid AND cid = :cid LIMIT 1");
         if (!$stmt) {
             respond('error', 'Failed to verify current password');
         }
+        $stmt->bindValue(':uid', $currentUserId, SQLITE3_INTEGER);
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
         $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
         if (!$row) {
-            respond('error', 'Company not found');
+            respond('error', 'User not found');
         }
 
-        if (!password_verify($currentPassword, $row['cPass'])) {
+        $storedPassword = strval($row['password'] ?? '');
+        $passwordInfo = $storedPassword !== '' ? password_get_info($storedPassword) : ['algo' => null];
+        $isCurrentValid = false;
+
+        if ($storedPassword !== '') {
+            // Support hashed passwords and a legacy plain-text fallback.
+            if (!empty($passwordInfo['algo'])) {
+                $isCurrentValid = password_verify($currentPassword, $storedPassword);
+            } else {
+                $isCurrentValid = hash_equals($storedPassword, $currentPassword);
+            }
+        }
+
+        if (!$isCurrentValid) {
             respond('error', 'Current password is incorrect');
         }
 
-        if (password_verify($newPassword, $row['cPass'])) {
+        $isSameAsCurrent = !empty($passwordInfo['algo'])
+            ? password_verify($newPassword, $storedPassword)
+            : hash_equals($storedPassword, $newPassword);
+
+        if ($isSameAsCurrent) {
             respond('error', 'New password must be different from current password');
         }
 
         $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-        $uStmt = $db->prepare("UPDATE company SET cPass = :cPass WHERE cid = :cid");
+        $uStmt = $db->prepare("UPDATE users SET password = :password WHERE user_id = :uid AND cid = :cid");
         if (!$uStmt) {
             respond('error', 'Failed to prepare password update');
         }
-        $uStmt->bindValue(':cPass', $hash, SQLITE3_TEXT);
+        $uStmt->bindValue(':password', $hash, SQLITE3_TEXT);
+        $uStmt->bindValue(':uid', $currentUserId, SQLITE3_INTEGER);
         $uStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
 
         if (!$uStmt->execute()) {
