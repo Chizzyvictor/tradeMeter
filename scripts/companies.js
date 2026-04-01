@@ -101,25 +101,22 @@ $(document).ready(function () {
   function loadCompanies() {
     showTableLoading();
 
-    $.ajax({
+    app.ajaxHelper({
       url: 'apiAuthentications.php',
-      type: 'POST',
-      data: { action: 'loadCompanies', csrf_token: csrfToken },
-      dataType: 'json',
-      success: function (response) {
-        if (response.status === 'success') {
-          companies = (Array.isArray(response.data) ? response.data : []).map(normalizeCompany);
-          filteredCompanies = [...companies];
-          applySort();
-          renderTable();
-        } else {
-          $('#companiesTable tbody').html(`<tr><td colspan="3" class="text-center text-danger">${response.text}</td></tr>`);
+      action: 'loadCompanies',
+      silent: true,
+      onSuccess: function (response) {
+        companies = (Array.isArray(response.data) ? response.data : []).map(normalizeCompany);
+        filteredCompanies = [...companies];
+        applySort();
+        renderTable();
+      },
+      onComplete: function (response) {
+        if (response && response.status !== 'success') {
+          $('#companiesTable tbody').html(`<tr><td colspan="3" class="text-center text-danger">${response.text || 'Failed to load companies!'}</td></tr>`);
         }
       },
-      error: function (_, __, error) {
-        console.error('Error loading companies:', error);
-        $('#companiesTable tbody').html('<tr><td colspan="3" class="text-center text-danger">Failed to load companies!</td></tr>');
-      }
+      errorMsg: 'Failed to load companies!'
     });
   }
 

@@ -1,6 +1,7 @@
 class ResetPasswordPage {
   constructor() {
-    this.app = new AppCore('');
+    const csrf = $('meta[name="csrf-token"]').attr('content') || '';
+    this.app = new AppCore(csrf);
     this.bindEvents();
   }
 
@@ -39,28 +40,18 @@ class ResetPasswordPage {
     const $btn = $('#resetPasswordBtn');
     $btn.prop('disabled', true);
 
-    $.ajax({
+    this.app.ajaxHelper({
       url: 'apiAuthentications.php',
-      method: 'POST',
-      data: {
-        action: 'resetPasswordWithToken',
-        token: token,
-        password: password
+      action: 'resetPasswordWithToken',
+      data: { token, password },
+      successMsg: 'Password reset successfully!',
+      errorMsg: 'Failed to reset password',
+      onSuccess: () => {
+        setTimeout(() => {
+          window.location.href = 'login.php';
+        }, 2000);
       },
-      dataType: 'json',
-      success: (response) => {
-        if (response.status === 'success') {
-          this.app.showAlert(response.text || response.message || 'Password reset successfully!', 'success');
-          setTimeout(() => {
-            window.location.href = 'login.php';
-          }, 2000);
-        } else {
-          this.app.showAlert(response.text || response.message || 'Failed to reset password', 'error');
-          $btn.prop('disabled', false);
-        }
-      },
-      error: () => {
-        this.app.showAlert('Error resetting password', 'error');
+      onComplete: () => {
         $btn.prop('disabled', false);
       }
     });

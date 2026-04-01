@@ -23,35 +23,23 @@ class UserProfilePage {
   }
 
   loadUserProfile() {
-    const formData = new FormData();
-    formData.append('action', 'getUserProfile');
-    formData.append('csrf_token', this.app.CSRF_TOKEN);
-
-    $.ajax({
+    this.app.ajaxHelper({
       url: 'apiUserProfile.php',
-      method: 'POST',
-      data: formData,
-      processData: false,
-      contentType: false,
-      success: (response) => {
-        if (response.status === 'success') {
-          const user = response.data;
-          $('#userFullName').text(user.full_name || 'N/A');
-          $('#userCompany').text(user.company || 'N/A');
-          $('#userRole').text(user.role || 'User');
-          $('#currentEmail').val(user.email || '');
-          
-          if (user.created_at) {
-            const date = new Date(parseInt(user.created_at) * 1000);
-            $('#userCreatedAt').text(date.toLocaleDateString());
-          }
-        } else {
-          this.app.showAlert(response.text || response.message || 'Failed to load profile', 'error');
+      action: 'getUserProfile',
+      silent: true,
+      onSuccess: (response) => {
+        const user = response.data;
+        $('#userFullName').text(user.full_name || 'N/A');
+        $('#userCompany').text(user.company || 'N/A');
+        $('#userRole').text(user.role || 'User');
+        $('#currentEmail').val(user.email || '');
+
+        if (user.created_at) {
+          const date = new Date(parseInt(user.created_at, 10) * 1000);
+          $('#userCreatedAt').text(date.toLocaleDateString());
         }
       },
-      error: () => {
-        this.app.showAlert('Error loading profile', 'error');
-      }
+      errorMsg: 'Error loading profile'
     });
   }
 
@@ -69,31 +57,17 @@ class UserProfilePage {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('action', 'changeEmail');
-    formData.append('csrf_token', this.app.CSRF_TOKEN);
-    formData.append('newEmail', newEmail);
-    formData.append('password', password);
-
-    $.ajax({
+    this.app.ajaxHelper({
       url: 'apiUserProfile.php',
-      method: 'POST',
-      data: formData,
-      processData: false,
-      contentType: false,
-      success: (response) => {
-        if (response.status === 'success') {
-          this.app.showAlert(response.text || response.message || 'Email changed successfully', 'success');
-          $('#emailForm')[0].reset();
-          setTimeout(() => {
-            window.location.href = 'login.php';
-          }, 2000);
-        } else {
-          this.app.showAlert(response.text || response.message || 'Failed to change email', 'error');
-        }
-      },
-      error: () => {
-        this.app.showAlert('Error changing email', 'error');
+      action: 'changeEmail',
+      data: { newEmail, password },
+      successMsg: 'Email changed successfully. Please log in with your new email.',
+      errorMsg: 'Failed to change email',
+      onSuccess: () => {
+        $('#emailForm')[0].reset();
+        setTimeout(() => {
+          window.location.href = 'login.php';
+        }, 2000);
       }
     });
   }
@@ -118,29 +92,18 @@ class UserProfilePage {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('action', 'changePassword');
-    formData.append('csrf_token', this.app.CSRF_TOKEN);
-    formData.append('currentPassword', current);
-    formData.append('newPassword', newPwd);
-    formData.append('confirmPassword', confirm);
-
-    $.ajax({
+    this.app.ajaxHelper({
       url: 'apiUserProfile.php',
-      method: 'POST',
-      data: formData,
-      processData: false,
-      contentType: false,
-      success: (response) => {
-        if (response.status === 'success') {
-          this.app.showAlert(response.text || response.message || 'Password changed successfully', 'success');
-          $('#passwordForm')[0].reset();
-        } else {
-          this.app.showAlert(response.text || response.message || 'Failed to change password', 'error');
-        }
+      action: 'changePassword',
+      data: {
+        currentPassword: current,
+        newPassword: newPwd,
+        confirmPassword: confirm
       },
-      error: () => {
-        this.app.showAlert('Error changing password', 'error');
+      successMsg: 'Password changed successfully',
+      errorMsg: 'Failed to change password',
+      onSuccess: () => {
+        $('#passwordForm')[0].reset();
       }
     });
   }
