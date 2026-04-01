@@ -25,6 +25,7 @@ class UserProfilePage {
   loadUserProfile() {
     const formData = new FormData();
     formData.append('action', 'getUserProfile');
+    formData.append('csrf_token', this.app.CSRF_TOKEN);
 
     $.ajax({
       url: 'apiUserProfile.php',
@@ -34,7 +35,7 @@ class UserProfilePage {
       contentType: false,
       success: (response) => {
         if (response.status === 'success') {
-          const user = response.data.data;
+          const user = response.data;
           $('#userFullName').text(user.full_name || 'N/A');
           $('#userCompany').text(user.company || 'N/A');
           $('#userRole').text(user.role || 'User');
@@ -70,6 +71,7 @@ class UserProfilePage {
 
     const formData = new FormData();
     formData.append('action', 'changeEmail');
+    formData.append('csrf_token', this.app.CSRF_TOKEN);
     formData.append('newEmail', newEmail);
     formData.append('password', password);
 
@@ -118,6 +120,7 @@ class UserProfilePage {
 
     const formData = new FormData();
     formData.append('action', 'changePassword');
+    formData.append('csrf_token', this.app.CSRF_TOKEN);
     formData.append('currentPassword', current);
     formData.append('newPassword', newPwd);
     formData.append('confirmPassword', confirm);

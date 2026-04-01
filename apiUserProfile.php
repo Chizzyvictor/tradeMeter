@@ -1,8 +1,6 @@
 <?php
 require_once __DIR__ . '/helpers.php';
 
-verifySessionToken();
-
 $cid = intval($_SESSION['cid'] ?? 0);
 if ($cid <= 0) {
     respond('error', 'Invalid session. Please log in again.');
