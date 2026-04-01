@@ -135,34 +135,6 @@ include "INC/header.php";
                     </small>
                 </div>
 
-   <!-- Secret question  -->
-<div class="form-group">
-<label for="cQuestion">Secret question :</label>
-<select class="form-control" id="cQuestion">
-<option value="">select your secret question</option>
-<option value="what is your mothers maiden name">what is your mother's maiden name</option>
-<option value="what is your favourite colour">what is your favourite colour </option>
-<option value="what is your favourite game">what is your favourite game</option>
-</select>
-  <small id="cQuestionCheck" class="form-text text-danger" style="display:none;">
-     choose a secret question 
-  </small>
-</div>
-
-   <!-- Secret answer-->
-<div class="form-group" id="ans" style="display: none;">
-<label for="cAnswer">Your secret answer :</label>
-<input type="text" 
-         id="cAnswer" 
-         name="cAnswer" 
-         class="form-control">
-  <small id="cAnswerCheck" class="form-text text-danger" style="display:none;">
-     Answer your secret question 
-  </small>
-  <hr>
-</div>
-
-
                 <!-- Password -->
                 <div class="form-group">
                     <label for="cPass">Password:</label>
@@ -217,78 +189,39 @@ include "INC/header.php";
     <!-- forgotPwdTab -->
     <div class="tab-content panel-box" id="forgotPwdTab">
         <button type="button" id="backToLogin" class="btn btn-success"><-Back</button>
-        <h4 class="text-center text-info">Forgotten password ?</h4>
+        <h4 class="text-center text-info">Forgotten password?</h4>
         <div class="col-lg-8 m-auto d-block">
-       <form id="forgotPwdForm">
-<div class="form-group">
-<label for="fEmail">Enter the email address associated with your account</label>
-<input type="email" id="fEmail" name="fEmail" class="form-control" required>
-<small id="fEmailCheck" 
-       class="form-text invalid-feedback text-danger">
-       Your email must be a valid email
-</small>
-</div>
-<input type="submit"
-       value="NEXT"
-       class="btn btn-primary btn-block">
-       </form>
-</div>
-</div>
-    <!-- forgotQandATab -->
-    <div class="tab-content panel-box" id="forgotQandATab">
-        <h4 class="text-center text-info">Forgotten password ?</h4>
-        <div class="col-lg-8 m-auto d-block">
-       <form id="forgotQandAForm">
-<div class="form-group">
-<label for="fQuestion">Your secret question</label>
-  <input type="text" 
-           id="fQuestion" 
-         name="fQuestion"
-        class="form-control" 
-        readonly>
-        <hr>
-</div>
-<div class="form-group" id="fAnswerDiv">
-<label for="fAnswer">Your secret answer</label>
-  <input type="text" 
-           id="fAnswer" 
-         name="fAnswer"
-        class="form-control">
-   <small id="fAnswerCheck" class="form-text text-danger" style="display:none;">
-   Your secret answer is required
-   </small>
-<hr>
-</div>
-<button type="submit" class="btn btn-success btn-block">SUBMIT ANSWER</button>
-       </form>
-</div>
-</div>
-
-    <!-- resetPwdTab -->
-    <div class="tab-content panel-box" id="resetPwdTab">
-        <h4 class="text-center text-info">Reset your password ?</h4>
-        <div class="col-lg-8 m-auto d-block">
-       <form id="resetPwdForm">
-<div class="form-group">
-<label for="rPass">Enter new password </label>
-   <input type="password" 
-            id="rPass" 
-          name="rPass"
-         class="form-control">
-  <h5 id="rPassCheck" style="color: red;display: none;">**Please Fill the password</h5>
-</div>
-<div class="form-group">
-<label for="rConPass">Enter new password again</label>
-    <input type="password" 
-    id="rConPass" 
-  name="rConPass"
- class="form-control">
-<h5 id="rConPassCheck" style="color: red;display: none;">**Please Fill the password</h5>
-</div>
-
-<button type="submit" class="btn btn-success btn-block">RESET PASSWORD</button>
-       </form>
-</div>
+            <p class="text-muted text-center mb-3">Enter your email and company name to receive a password reset link.</p>
+            <form id="forgotPwdForm">
+                <div class="form-group">
+                    <label for="fpCompanyEmail">Company (Email or Name):</label>
+                    <input type="text"
+                           id="fpCompanyEmail"
+                           name="company"
+                           placeholder="acme@company.com or Acme Ltd"
+                           class="form-control"
+                           required>
+                    <small id="fpCompanyCheck" class="form-text invalid-feedback text-danger">
+                        Enter a valid company email or company name
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="fpUserEmail">Your Email:</label>
+                    <input type="email"
+                           id="fpUserEmail"
+                           name="email"
+                           class="form-control"
+                           required>
+                    <small id="fpEmailCheck" class="form-text invalid-feedback text-danger">
+                        Your email must be valid
+                    </small>
+                </div>
+                <input type="submit"
+                       value="Send Reset Link"
+                       class="btn btn-primary btn-block">
+            </form>
+        </div>
+    </div>
 
 <?php include "INC/footer.php";?>
 

@@ -12,6 +12,9 @@ include "INC/navbar.php";
 				<div class="col-sm-6">
 					<h1 class="m-0">Company Settings</h1>
 				</div>
+				<div class="col-sm-6 text-right">
+					<p class="text-muted small">Go to <a href="user_profile.php">My Profile</a> to manage personal settings.</p>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -53,55 +56,6 @@ include "INC/navbar.php";
 								</div>
 								<div class="settings-form-actions">
 									<button type="submit" class="btn btn-primary" id="saveCompanyProfileBtn">Save Profile</button>
-								</div>
-							</form>
-						</div>
-					</div>
-
-					<div class="card shadow-sm mb-4 settings-section-card">
-						<div class="card-header font-weight-bold">Security Question & Answer</div>
-						<div class="card-body">
-							<form id="securityForm">
-								<div class="form-group">
-									<label for="securityQuestion">Security Question</label>
-									<select id="securityQuestion" name="question" class="form-control" required>
-										<option value="">Select your security question</option>
-										<option value="what is your mothers maiden name">What is your mother's maiden name?</option>
-										<option value="what is your favourite colour">What is your favourite colour?</option>
-										<option value="what is your favourite game">What is your favourite game?</option>
-									</select>
-								</div>
-								<div class="form-group">
-									<label for="securityAnswer">Security Answer</label>
-									<input type="text" id="securityAnswer" name="answer" class="form-control" required>
-								</div>
-								<div class="settings-form-actions">
-									<button type="submit" class="btn btn-info" id="saveSecurityBtn">Update Security</button>
-								</div>
-							</form>
-						</div>
-					</div>
-
-					<div class="card shadow-sm settings-section-card">
-						<div class="card-header font-weight-bold">Change Password</div>
-						<div class="card-body">
-							<form id="passwordForm">
-								<div class="form-row">
-									<div class="form-group col-md-4">
-										<label for="currentPassword">Current Password</label>
-										<input type="password" id="currentPassword" name="currentPassword" class="form-control" required>
-									</div>
-									<div class="form-group col-md-4">
-										<label for="newPassword">New Password</label>
-										<input type="password" id="newPassword" name="newPassword" class="form-control" required>
-									</div>
-									<div class="form-group col-md-4">
-										<label for="confirmPassword">Confirm Password</label>
-										<input type="password" id="confirmPassword" name="confirmPassword" class="form-control" required>
-									</div>
-								</div>
-								<div class="settings-form-actions">
-									<button type="submit" class="btn btn-warning" id="changePasswordBtn">Change Password</button>
 								</div>
 							</form>
 						</div>

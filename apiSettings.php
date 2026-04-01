@@ -35,23 +35,6 @@ function toEpochInt($value): int {
     return $ts === false ? 0 : intval($ts);
 }
 
-function settingsStringLength(string $value): int {
-    return function_exists('mb_strlen') ? mb_strlen($value) : strlen($value);
-}
-
-function settingsEnsureUserSecurityProfilesTable(AppDbConnection $db): void {
-    $db->exec("CREATE TABLE IF NOT EXISTS user_security_profiles (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cid INTEGER NOT NULL,
-        user_id INTEGER NOT NULL UNIQUE,
-        question TEXT NOT NULL,
-        answer TEXT NOT NULL,
-        updated_at INTEGER DEFAULT (strftime('%s','now'))
-    )");
-
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_user_security_profiles_cid ON user_security_profiles(cid)");
-}
-
 function settingsBackupDir(): string {
     $configured = trim((string)(appEnv('TM_BACKUP_DIR', '') ?? ''));
     $dir = $configured !== ''
@@ -416,7 +399,6 @@ function settingsRunDailyAutoBackup(AppDbConnection $db, int $cid): void {
 ensureRbacSchemaForSettings($db);
 seedRolesAndPermissionsForSettings($db, $cid);
 settingsEnsureBackupAuditTable($db);
-settingsEnsureUserSecurityProfilesTable($db);
 
 switch ($action) {
     case 'getBackupCapability':
@@ -427,22 +409,17 @@ switch ($action) {
         break;
 
     case 'loadSettings':
-        $uid = intval($_SESSION['user_id'] ?? 0);
         $stmt = $db->prepare("SELECT c.cid,
                                      c.cName,
                                      c.cEmail,
-                                     COALESCE(usp.question, c.question, '') AS question,
                                      c.cLogo,
                                      c.regDate
                               FROM company c
-                              LEFT JOIN user_security_profiles usp
-                                     ON usp.cid = c.cid AND usp.user_id = :uid
                               WHERE c.cid = :cid
                               LIMIT 1");
         if (!$stmt) {
             respond('error', 'Failed to load settings');
         }
-        $stmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
         $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
         if (!$row) {
@@ -503,146 +480,6 @@ switch ($action) {
         }
 
         respond('success', 'Company profile updated successfully');
-        break;
-
-    case 'updateSecurity':
-        $uid = intval($_SESSION['user_id'] ?? 0);
-        $question = safe_input($_POST['question'] ?? '');
-        $answer = strtolower(safe_input($_POST['answer'] ?? ''));
-
-        if ($uid <= 0) {
-            respond('error', 'Session expired. Please log in again');
-        }
-
-        if ($question === '') {
-            respond('error', 'Security question is required');
-        }
-        if (settingsStringLength($question) < 5) {
-            respond('error', 'Security question must be at least 5 characters');
-        }
-        if ($answer === '') {
-            respond('error', 'Security answer is required');
-        }
-        if (settingsStringLength($answer) < 2) {
-            respond('error', 'Security answer must be at least 2 characters');
-        }
-
-        $stmt = $db->prepare("INSERT INTO user_security_profiles (cid, user_id, question, answer, updated_at)
-                              VALUES (:cid, :uid, :question, :answer, :updated_at)
-                              ON CONFLICT(user_id) DO UPDATE SET
-                                  cid = excluded.cid,
-                                  question = excluded.question,
-                                  answer = excluded.answer,
-                                  updated_at = excluded.updated_at");
-        if (!$stmt) {
-            respond('error', 'Failed to prepare security update');
-        }
-        $stmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
-        $stmt->bindValue(':question', $question, SQLITE3_TEXT);
-        $stmt->bindValue(':answer', $answer, SQLITE3_TEXT);
-        $stmt->bindValue(':updated_at', time(), SQLITE3_INTEGER);
-        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-
-        if (!$stmt->execute()) {
-            respond('error', 'Failed to update security settings');
-        }
-
-        respond('success', 'Security settings updated successfully');
-        break;
-
-    case 'changePassword':
-        $currentPassword = $_POST['currentPassword'] ?? '';
-        $newPassword = $_POST['newPassword'] ?? '';
-        $confirmPassword = $_POST['confirmPassword'] ?? '';
-        $currentUserId = intval($_SESSION['user_id'] ?? 0);
-
-        if ($currentPassword === '' || $newPassword === '' || $confirmPassword === '') {
-            respond('error', 'All password fields are required');
-        }
-
-        if ($currentUserId <= 0) {
-            respond('error', 'Session expired. Please log in again');
-        }
-
-        if (strlen($newPassword) < 6) {
-            respond('error', 'New password must be at least 6 characters');
-        }
-
-        if ($newPassword !== $confirmPassword) {
-            respond('error', 'New password and confirm password do not match');
-        }
-
-        $stmt = $db->prepare("SELECT password FROM users WHERE user_id = :uid AND cid = :cid LIMIT 1");
-        if (!$stmt) {
-            respond('error', 'Failed to verify current password');
-        }
-        $stmt->bindValue(':uid', $currentUserId, SQLITE3_INTEGER);
-        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-        $res = $stmt->execute();
-        if (!$res) {
-            respond('error', 'Failed to verify current password');
-        }
-
-        $row = $res->fetchArray(SQLITE3_ASSOC);
-        $storedPassword = strval($row['password'] ?? '');
-
-        // Backward compatibility for legacy company-level credentials.
-        if ($storedPassword === '') {
-            $legacyStmt = $db->prepare("SELECT cPass FROM company WHERE cid = :cid LIMIT 1");
-            if ($legacyStmt) {
-                $legacyStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-                $legacyRes = $legacyStmt->execute();
-                if ($legacyRes) {
-                    $legacyRow = $legacyRes->fetchArray(SQLITE3_ASSOC);
-                    if ($legacyRow && isset($legacyRow['cPass'])) {
-                        $storedPassword = strval($legacyRow['cPass']);
-                    }
-                }
-            }
-        }
-
-        if ($storedPassword === '') {
-            respond('error', 'User not found');
-        }
-
-        $passwordInfo = $storedPassword !== '' ? password_get_info($storedPassword) : ['algo' => null];
-        $isCurrentValid = false;
-
-        if ($storedPassword !== '') {
-            // Support hashed passwords and a legacy plain-text fallback.
-            if (!empty($passwordInfo['algo'])) {
-                $isCurrentValid = password_verify($currentPassword, $storedPassword);
-            } else {
-                $isCurrentValid = hash_equals($storedPassword, $currentPassword);
-            }
-        }
-
-        if (!$isCurrentValid) {
-            respond('error', 'Current password is incorrect');
-        }
-
-        $isSameAsCurrent = !empty($passwordInfo['algo'])
-            ? password_verify($newPassword, $storedPassword)
-            : hash_equals($storedPassword, $newPassword);
-
-        if ($isSameAsCurrent) {
-            respond('error', 'New password must be different from current password');
-        }
-
-        $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-        $uStmt = $db->prepare("UPDATE users SET password = :password WHERE user_id = :uid AND cid = :cid");
-        if (!$uStmt) {
-            respond('error', 'Failed to prepare password update');
-        }
-        $uStmt->bindValue(':password', $hash, SQLITE3_TEXT);
-        $uStmt->bindValue(':uid', $currentUserId, SQLITE3_INTEGER);
-        $uStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-
-        if (!$uStmt->execute()) {
-            respond('error', 'Failed to update password');
-        }
-
-        respond('success', 'Password changed successfully');
         break;
 
     case 'loadRoles':

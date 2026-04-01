@@ -77,16 +77,6 @@ class SettingsPage {
       reader.readAsDataURL(file);
     });
 
-    $('#securityForm').on('submit', (e) => {
-      e.preventDefault();
-      this.updateSecurity();
-    });
-
-    $('#passwordForm').on('submit', (e) => {
-      e.preventDefault();
-      this.changePassword();
-    });
-
     $('#createUserForm').on('submit', (e) => {
       e.preventDefault();
       this.createUser();
@@ -193,7 +183,6 @@ class SettingsPage {
   renderSettings(data) {
     const cName = data.cName || '-';
     const cEmail = data.cEmail || '-';
-    const question = data.question || '';
     const logo = data.cLogo || 'logo.jpg';
 
     $('#settingsCompanyName').text(cName);
@@ -204,22 +193,7 @@ class SettingsPage {
 
     $('#companyName').val(cName === '-' ? '' : cName);
     $('#companyEmail').val(cEmail === '-' ? '' : cEmail);
-    this.ensureSecurityQuestionOption(question);
-    $('#securityQuestion').val(question);
-    $('#securityAnswer').val('');
     $('#companyLogo').val('');
-  }
-
-  ensureSecurityQuestionOption(question) {
-    const value = String(question || '').trim();
-    const $question = $('#securityQuestion');
-    if (!$question.length || !value) return;
-
-    const hasOption = $question.find(`option[value="${value.replace(/"/g, '\\"')}"]`).length > 0;
-    if (!hasOption) {
-      const safeValue = AppCore.escapeHtml(value);
-      $question.append(`<option value="${safeValue}">${safeValue}</option>`);
-    }
   }
 
   updateProfile() {
@@ -243,77 +217,6 @@ class SettingsPage {
       onSuccess: () => {
         this.loadSettings();
         this.AuthApp.loadCompanyLogo();        
-      },
-      onComplete: () => {
-        $btn.prop('disabled', false);
-      }
-    });
-  }
-
-  updateSecurity() {
-    const question = String($('#securityQuestion').val() || '').trim();
-    const answer = String($('#securityAnswer').val() || '').trim();
-    const $btn = $('#saveSecurityBtn');
-
-    if (!question) {
-      this.app.showAlert('Please select a security question', 'error');
-      return;
-    }
-
-    if (!answer) {
-      this.app.showAlert('Security answer is required', 'error');
-      return;
-    }
-
-    $btn.prop('disabled', true);
-
-    this.app.ajaxHelper({
-      url: 'apiSettings.php',
-      action: 'updateSecurity',
-      data: { question, answer },
-      onSuccess: () => {
-        $('#securityAnswer').val('');
-      },
-      onComplete: () => {
-        $btn.prop('disabled', false);
-      }
-    });
-  }
-
-  changePassword() {
-    const currentPassword = String($('#currentPassword').val() || '');
-    const newPassword = String($('#newPassword').val() || '');
-    const confirmPassword = String($('#confirmPassword').val() || '');
-    const $btn = $('#changePasswordBtn');
-
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      this.app.showAlert('All password fields are required', 'error');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      this.app.showAlert('New password and confirm password do not match', 'error');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      this.app.showAlert('New password must be at least 6 characters', 'error');
-      return;
-    }
-
-    if (newPassword === currentPassword) {
-      this.app.showAlert('New password must be different from current password', 'error');
-      return;
-    }
-
-    $btn.prop('disabled', true);
-
-    this.app.ajaxHelper({
-      url: 'apiSettings.php',
-      action: 'changePassword',
-      data: { currentPassword, newPassword, confirmPassword },
-      onSuccess: () => {
-        $('#passwordForm')[0].reset();
       },
       onComplete: () => {
         $btn.prop('disabled', false);

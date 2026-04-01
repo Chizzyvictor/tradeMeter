@@ -607,31 +607,15 @@ class Auth {
       }
     });
   }
-  requestPasswordReset(email) {
+  requestPasswordReset(company, email) {
     this.app.ajaxHelper({
       url: "apiAuthentications.php",
       action: "requestPasswordReset",
-      data: {"fEmail" : email},
-      onSuccess: res => {
-       $("#fQuestion").val(res.question);
-       this.app.switchTab("forgotQandATab");
-       }
-    });
-  }
-  forgotQandA(answer) {
-    this.app.ajaxHelper({
-      url: "apiAuthentications.php",
-      action: "forgotQandA",
-      data: { answer },
-      onSuccess: res => this.app.switchTab("resetPwdTab")
-    });
-  }
-  resetPassword(password) {
-    this.app.ajaxHelper({
-      url: "apiAuthentications.php",
-      action: "resetPassword",
-      data: {"pwd" : password},
-      onSuccess: () => this.app.switchTab("loginTab")
+      data: { company, email },
+      onSuccess: () => {
+        this.app.showAlert("Check your email for the reset link.", "success");
+        this.app.switchTab("loginTab");
+      }
     });
   }
 

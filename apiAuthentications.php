@@ -164,6 +164,102 @@ function sendVerificationEmail(string $toEmail, string $fullName, string $token)
     return sendAppEmail($toEmail, $recipientName, $subject, $textMessage, $htmlMessage);
 }
 
+function ensurePasswordResetTokenTable(AppDbConnection $db): void {
+    $db->exec("CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        cid INTEGER NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        expires_at INTEGER NOT NULL,
+        used_at INTEGER,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+    )");
+
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens(user_id)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at ON password_reset_tokens(expires_at)");
+}
+
+function createPasswordResetToken(AppDbConnection $db, int $userId, int $cid): string {
+    ensurePasswordResetTokenTable($db);
+
+    $token = bin2hex(random_bytes(32));
+    $expiresAt = time() + (24 * 3600);
+
+    $stmt = $db->prepare("INSERT INTO password_reset_tokens (user_id, cid, token, expires_at)
+                          VALUES (:user_id, :cid, :token, :expires_at)");
+    if (!$stmt) {
+        return '';
+    }
+
+    $stmt->bindValue(':user_id', $userId, SQLITE3_INTEGER);
+    $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    $stmt->bindValue(':token', $token, SQLITE3_TEXT);
+    $stmt->bindValue(':expires_at', $expiresAt, SQLITE3_INTEGER);
+
+    if ($stmt->execute()) {
+        return $token;
+    }
+
+    return '';
+}
+
+function validateResetToken(AppDbConnection $db, string $token): ?array {
+    ensurePasswordResetTokenTable($db);
+
+    $now = time();
+    $stmt = $db->prepare("SELECT id, user_id, cid, expires_at, used_at
+                          FROM password_reset_tokens
+                          WHERE token = :token
+                            AND expires_at > :now
+                            AND used_at IS NULL
+                          LIMIT 1");
+    if (!$stmt) {
+        return null;
+    }
+
+    $stmt->bindValue(':token', $token, SQLITE3_TEXT);
+    $stmt->bindValue(':now', $now, SQLITE3_INTEGER);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    return $row ? $row : null;
+}
+
+function markTokenAsUsed(AppDbConnection $db, string $token): bool {
+    ensurePasswordResetTokenTable($db);
+
+    $stmt = $db->prepare("UPDATE password_reset_tokens
+                          SET used_at = :used_at
+                          WHERE token = :token");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bindValue(':token', $token, SQLITE3_TEXT);
+    $stmt->bindValue(':used_at', time(), SQLITE3_INTEGER);
+    return (bool)$stmt->execute();
+}
+
+function sendPasswordResetEmail(string $toEmail, string $fullName, string $resetUrl): bool {
+    $recipientName = trim($fullName) !== '' ? $fullName : 'User';
+    $appName = 'TradeMeter';
+
+    $subject = 'Password Reset Request - ' . $appName;
+    $textMessage = "Hello {$recipientName},\n\n" .
+                   "You requested a password reset for your {$appName} account.\n" .
+                   "Click the link below to reset your password:\n\n" .
+                   "{$resetUrl}\n\n" .
+                   "This link will expire in 24 hours.\n\n" .
+                   "If you did not request this reset, you can safely ignore this message.";
+
+    $htmlMessage = '<p>Hello ' . htmlspecialchars($recipientName, ENT_QUOTES, 'UTF-8') . ',</p>' .
+                   '<p>You requested a password reset for your <strong>' . htmlspecialchars($appName, ENT_QUOTES, 'UTF-8') . '</strong> account.</p>' .
+                   '<p><a href="' . htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8') . '">Reset Password</a></p>' .
+                   '<p>This link will expire in 24 hours.</p>' .
+                   '<p>If you did not request this reset, you can safely ignore this message.</p>';
+
+    return sendAppEmail($toEmail, $recipientName, $subject, $textMessage, $htmlMessage);
+}
+
 function getClientIpAddress(): string {
     $forwarded = trim((string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
     if ($forwarded !== '') {
@@ -346,54 +442,6 @@ function assignUserRole(AppDbConnection $db, int $userId, int $cid, string $role
     $stmt->execute();
 }
 
-function ensureUserSecurityProfiles(AppDbConnection $db): void {
-    $db->exec("CREATE TABLE IF NOT EXISTS user_security_profiles (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cid INTEGER NOT NULL,
-        user_id INTEGER NOT NULL UNIQUE,
-        question TEXT NOT NULL,
-        answer TEXT NOT NULL,
-        updated_at INTEGER DEFAULT (strftime('%s','now'))
-    )");
-
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_user_security_profiles_cid ON user_security_profiles(cid)");
-}
-
-function upsertUserSecurityProfile(AppDbConnection $db, int $cid, int $userId, string $question, string $answer, int $now): bool {
-    if ($cid <= 0 || $userId <= 0 || $question === '' || $answer === '') {
-        return false;
-    }
-
-    $stmt = $db->prepare("INSERT INTO user_security_profiles (cid, user_id, question, answer, updated_at)
-                          VALUES (:cid, :uid, :question, :answer, :updated_at)
-                          ON CONFLICT(user_id) DO UPDATE SET
-                              question = excluded.question,
-                              answer = excluded.answer,
-                              cid = excluded.cid,
-                              updated_at = excluded.updated_at");
-    if (!$stmt) {
-        return false;
-    }
-
-    $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-    $stmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
-    $stmt->bindValue(':question', $question, SQLITE3_TEXT);
-    $stmt->bindValue(':answer', strtolower($answer), SQLITE3_TEXT);
-    $stmt->bindValue(':updated_at', $now, SQLITE3_INTEGER);
-    return (bool)$stmt->execute();
-}
-
-function syncLegacyCompanyPassword(AppDbConnection $db, int $cid, string $passwordHash): bool {
-    $stmt = $db->prepare("UPDATE company SET cPass = :pwd WHERE cid = :cid");
-    if (!$stmt) {
-        return false;
-    }
-
-    $stmt->bindValue(':pwd', $passwordHash, SQLITE3_TEXT);
-    $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-    return (bool)$stmt->execute();
-}
-
 function getUserRoles(AppDbConnection $db, int $userId): array {
     if ($userId <= 0) {
         return [];
@@ -460,8 +508,6 @@ $action     = $_POST['action'] ?? null;
 // -------------------------
 // === Ensure action exists ===
 if (!$action) respond("error", "No action provided");
-
-ensureUserSecurityProfiles($db);
 
 
 
@@ -596,8 +642,6 @@ switch ($action) {
         $cName = safe_input($_POST["cName"] ?? $_POST["name"] ?? "");
         $email = strtolower(safe_input($_POST["cEmail"] ?? $_POST["email"] ?? ""));
         $rawPassword = (string)($_POST["cPass"] ?? $_POST["password"] ?? "");
-        $question = safe_input($_POST["cQuestion"] ?? $_POST["question"] ?? "");
-        $answer = strtolower(safe_input($_POST["cAnswer"] ?? $_POST["answer"] ?? ""));
         $fullName = safe_input($_POST["fullName"] ?? $cName);
 
         if ($cName === '' || $email === '' || $rawPassword === '' || $fullName === '') {
@@ -634,8 +678,8 @@ switch ($action) {
             $stmt->bindValue(':email', $email, SQLITE3_TEXT);
             $stmt->bindValue(':pass', $passHash, SQLITE3_TEXT);
             $stmt->bindValue(':regDate', $now, SQLITE3_INTEGER);
-            $stmt->bindValue(':question', $question, SQLITE3_TEXT);
-            $stmt->bindValue(':answer', $answer, SQLITE3_TEXT);
+            $stmt->bindValue(':question', '', SQLITE3_TEXT);
+            $stmt->bindValue(':answer', '', SQLITE3_TEXT);
             $stmt->bindValue(':cLogo', "logo.jpg", SQLITE3_TEXT);
 
             if (!$stmt->execute()) {
@@ -672,10 +716,6 @@ switch ($action) {
 
             $userId = intval($db->lastInsertRowID());
             assignUserRole($db, $userId, $companyId, 'Owner');
-
-            if ($question !== '' && $answer !== '') {
-                upsertUserSecurityProfile($db, $companyId, $userId, $question, $answer, $now);
-            }
 
             if (!sendVerificationEmail($email, $fullName, $verificationToken)) {
                 if (isEmailVerificationStrict()) {
@@ -794,7 +834,7 @@ switch ($action) {
     // ---------------- LOAD ALL COMPANIES ----------------
     case 'loadCompanies':
         $companies = [];
-        $ret = $db->query("SELECT cid, cName, cEmail, regDate, question, cLogo FROM company");
+        $ret = $db->query("SELECT cid, cName, cEmail, regDate, cLogo FROM company");
 
         while ($row = $ret->fetchArray(SQLITE3_ASSOC)) {
             $companies[] = $row;
@@ -807,198 +847,108 @@ switch ($action) {
         }
         break;
 
-    // ---------------- FORGOT PASSWORD: STEP 1 ----------------
+    // ---------------- FORGOT PASSWORD: EMAIL-BASED RESET ----------------
     case "requestPasswordReset":
-        if (empty($_POST["fEmail"])) {
-            respond("error", "Email is required.");
+        if (empty($_POST["company"]) || empty($_POST["email"])) {
+            respond("error", "Company and email are required.");
         }
 
-        $userEmail = strtolower(safe_input($_POST["fEmail"]));
-        $stmt = $db->prepare("SELECT u.user_id, u.cid, u.email,
-                                     usp.question AS user_question,
-                                     c.question AS company_question
-                              FROM users u
-                              JOIN company c ON c.cid = u.cid
-                              LEFT JOIN user_security_profiles usp ON usp.user_id = u.user_id
-                              WHERE lower(u.email) = lower(:email)
-                                AND COALESCE(u.is_active, 1) = 1
-                              ORDER BY u.user_id ASC
-                              LIMIT 1");
-        $stmt->bindValue(':email', $userEmail, SQLITE3_TEXT);
-        $ret = $stmt->execute();
-        $row = $ret->fetchArray(SQLITE3_ASSOC);
+        $company = safe_input($_POST["company"]);
+        $userEmail = strtolower(safe_input($_POST["email"]));
 
-        if ($row) {
-            $question = trim((string)($row['user_question'] ?? ''));
-            if ($question === '') {
-                $question = trim((string)($row['company_question'] ?? ''));
-            }
-            if ($question === '') {
-                respond("error", "No security question is configured for this user.");
-            }
+        // Find company by name or email
+        $companyStmt = $db->prepare("SELECT cid, cName, cEmail
+                                     FROM company
+                                     WHERE lower(cName) = lower(:company)
+                                        OR lower(cEmail) = lower(:company)
+                                     LIMIT 1");
+        $companyStmt->bindValue(':company', $company, SQLITE3_TEXT);
+        $companyRow = $companyStmt->execute()->fetchArray(SQLITE3_ASSOC);
 
-            $_SESSION["reset_email"] = strtolower((string)($row['email'] ?? $userEmail));
-            $_SESSION["reset_cid"] = intval($row['cid'] ?? 0);
-            $_SESSION["reset_user_id"] = intval($row['user_id'] ?? 0);
-            respond("success", "Email found", ["question" => $question]);
+        if (!$companyRow) {
+            respond("error", "Company not found. Please check and try again.");
         }
 
-        $legacyStmt = $db->prepare("SELECT cid, cName, cEmail, question
-                                    FROM company
-                                    WHERE lower(cEmail) = lower(:email)
-                                    LIMIT 1");
-        if (!$legacyStmt) {
-            respond("error", "Account not found");
-        }
-        $legacyStmt->bindValue(':email', $userEmail, SQLITE3_TEXT);
-        $legacyRes = $legacyStmt->execute();
-        $legacyRow = $legacyRes ? $legacyRes->fetchArray(SQLITE3_ASSOC) : false;
-        if ($legacyRow) {
-            $legacyQuestion = trim((string)($legacyRow['question'] ?? ''));
-            if ($legacyQuestion === '') {
-                respond("error", "No security question is configured for this user.");
-            }
-            $_SESSION["reset_email"] = strtolower((string)($legacyRow['cEmail'] ?? $userEmail));
-            $_SESSION["reset_cid"] = intval($legacyRow['cid'] ?? 0);
-            $_SESSION["reset_user_id"] = 0;
-            $_SESSION["reset_company_name"] = (string)($legacyRow['cName'] ?? '');
-            respond("success", "Email found", ["question" => $legacyQuestion]);
-        }
-
-        respond("error", "Account not found");
-        break;
-
-    // ---------------- FORGOT PASSWORD: STEP 2 ----------------
-    case "forgotQandA":
-        if (empty($_POST["answer"])) {
-            respond("error", "Answer is required.");
-        }
-
-        if (!isset($_SESSION["reset_cid"])) {
-            respond("error", "Session expired. Please restart reset process.");
-        }
-
-        $answer = strtolower(safe_input($_POST["answer"]));
-        $userId = intval($_SESSION["reset_user_id"] ?? 0);
-        $cid = intval($_SESSION["reset_cid"] ?? 0);
-        if ($cid <= 0) {
-            respond("error", "Session expired. Please restart reset process.");
-        }
-
-        $expectedAnswer = '';
-        if ($userId > 0) {
-            $stmt = $db->prepare("SELECT usp.answer AS user_answer,
-                                         c.answer AS company_answer
-                                  FROM users u
-                                  JOIN company c ON c.cid = u.cid
-                                  LEFT JOIN user_security_profiles usp ON usp.user_id = u.user_id
-                                  WHERE u.user_id = :uid AND u.cid = :cid
+        $cid = intval($companyRow['cid']);
+        // Find user by email in this company
+        $userStmt = $db->prepare("SELECT user_id, full_name, email
+                                  FROM users
+                                  WHERE cid = :cid
+                                    AND lower(email) = lower(:email)
+                                    AND COALESCE(is_active, 1) = 1
                                   LIMIT 1");
-            $stmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
-            $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-            $ret = $stmt->execute();
-            $row = $ret ? $ret->fetchArray(SQLITE3_ASSOC) : false;
-            $expectedAnswer = strtolower(trim((string)($row['user_answer'] ?? '')));
-            if ($expectedAnswer === '') {
-                $expectedAnswer = strtolower(trim((string)($row['company_answer'] ?? '')));
-            }
-        } else {
-            $stmt = $db->prepare("SELECT answer FROM company WHERE cid = :cid LIMIT 1");
-            if ($stmt) {
-                $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-                $ret = $stmt->execute();
-                $row = $ret ? $ret->fetchArray(SQLITE3_ASSOC) : false;
-                $expectedAnswer = strtolower(trim((string)($row['answer'] ?? '')));
-            }
+        $userStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $userStmt->bindValue(':email', $userEmail, SQLITE3_TEXT);
+        $userRow = $userStmt->execute()->fetchArray(SQLITE3_ASSOC);
+
+        if (!$userRow) {
+            respond("error", "User not found in this company. Please check and try again.");
         }
 
-        if ($expectedAnswer !== '' && hash_equals($expectedAnswer, $answer)) {
-            $_SESSION["can_reset"] = true;
-            respond("success", "Answer verified. You may now reset your password.");
+        $userId = intval($userRow['user_id']);
+        $userFullName = $userRow['full_name'] ?? 'User';
+        $userEmail = $userRow['email'];
+
+        $token = createPasswordResetToken($db, $userId, $cid);
+
+        if ($token === '') {
+            respond("error", "Failed to create reset token. Please try again.");
+        }
+
+        // Send reset email
+        $resetUrl = buildBaseUrl() . '/reset_password.php?token=' . urlencode($token);
+        $sent = sendPasswordResetEmail($userEmail, $userFullName, $resetUrl);
+
+        if ($sent) {
+            respond("success", "Password reset link has been sent to your email. Check your inbox and click the link to reset your password.");
         } else {
-            respond("error", "Incorrect answer.");
+            respond("error", "Failed to send reset email. Please try again or contact support.");
         }
         break;
 
-    // ---------------- FORGOT PASSWORD: STEP 3 ----------------
-    case "resetPassword":
-        if (empty($_POST["pwd"])) {
-            respond("error", "Password is required.");
+    // ---------------- NEW: RESET PASSWORD WITH TOKEN ----------------
+    case "resetPasswordWithToken":
+        if (empty($_POST["token"]) || empty($_POST["password"])) {
+            respond("error", "Invalid request.");
         }
 
-        if (!isset($_SESSION["reset_email"], $_SESSION["reset_cid"]) || empty($_SESSION["can_reset"])) {
-            respond("error", "Unauthorized request.");
+        $token = trim(safe_input($_POST["token"]));
+        $newPassword = $_POST["password"] ?? '';
+
+        if (strlen($newPassword) < 6) {
+            respond("error", "Password must be at least 6 characters.");
         }
 
-        $userId = intval($_SESSION["reset_user_id"] ?? 0);
-        $cid = intval($_SESSION["reset_cid"] ?? 0);
-        $email = strtolower((string)($_SESSION["reset_email"] ?? ''));
-        $companyName = (string)($_SESSION["reset_company_name"] ?? '');
-        $pwd = password_hash($_POST["pwd"], PASSWORD_DEFAULT);
+        $tokenData = validateResetToken($db, $token);
 
-        if ($cid <= 0) {
-            respond("error", "Unauthorized request.");
+        if (!$tokenData) {
+            respond("error", "Invalid or expired reset token. Please request a new reset link.");
         }
 
-        $db->exec("BEGIN");
-        try {
-            if ($userId > 0) {
-                $userStmt = $db->prepare("UPDATE users
-                                         SET password = :pwd
-                                         WHERE user_id = :uid AND cid = :cid");
-                if (!$userStmt) {
-                    throw new Exception('Failed to prepare user password reset.');
-                }
-                $userStmt->bindValue(':pwd', $pwd, SQLITE3_TEXT);
-                $userStmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
-                $userStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-                if (!$userStmt->execute()) {
-                    throw new Exception('Failed to update user password.');
-                }
-            } else {
-                ensureRbacSchema($db);
-                seedRolesAndPermissions($db, $cid);
+        $userId = intval($tokenData['user_id']);
+        $cid = intval($tokenData['cid']);
 
-                $insertUser = $db->prepare("INSERT INTO users (
-                                                cid, full_name, email, password, is_active,
-                                                email_verified_at, email_verification_token_hash, email_verification_expires_at
-                                            ) VALUES (
-                                                :cid, :full_name, :email, :password, 1,
-                                                :verified_at, NULL, NULL
-                                            )");
-                if (!$insertUser) {
-                    throw new Exception('Failed to create owner user for reset.');
-                }
-                $displayName = trim($companyName) !== '' ? $companyName : 'Owner';
-                $insertUser->bindValue(':cid', $cid, SQLITE3_INTEGER);
-                $insertUser->bindValue(':full_name', $displayName, SQLITE3_TEXT);
-                $insertUser->bindValue(':email', $email, SQLITE3_TEXT);
-                $insertUser->bindValue(':password', $pwd, SQLITE3_TEXT);
-                $insertUser->bindValue(':verified_at', $now, SQLITE3_INTEGER);
-                if (!$insertUser->execute()) {
-                    throw new Exception('Failed to create owner user for reset.');
-                }
-
-                $newUserId = intval($db->lastInsertRowID());
-                if ($newUserId <= 0) {
-                    throw new Exception('Failed to create owner user for reset.');
-                }
-
-                assignUserRole($db, $newUserId, $cid, 'Owner');
-                $_SESSION["reset_user_id"] = $newUserId;
-            }
-
-            if (!syncLegacyCompanyPassword($db, $cid, $pwd)) {
-                throw new Exception('Failed to sync company password.');
-            }
-
-            $db->exec("COMMIT");
-            unset($_SESSION["reset_email"], $_SESSION["reset_user_id"], $_SESSION["reset_cid"], $_SESSION["reset_company_name"], $_SESSION["can_reset"]);
-            respond("success", "Password reset successful.");
-        } catch (Throwable $e) {
-            $db->exec("ROLLBACK");
-            respond("error", $e->getMessage());
+        if ($userId <= 0 || $cid <= 0) {
+            respond("error", "Invalid token data.");
         }
+
+        // Update password
+        $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+        $updateStmt = $db->prepare("UPDATE users
+                                    SET password = :password
+                                    WHERE user_id = :uid AND cid = :cid");
+        $updateStmt->bindValue(':password', $hash, SQLITE3_TEXT);
+        $updateStmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+        $updateStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+
+        if (!$updateStmt->execute()) {
+            respond("error", "Failed to update password. Please try again.");
+        }
+
+        // Mark token as used
+        markTokenAsUsed($db, $token);
+
+        respond("success", "Password has been reset successfully. You can now log in with your new password.");
         break;
 
     // ---------------- GET USER PERMISSIONS ----------------

@@ -14,10 +14,6 @@ $(document).ready(() => {
   const $signupForm = $("#signupForm");
   const $loginForm = $("#loginForm");
   const $forgotPwdForm = $("#forgotPwdForm");
-  const $forgotQandAForm = $("#forgotQandAForm");
-  const $resetPwdForm = $("#resetPwdForm");
-  const $questionSelect = $("#cQuestion");
-  const $answerWrapper = $("#ans");
 
   const validateCompanyIdentifier = () => {
     const value = String($("#companyEmail").val() || "").trim();
@@ -46,8 +42,7 @@ $(document).ready(() => {
       cEmail: Validator.rules.email,
       cPass: Validator.rules.password,
       cName: Validator.rules.name,
-      fullName: Validator.rules.name,
-      cAnswer: Validator.rules.answer
+      fullName: Validator.rules.name
     };
     const ok = Validator.validateForm($signupForm, rulesMap);
     const passMatch = $("#cPass").val() === $("#conCPass").val();
@@ -65,8 +60,6 @@ $(document).ready(() => {
       cEmail: $("#cEmail").val().trim(),
       cPass: $("#cPass").val().trim(),
       cName: $("#cName").val().trim(),
-      cQuestion: $questionSelect.val(),
-      cAnswer: $("#cAnswer").val().trim(),
       fullName: $("#fullName").val().trim()
     });
   });
@@ -98,48 +91,18 @@ $(document).ready(() => {
   // ============================
   $forgotPwdForm.on("submit", e => {
     e.preventDefault();
-    const rulesMap = {fEmail: Validator.rules.email};
-    if (!Validator.validateForm($forgotPwdForm, rulesMap)) return;
-    AuthApp.requestPasswordReset($("#fEmail").val().trim());
-  });
-
-  // ============================
-  // FORGOT Q & A
-  // ============================
-  $forgotQandAForm.on("submit", e => {
-    e.preventDefault();
-    const rulesMap = { fAnswer: Validator.rules.answer };
-    if (!Validator.validateForm($forgotQandAForm, rulesMap)) return;
-    AuthApp.forgotQandA($("#fAnswer").val().trim());
-  });
-
-  // ============================
-  // RESET PASSWORD
-  // ============================
-  $resetPwdForm.on("submit", e => {
-    e.preventDefault();
-    const rulesMap = { rPass: Validator.rules.password };
-    if (!Validator.validateForm($resetPwdForm, rulesMap)) return;
-    if ($("#rPass").val() !== $("#rConPass").val()) {
-      Validator.setTextError("#rConPassCheck", "Passwords do not match");
+    const company = $("#fpCompanyEmail").val().trim();
+    const email = $("#fpUserEmail").val().trim();
+    if (!company || !email) {
+      AppCoreInstance.showAlert("Company and email are required", "error");
       return;
-    } else {
-      Validator.setTextError("#rConPassCheck", "");
     }
-    AuthApp.resetPassword($("#rPass").val().trim());
+    const rulesMap = {
+      fpUserEmail: Validator.rules.email
+    };
+    if (!Validator.validateForm($forgotPwdForm, rulesMap)) return;
+    AuthApp.requestPasswordReset(company, email);
   });
-
-  // ============================
-  // SECURITY QUESTION TOGGLE
-  // ============================
-  $questionSelect.on("change", function () {
-    if (!this.value) {
-      $answerWrapper.hide();
-      $("#cAnswer").val("");
-    } else {
-      $answerWrapper.show();
-    }
-  }).trigger("change");
 
   // ============================
   // LIVE VALIDATION
@@ -153,17 +116,14 @@ $(document).ready(() => {
   live("#cPass", Validator.rules.password, "#cpasscheck");
   live("#cName", Validator.rules.name, "#cNameCheck");
   live("#fullName", Validator.rules.name, "#fullNameCheck");
-  live("#cAnswer", Validator.rules.answer, "#cAnswerCheck");
   live("#email", Validator.rules.email, "#emailvalid");
   live("#pass", Validator.rules.password, "#passCheck");
-  live("#fEmail", Validator.rules.email, "#fEmailCheck");
-  live("#fAnswer", Validator.rules.answer, "#fAnswerCheck");
-  live("#rPass", Validator.rules.password, "#rPassCheck");
+  live("#fpUserEmail", Validator.rules.email, "#fpEmailCheck");
 
   // ============================
   // CONFIRM PASSWORD LIVE
   // ============================
-  $("#conCPass, #rConPass").on("input", function () {
+  $("#conCPass").on("input", function () {
     const match =
       $(this).val() === $(this).closest("form").find("input[type=password]").first().val();
     $(this)
@@ -174,7 +134,7 @@ $(document).ready(() => {
   // ============================
   // PASSWORD STRENGTH
   // ============================
-  $("#cPass, #rPass").on("input", function () {
+  $("#cPass").on("input", function () {
     const pass = $(this).val();
     const score =
       (pass.length >= 6) +
