@@ -98,9 +98,12 @@ $(document).ready(() => {
       return;
     }
     const rulesMap = {
-      fpUserEmail: Validator.rules.email
+      email: Validator.rules.email
     };
-    if (!Validator.validateForm($forgotPwdForm, rulesMap)) return;
+    if (!Validator.validateForm($forgotPwdForm, rulesMap)) {
+      AppCoreInstance.showAlert("Please enter a valid user email", "error");
+      return;
+    }
     AuthApp.requestPasswordReset(company, email);
   });
 
