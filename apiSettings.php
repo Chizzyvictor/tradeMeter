@@ -535,12 +535,33 @@ switch ($action) {
         }
         $stmt->bindValue(':uid', $currentUserId, SQLITE3_INTEGER);
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-        $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
-        if (!$row) {
+        $res = $stmt->execute();
+        if (!$res) {
+            respond('error', 'Failed to verify current password');
+        }
+
+        $row = $res->fetchArray(SQLITE3_ASSOC);
+        $storedPassword = strval($row['password'] ?? '');
+
+        // Backward compatibility for legacy company-level credentials.
+        if ($storedPassword === '') {
+            $legacyStmt = $db->prepare("SELECT cPass FROM company WHERE cid = :cid LIMIT 1");
+            if ($legacyStmt) {
+                $legacyStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+                $legacyRes = $legacyStmt->execute();
+                if ($legacyRes) {
+                    $legacyRow = $legacyRes->fetchArray(SQLITE3_ASSOC);
+                    if ($legacyRow && isset($legacyRow['cPass'])) {
+                        $storedPassword = strval($legacyRow['cPass']);
+                    }
+                }
+            }
+        }
+
+        if ($storedPassword === '') {
             respond('error', 'User not found');
         }
 
-        $storedPassword = strval($row['password'] ?? '');
         $passwordInfo = $storedPassword !== '' ? password_get_info($storedPassword) : ['algo' => null];
         $isCurrentValid = false;
 
