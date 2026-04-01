@@ -39,6 +39,19 @@ function settingsStringLength(string $value): int {
     return function_exists('mb_strlen') ? mb_strlen($value) : strlen($value);
 }
 
+function settingsEnsureUserSecurityProfilesTable(AppDbConnection $db): void {
+    $db->exec("CREATE TABLE IF NOT EXISTS user_security_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER NOT NULL,
+        user_id INTEGER NOT NULL UNIQUE,
+        question TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        updated_at INTEGER DEFAULT (strftime('%s','now'))
+    )");
+
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_user_security_profiles_cid ON user_security_profiles(cid)");
+}
+
 function settingsBackupDir(): string {
     $configured = trim((string)(appEnv('TM_BACKUP_DIR', '') ?? ''));
     $dir = $configured !== ''
@@ -403,6 +416,7 @@ function settingsRunDailyAutoBackup(AppDbConnection $db, int $cid): void {
 ensureRbacSchemaForSettings($db);
 seedRolesAndPermissionsForSettings($db, $cid);
 settingsEnsureBackupAuditTable($db);
+settingsEnsureUserSecurityProfilesTable($db);
 
 switch ($action) {
     case 'getBackupCapability':
@@ -413,10 +427,22 @@ switch ($action) {
         break;
 
     case 'loadSettings':
-        $stmt = $db->prepare("SELECT cid, cName, cEmail, question, cLogo, regDate FROM company WHERE cid = :cid LIMIT 1");
+        $uid = intval($_SESSION['user_id'] ?? 0);
+        $stmt = $db->prepare("SELECT c.cid,
+                                     c.cName,
+                                     c.cEmail,
+                                     COALESCE(usp.question, c.question, '') AS question,
+                                     c.cLogo,
+                                     c.regDate
+                              FROM company c
+                              LEFT JOIN user_security_profiles usp
+                                     ON usp.cid = c.cid AND usp.user_id = :uid
+                              WHERE c.cid = :cid
+                              LIMIT 1");
         if (!$stmt) {
             respond('error', 'Failed to load settings');
         }
+        $stmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
         $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
         if (!$row) {
@@ -480,8 +506,13 @@ switch ($action) {
         break;
 
     case 'updateSecurity':
+        $uid = intval($_SESSION['user_id'] ?? 0);
         $question = safe_input($_POST['question'] ?? '');
         $answer = strtolower(safe_input($_POST['answer'] ?? ''));
+
+        if ($uid <= 0) {
+            respond('error', 'Session expired. Please log in again');
+        }
 
         if ($question === '') {
             respond('error', 'Security question is required');
@@ -496,12 +527,20 @@ switch ($action) {
             respond('error', 'Security answer must be at least 2 characters');
         }
 
-        $stmt = $db->prepare("UPDATE company SET question = :question, answer = :answer WHERE cid = :cid");
+        $stmt = $db->prepare("INSERT INTO user_security_profiles (cid, user_id, question, answer, updated_at)
+                              VALUES (:cid, :uid, :question, :answer, :updated_at)
+                              ON CONFLICT(user_id) DO UPDATE SET
+                                  cid = excluded.cid,
+                                  question = excluded.question,
+                                  answer = excluded.answer,
+                                  updated_at = excluded.updated_at");
         if (!$stmt) {
             respond('error', 'Failed to prepare security update');
         }
+        $stmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
         $stmt->bindValue(':question', $question, SQLITE3_TEXT);
         $stmt->bindValue(':answer', $answer, SQLITE3_TEXT);
+        $stmt->bindValue(':updated_at', time(), SQLITE3_INTEGER);
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
 
         if (!$stmt->execute()) {
