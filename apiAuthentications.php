@@ -346,6 +346,98 @@ function assignUserRole(AppDbConnection $db, int $userId, int $cid, string $role
     $stmt->execute();
 }
 
+function findOwnerUserForCompany(AppDbConnection $db, int $cid, string $companyEmail = ''): ?array {
+    if ($cid <= 0) {
+        return null;
+    }
+
+    $stmt = $db->prepare("SELECT u.user_id, u.cid, u.full_name, u.email
+                          FROM users u
+                          LEFT JOIN user_roles ur ON u.user_id = ur.user_id
+                          LEFT JOIN roles r ON ur.role_id = r.role_id
+                          WHERE u.cid = :cid
+                          ORDER BY CASE
+                                    WHEN lower(COALESCE(r.role_name, '')) = 'owner' THEN 1
+                                    WHEN :company_email <> '' AND lower(u.email) = lower(:company_email) THEN 2
+                                    ELSE 3
+                                   END,
+                                   u.user_id ASC
+                          LIMIT 1");
+    if (!$stmt) {
+        return null;
+    }
+
+    $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    $stmt->bindValue(':company_email', $companyEmail, SQLITE3_TEXT);
+    $res = $stmt->execute();
+    if (!$res) {
+        return null;
+    }
+
+    $row = $res->fetchArray(SQLITE3_ASSOC);
+    return $row ?: null;
+}
+
+function syncLegacyCompanyPassword(AppDbConnection $db, string $email, string $passwordHash): bool {
+    $stmt = $db->prepare("UPDATE company SET cPass = :pwd WHERE cEmail = :email");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bindValue(':pwd', $passwordHash, SQLITE3_TEXT);
+    $stmt->bindValue(':email', $email, SQLITE3_TEXT);
+    return (bool)$stmt->execute();
+}
+
+function ensureResettableOwnerUser(AppDbConnection $db, int $cid, string $companyEmail, string $companyName, string $passwordHash, int $now): bool {
+    ensureRbacSchema($db);
+    seedRolesAndPermissions($db, $cid);
+
+    $ownerUser = findOwnerUserForCompany($db, $cid, $companyEmail);
+    if ($ownerUser) {
+        $update = $db->prepare("UPDATE users
+                               SET password = :password
+                               WHERE user_id = :uid AND cid = :cid");
+        if (!$update) {
+            return false;
+        }
+
+        $update->bindValue(':password', $passwordHash, SQLITE3_TEXT);
+        $update->bindValue(':uid', intval($ownerUser['user_id'] ?? 0), SQLITE3_INTEGER);
+        $update->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        return (bool)$update->execute();
+    }
+
+    $insert = $db->prepare("INSERT INTO users (
+                                cid, full_name, email, password, is_active,
+                                email_verified_at, email_verification_token_hash, email_verification_expires_at
+                            ) VALUES (
+                                :cid, :full_name, :email, :password, 1,
+                                :verified_at, NULL, NULL
+                            )");
+    if (!$insert) {
+        return false;
+    }
+
+    $displayName = trim($companyName) !== '' ? $companyName : 'Owner';
+    $insert->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    $insert->bindValue(':full_name', $displayName, SQLITE3_TEXT);
+    $insert->bindValue(':email', $companyEmail, SQLITE3_TEXT);
+    $insert->bindValue(':password', $passwordHash, SQLITE3_TEXT);
+    $insert->bindValue(':verified_at', $now, SQLITE3_INTEGER);
+
+    if (!$insert->execute()) {
+        return false;
+    }
+
+    $userId = intval($db->lastInsertRowID());
+    if ($userId > 0) {
+        assignUserRole($db, $userId, $cid, 'Owner');
+    }
+
+    return $userId > 0;
+}
+
 function getUserRoles(AppDbConnection $db, int $userId): array {
     if ($userId <= 0) {
         return [];
@@ -760,13 +852,15 @@ switch ($action) {
         }
 
         $email = strtolower(safe_input($_POST["fEmail"]));
-        $stmt = $db->prepare("SELECT question FROM company WHERE cEmail = :email");
+        $stmt = $db->prepare("SELECT cid, cName, question FROM company WHERE cEmail = :email");
         $stmt->bindValue(':email', $email, SQLITE3_TEXT);
         $ret = $stmt->execute();
         $row = $ret->fetchArray(SQLITE3_ASSOC);
 
         if ($row) {
             $_SESSION["reset_email"] = $email;
+            $_SESSION["reset_cid"] = intval($row['cid'] ?? 0);
+            $_SESSION["reset_company_name"] = (string)($row['cName'] ?? '');
             respond("success", "Email found", ["question" => $row["question"]]);
         } else {
             respond("error", "Account not found");
@@ -809,18 +903,42 @@ switch ($action) {
             respond("error", "Unauthorized request.");
         }
 
-        $email = $_SESSION["reset_email"];
-        $pwd   = password_hash($_POST["pwd"], PASSWORD_DEFAULT);
+        $email = strtolower((string)$_SESSION["reset_email"]);
+        $cid = intval($_SESSION["reset_cid"] ?? 0);
+        $companyName = (string)($_SESSION["reset_company_name"] ?? '');
+        $pwd = password_hash($_POST["pwd"], PASSWORD_DEFAULT);
 
-        $stmt = $db->prepare("UPDATE company SET cPass = :pwd WHERE cEmail = :email");
-        $stmt->bindValue(':pwd', $pwd, SQLITE3_TEXT);
-        $stmt->bindValue(':email', $email, SQLITE3_TEXT);
+        if ($cid <= 0) {
+            $companyStmt = $db->prepare("SELECT cid, cName FROM company WHERE cEmail = :email LIMIT 1");
+            if (!$companyStmt) {
+                respond("error", "Failed to reset password.");
+            }
+            $companyStmt->bindValue(':email', $email, SQLITE3_TEXT);
+            $companyRes = $companyStmt->execute();
+            $companyRow = $companyRes ? $companyRes->fetchArray(SQLITE3_ASSOC) : false;
+            if (!$companyRow) {
+                respond("error", "Account not found.");
+            }
+            $cid = intval($companyRow['cid'] ?? 0);
+            $companyName = (string)($companyRow['cName'] ?? '');
+        }
 
-        if ($stmt->execute()) {
-            unset($_SESSION["reset_email"], $_SESSION["can_reset"]);
+        $db->exec("BEGIN");
+        try {
+            if (!ensureResettableOwnerUser($db, $cid, $email, $companyName, $pwd, $now)) {
+                throw new Exception('Failed to update user password.');
+            }
+
+            if (!syncLegacyCompanyPassword($db, $email, $pwd)) {
+                throw new Exception('Failed to sync company password.');
+            }
+
+            $db->exec("COMMIT");
+            unset($_SESSION["reset_email"], $_SESSION["reset_cid"], $_SESSION["reset_company_name"], $_SESSION["can_reset"]);
             respond("success", "Password reset successful.");
-        } else {
-            respond("error", "Failed to reset password.");
+        } catch (Throwable $e) {
+            $db->exec("ROLLBACK");
+            respond("error", $e->getMessage());
         }
         break;
 
