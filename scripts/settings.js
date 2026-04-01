@@ -204,9 +204,22 @@ class SettingsPage {
 
     $('#companyName').val(cName === '-' ? '' : cName);
     $('#companyEmail').val(cEmail === '-' ? '' : cEmail);
+    this.ensureSecurityQuestionOption(question);
     $('#securityQuestion').val(question);
     $('#securityAnswer').val('');
     $('#companyLogo').val('');
+  }
+
+  ensureSecurityQuestionOption(question) {
+    const value = String(question || '').trim();
+    const $question = $('#securityQuestion');
+    if (!$question.length || !value) return;
+
+    const hasOption = $question.find(`option[value="${value.replace(/"/g, '\\"')}"]`).length > 0;
+    if (!hasOption) {
+      const safeValue = AppCore.escapeHtml(value);
+      $question.append(`<option value="${safeValue}">${safeValue}</option>`);
+    }
   }
 
   updateProfile() {
@@ -242,8 +255,13 @@ class SettingsPage {
     const answer = String($('#securityAnswer').val() || '').trim();
     const $btn = $('#saveSecurityBtn');
 
-    if (!question || !answer) {
-      this.app.showAlert('Question and answer are required', 'error');
+    if (!question) {
+      this.app.showAlert('Please select a security question', 'error');
+      return;
+    }
+
+    if (!answer) {
+      this.app.showAlert('Security answer is required', 'error');
       return;
     }
 

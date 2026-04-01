@@ -64,7 +64,12 @@ include "INC/navbar.php";
 							<form id="securityForm">
 								<div class="form-group">
 									<label for="securityQuestion">Security Question</label>
-									<input type="text" id="securityQuestion" name="question" class="form-control" required>
+									<select id="securityQuestion" name="question" class="form-control" required>
+										<option value="">Select your security question</option>
+										<option value="what is your mothers maiden name">What is your mother's maiden name?</option>
+										<option value="what is your favourite colour">What is your favourite colour?</option>
+										<option value="what is your favourite game">What is your favourite game?</option>
+									</select>
 								</div>
 								<div class="form-group">
 									<label for="securityAnswer">Security Answer</label>
