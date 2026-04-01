@@ -35,6 +35,10 @@ function toEpochInt($value): int {
     return $ts === false ? 0 : intval($ts);
 }
 
+function settingsStringLength(string $value): int {
+    return function_exists('mb_strlen') ? mb_strlen($value) : strlen($value);
+}
+
 function settingsBackupDir(): string {
     $configured = trim((string)(appEnv('TM_BACKUP_DIR', '') ?? ''));
     $dir = $configured !== ''
@@ -482,13 +486,13 @@ switch ($action) {
         if ($question === '') {
             respond('error', 'Security question is required');
         }
-        if (mb_strlen($question) < 5) {
+        if (settingsStringLength($question) < 5) {
             respond('error', 'Security question must be at least 5 characters');
         }
         if ($answer === '') {
             respond('error', 'Security answer is required');
         }
-        if (mb_strlen($answer) < 2) {
+        if (settingsStringLength($answer) < 2) {
             respond('error', 'Security answer must be at least 2 characters');
         }
 
