@@ -20,9 +20,16 @@ include "INC/navbar.php";
 		<div class="container-fluid">
 			<div class="row">
 				<div class="col-lg-10 offset-lg-1">
-					<div class="profile-tab-nav" role="tablist" aria-label="Profile sections">
-						<button type="button" class="profile-tab-btn active" data-profile-tab="infoTab">User Info</button>
-						<button type="button" class="profile-tab-btn" data-profile-tab="messagesTab">Messaging <span class="badge badge-light ml-1" id="messageUnreadBadge">0</span></button>
+					<div class="profile-tab-nav-wrap">
+						<div class="profile-tab-nav" role="tablist" aria-label="Profile sections">
+							<button type="button" class="profile-tab-btn active" data-profile-tab="infoTab">
+								<i class="fas fa-user mr-1"></i> User Info
+							</button>
+							<button type="button" class="profile-tab-btn" data-profile-tab="messagesTab">
+								<i class="fas fa-comments mr-1"></i> Messages
+								<span class="chat-tab-badge" id="messageUnreadBadge"></span>
+							</button>
+						</div>
 					</div>
 
 					<div id="infoTab" class="profile-tab-panel is-active">
@@ -98,50 +105,64 @@ include "INC/navbar.php";
 					</div>
 
 					<div id="messagesTab" class="profile-tab-panel">
-						<div class="chat-shell card shadow-sm">
-							<div class="chat-sidebar border-right">
-								<div class="chat-sidebar-head d-flex justify-content-between align-items-center">
-									<h5 class="mb-0">Chats</h5>
-									<button type="button" class="btn btn-sm btn-outline-secondary" id="refreshMessagesBtn">Refresh</button>
+						<div class="chat-shell">
+							<!-- Sidebar -->
+							<div class="chat-sidebar">
+								<div class="chat-sidebar-head">
+									<div class="d-flex align-items-center gap-2">
+										<span class="chat-live-dot mr-2" title="Auto-refreshing every 5s"></span>
+										<span class="font-weight-bold" style="font-size:.95rem;">Messages</span>
+									</div>
+									<button type="button" class="btn btn-sm btn-outline-light" id="refreshMessagesBtn" title="Refresh conversations">
+										<i class="fas fa-sync-alt"></i>
+									</button>
 								</div>
-								<div class="chat-sidebar-search p-2 border-bottom">
-									<input type="text" id="chatSearch" class="form-control form-control-sm" placeholder="Search teammate">
+								<div class="chat-sidebar-search">
+									<input type="text" id="chatSearch" class="form-control form-control-sm" placeholder="&#128269; Search teammates...">
 								</div>
 								<div class="chat-conversation-list" id="chatConversationList">
-									<div class="text-muted p-3">Loading chats...</div>
+									<div class="chat-conv-empty">Loading conversations...</div>
 								</div>
 							</div>
 
+							<!-- Main chat pane -->
 							<div class="chat-main">
-								<div class="chat-main-head border-bottom d-flex justify-content-between align-items-center" id="chatMainHead">
-									<div class="d-flex align-items-center">
-										<button type="button" class="btn btn-sm btn-outline-secondary mr-2 d-none" id="chatBackBtn">Back</button>
-										<div>
+								<div class="chat-main-head" id="chatMainHead">
+									<button type="button" class="btn btn-link d-none p-0 chat-back-btn" id="chatBackBtn">
+										<i class="fas fa-chevron-left"></i>
+									</button>
+									<div id="chatHeadAvatar"></div>
+									<div class="chat-main-head-info">
 										<div class="font-weight-bold" id="chatActiveName">Select a teammate</div>
-										<small class="text-muted" id="chatActiveMeta">Use this channel for information, reports, and suggestions.</small>
-										</div>
+										<small class="text-muted" id="chatActiveMeta">Choose someone from the list to start chatting</small>
+									</div>
+									<div class="ml-auto">
+										<span class="chat-live-dot" title="Live — updates every 5s"></span>
 									</div>
 								</div>
+
 								<div class="chat-thread" id="chatThread">
-									<div class="chat-empty">Choose a teammate from the left to start messaging.</div>
+									<div class="chat-empty">
+										<i class="fas fa-comments fa-3x mb-3 d-block"></i>
+										Choose a teammate to start messaging
+									</div>
 								</div>
-								<div class="chat-compose border-top">
-									<form id="messageForm" class="chat-compose-form">
-										<div class="form-row mb-2">
-											<div class="col-6 col-md-4">
-												<select id="messageCategory" class="form-control form-control-sm">
-													<option value="info">Information</option>
-													<option value="report">Report</option>
-													<option value="suggestion">Suggestion</option>
-												</select>
-											</div>
-											<div class="col-6 col-md-8">
-												<input type="text" id="messageSubject" class="form-control form-control-sm" maxlength="150" placeholder="Subject (optional)">
-											</div>
+
+								<div class="chat-compose">
+									<form id="messageForm">
+										<div class="chat-compose-meta">
+											<select id="messageCategory" class="form-control form-control-sm chat-category-select">
+												<option value="info">&#128203; Info</option>
+												<option value="report">&#128202; Report</option>
+												<option value="suggestion">&#128161; Suggestion</option>
+											</select>
+											<input type="text" id="messageSubject" class="form-control form-control-sm" maxlength="150" placeholder="Subject (optional)">
 										</div>
-										<div class="d-flex align-items-end">
-											<textarea id="messageBody" class="form-control chat-compose-input" rows="2" maxlength="5000" placeholder="Type a message"></textarea>
-											<button type="submit" class="btn btn-success ml-2" id="sendMessageBtn">Send</button>
+										<div class="chat-compose-row">
+											<textarea id="messageBody" class="form-control chat-compose-input" rows="1" maxlength="5000" placeholder="Type a message… (Ctrl+Enter to send)"></textarea>
+											<button type="submit" class="btn btn-success chat-send-btn" id="sendMessageBtn">
+												<i class="fas fa-paper-plane"></i>
+											</button>
 										</div>
 									</form>
 								</div>

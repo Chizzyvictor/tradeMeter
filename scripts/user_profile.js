@@ -75,6 +75,20 @@ class UserProfilePage {
         this.markMessageRead(messageId);
       }
     });
+
+    // Auto-grow textarea
+    $('#messageBody').on('input', function () {
+      this.style.height = 'auto';
+      this.style.height = `${Math.min(this.scrollHeight, 150)}px`;
+    });
+
+    // Ctrl+Enter to send
+    $('#messageBody').on('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        this.sendMessage();
+      }
+    });
   }
 
   switchProfileTab(tabId) {
@@ -230,6 +244,7 @@ class UserProfilePage {
     }
 
     this.isLoadingMessages = true;
+    $('#refreshMessagesBtn i').addClass('fa-spin');
     this.app.ajaxHelper({
       url: 'apiUserProfile.php',
       action: 'loadMessagingData',
@@ -244,7 +259,7 @@ class UserProfilePage {
         this.messagePool = [...inbox, ...sent];
 
         const unreadCount = parseInt(data.unread_count || 0, 10);
-        $('#messageUnreadBadge').text(String(unreadCount));
+        $('#messageUnreadBadge').text(unreadCount > 0 ? String(unreadCount) : '');
         $('#globalMessageUnreadBadge').text(String(unreadCount));
         $('#globalMessageUnreadBadge').toggleClass('badge-danger', unreadCount > 0).toggleClass('badge-light', unreadCount <= 0);
 
@@ -257,6 +272,7 @@ class UserProfilePage {
       },
       onComplete: () => {
         this.isLoadingMessages = false;
+        $('#refreshMessagesBtn i').removeClass('fa-spin');
       }
     });
   }
@@ -305,28 +321,35 @@ class UserProfilePage {
 
     const $container = $('#chatConversationList');
     if (!rows.length) {
-      $container.html('<div class="text-muted p-3">No matching teammates.</div>');
+      $container.html('<div class="chat-conv-empty"><i class="fas fa-user-friends fa-2x mb-2 d-block"></i>No matching teammates.</div>');
       return;
     }
 
     const html = rows.map((row) => {
       const activeClass = row.userId === this.activeConversationUserId ? 'is-active' : '';
       const name = AppCore.escapeHtml(row.user.full_name || 'User');
-      const meta = AppCore.escapeHtml(row.user.role_name || 'User');
-      const previewRaw = row.latest ? (row.latest.body || row.latest.subject || '') : 'No messages yet';
-      const preview = AppCore.escapeHtml(previewRaw).slice(0, 58);
-      const time = row.latest ? this.app.formatDateSafe(row.latest.created_at, '-') : '-';
-      const unreadBadge = row.unread > 0 ? `<span class="badge badge-success">${row.unread}</span>` : '';
+      const initials = UserProfilePage.avatarInitials(row.user.full_name || 'U');
+      const color = UserProfilePage.avatarColor(row.user.full_name || 'U');
+      let previewRaw = '';
+      if (row.latest) {
+        const isMine = parseInt(row.latest.sender_user_id || 0, 10) === this.currentUserId;
+        previewRaw = (isMine ? 'You: ' : '') + (row.latest.body || row.latest.subject || '');
+      } else {
+        previewRaw = 'No messages yet';
+      }
+      const preview = AppCore.escapeHtml(previewRaw).slice(0, 55);
+      const time = row.latest ? this.relativeTime(row.latest.created_at) : '';
+      const unreadBadge = row.unread > 0 ? `<span class="chat-unread-badge">${row.unread}</span>` : '';
       return `
         <button type="button" class="chat-conversation-item ${activeClass}" data-user-id="${row.userId}">
-          <div class="d-flex justify-content-between align-items-start">
-            <div class="text-left">
-              <div class="font-weight-bold">${name}</div>
-              <small class="text-muted d-block">${meta}</small>
-              <small class="text-muted d-block">${preview}</small>
+          <div class="chat-avatar" style="background:${color}">${initials}</div>
+          <div class="chat-conv-body">
+            <div class="chat-conv-top">
+              <span class="chat-conv-name">${name}</span>
+              <span class="chat-conv-time">${time}</span>
             </div>
-            <div class="text-right ml-2">
-              <small class="text-muted d-block">${time}</small>
+            <div class="chat-conv-bottom">
+              <span class="chat-conv-preview">${preview}</span>
               ${unreadBadge}
             </div>
           </div>
@@ -381,49 +404,86 @@ class UserProfilePage {
 
     if (!activeUser) {
       $('#chatActiveName').text('Select a teammate');
-      $('#chatActiveMeta').text('Use this channel for information, reports, and suggestions.');
-      $thread.html('<div class="chat-empty">Choose a teammate from the left to start messaging.</div>');
+      $('#chatActiveMeta').text('Choose someone from the list to start chatting');
+      $('#chatHeadAvatar').html('');
+      $thread.html('<div class="chat-empty"><i class="fas fa-comments fa-3x mb-3 d-block"></i>Choose a teammate from the left to start messaging.</div>');
       this.lastRenderedConversationUserId = 0;
       this.pendingAutoScroll = false;
       return;
     }
 
+    // Update chat header
+    const initials = UserProfilePage.avatarInitials(activeUser.full_name || 'U');
+    const color = UserProfilePage.avatarColor(activeUser.full_name || 'U');
+    $('#chatHeadAvatar').html(`<div class="chat-avatar chat-avatar-sm" style="background:${color}">${initials}</div>`);
     $('#chatActiveName').text(activeUser.full_name || 'User');
-    $('#chatActiveMeta').text(`${activeUser.role_name || 'User'} | ${activeUser.email || ''}`);
+    $('#chatActiveMeta').text(activeUser.role_name || 'Member');
 
     const messages = this.getActiveConversationMessages();
     if (!messages.length) {
-      $thread.html('<div class="chat-empty">No messages yet. Say hello.</div>');
+      $thread.html('<div class="chat-empty"><i class="fas fa-comment-dots fa-3x mb-3 d-block"></i>No messages yet — say hello!</div>');
       return;
     }
 
-    const html = messages.map((message) => {
+    // Find first unread incoming message index for unread divider
+    const firstUnreadIdx = messages.findIndex((m) =>
+      parseInt(m.sender_user_id || 0, 10) !== this.currentUserId &&
+      parseInt(m.is_read || 0, 10) === 0
+    );
+
+    let html = '';
+    let lastDateGroup = '';
+
+    messages.forEach((message, index) => {
       const senderId = parseInt(message.sender_user_id || 0, 10);
       const outgoing = senderId === this.currentUserId;
-      const bubbleClass = outgoing ? 'chat-bubble-out' : 'chat-bubble-in';
-      const status = outgoing
-        ? (parseInt(message.is_read || 0, 10) === 1 ? 'Read' : 'Sent')
-        : (parseInt(message.is_read || 0, 10) === 1 ? 'Read' : 'Unread');
+      const ts = parseInt(message.created_at || 0, 10);
+      const isRead = parseInt(message.is_read || 0, 10) === 1;
+
+      // Date group separator
+      const dateLabel = this.dateGroupLabel(ts);
+      if (dateLabel !== lastDateGroup) {
+        html += `<div class="chat-date-sep"><span>${dateLabel}</span></div>`;
+        lastDateGroup = dateLabel;
+      }
+
+      // Unread messages divider (shown before the first unread)
+      if (index === firstUnreadIdx && firstUnreadIdx > 0) {
+        const remaining = messages.length - firstUnreadIdx;
+        html += `<div class="chat-unread-sep"><span><i class="fas fa-arrow-down mr-1"></i>${remaining} unread message${remaining !== 1 ? 's' : ''} below</span></div>`;
+      }
+
       const body = AppCore.escapeHtml(message.body || '').replace(/\n/g, '<br>');
       const category = AppCore.escapeHtml(message.category || 'info');
-      const subject = AppCore.escapeHtml(message.subject || 'Message');
-      const time = this.app.formatDateSafe(message.created_at, '-');
-      const markBtn = (!outgoing && parseInt(message.is_read || 0, 10) === 0)
-        ? `<button type="button" class="btn btn-sm btn-outline-success message-read-btn" data-message-id="${parseInt(message.message_id || 0, 10)}">Mark read</button>`
+      const subject = message.subject ? AppCore.escapeHtml(message.subject) : '';
+      const timeStr = this.formatTime(ts);
+
+      let readIndicator = '';
+      if (outgoing) {
+        readIndicator = isRead
+          ? '<span class="chat-tick read" title="Read"><i class="fas fa-check-double"></i></span>'
+          : '<span class="chat-tick sent" title="Delivered"><i class="fas fa-check"></i></span>';
+      }
+
+      const markBtn = (!outgoing && !isRead)
+        ? `<button type="button" class="chat-mark-read-btn message-read-btn" data-message-id="${parseInt(message.message_id || 0, 10)}"><i class="fas fa-check mr-1"></i>Mark as read</button>`
         : '';
 
-      return `
+      html += `
         <div class="chat-bubble-row ${outgoing ? 'is-out' : 'is-in'}">
-          <div class="chat-bubble ${bubbleClass}">
-            <div class="chat-bubble-title">${subject}</div>
-            <div class="chat-bubble-category">${category}</div>
+          <div class="chat-bubble ${outgoing ? 'chat-bubble-out' : 'chat-bubble-in'}">
+            ${subject ? `<div class="chat-bubble-title">${subject}</div>` : ''}
+            <span class="chat-cat-chip ${category}">${category}</span>
             <div class="chat-bubble-body">${body}</div>
-            <div class="chat-bubble-meta">${time} • ${status}</div>
+            <div class="chat-bubble-meta">
+              <span>${timeStr}</span>
+              ${readIndicator}
+            </div>
             ${markBtn}
           </div>
         </div>
       `;
-    }).join('');
+    });
 
     $thread.html(html);
     if (shouldKeepBottom) {
@@ -493,6 +553,62 @@ class UserProfilePage {
         this.loadMessagingData();
       }
     });
+  }
+
+  /* -------------------------------------------------------
+   * Instance helpers: time formatting
+   * ------------------------------------------------------- */
+  relativeTime(ts) {
+    const now = Math.floor(Date.now() / 1000);
+    const diff = now - parseInt(ts || 0, 10);
+    if (diff < 60)        return 'Just now';
+    if (diff < 3600)      return `${Math.floor(diff / 60)}m`;
+    if (diff < 86400)     return `${Math.floor(diff / 3600)}h`;
+    if (diff < 86400 * 6) return `${Math.floor(diff / 86400)}d`;
+    return this.app.formatDateSafe(ts, '-');
+  }
+
+  formatTime(ts) {
+    if (!ts) return '';
+    const d = new Date(parseInt(ts, 10) * 1000);
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  }
+
+  dateGroupLabel(ts) {
+    const ms = parseInt(ts || 0, 10) * 1000;
+    const msgDay = new Date(ms);
+    msgDay.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    if (msgDay.getTime() === today.getTime())     return 'Today';
+    if (msgDay.getTime() === yesterday.getTime()) return 'Yesterday';
+    return new Date(ms).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  }
+
+  /* -------------------------------------------------------
+   * Static helpers: avatar initials + color
+   * ------------------------------------------------------- */
+  static avatarInitials(name) {
+    const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0][0].toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  static avatarColor(name) {
+    const palette = [
+      '#075e54', '#0369a1', '#7c3aed', '#b45309',
+      '#c2410c', '#047857', '#1d4ed8', '#9333ea',
+      '#0e7490', '#b91c1c'
+    ];
+    let h = 0;
+    const s = name || '';
+    for (let i = 0; i < s.length; i++) {
+      h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff;
+    }
+    return palette[h % palette.length];
   }
 }
 
