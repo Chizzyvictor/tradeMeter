@@ -7,6 +7,8 @@ class UserProfilePage {
     this.messagePool = [];
     this.activeConversationUserId = 0;
     this.chatFilter = '';
+    this.messagesRefreshTimer = null;
+    this.isLoadingMessages = false;
     this.bindEvents();
     this.initialize();
   }
@@ -14,6 +16,7 @@ class UserProfilePage {
   initialize() {
     this.loadUserProfile();
     this.loadMessagingData();
+    this.startMessagesAutoRefresh();
   }
 
   bindEvents() {
@@ -48,6 +51,14 @@ class UserProfilePage {
       this.loadMessagingData();
     });
 
+    $('#chatBackBtn').on('click', () => {
+      this.showMobileConversationList();
+    });
+
+    $(window).on('resize', () => {
+      this.applyMobileChatMode();
+    });
+
     $(document).on('click', '.chat-conversation-item', (e) => {
       const userId = parseInt($(e.currentTarget).data('userId'), 10);
       if (!Number.isNaN(userId) && userId > 0) {
@@ -68,6 +79,55 @@ class UserProfilePage {
     $(`.profile-tab-btn[data-profile-tab="${tabId}"]`).addClass('active');
     $('.profile-tab-panel').removeClass('is-active');
     $(`#${tabId}`).addClass('is-active');
+
+    if (tabId === 'messagesTab') {
+      this.showMobileConversationList();
+      this.loadMessagingData();
+    }
+  }
+
+  isMobileView() {
+    return window.matchMedia('(max-width: 991.98px)').matches;
+  }
+
+  applyMobileChatMode() {
+    if (!this.isMobileView()) {
+      $('.chat-shell').removeClass('mobile-chat-open');
+      $('body').removeClass('chat-mobile-open');
+      return;
+    }
+
+    if ($('#messagesTab').hasClass('is-active')) {
+      this.showMobileConversationList();
+    }
+  }
+
+  showMobileConversationList() {
+    if (!this.isMobileView()) {
+      return;
+    }
+    $('.chat-shell').removeClass('mobile-chat-open');
+    $('body').removeClass('chat-mobile-open');
+  }
+
+  openMobileConversation() {
+    if (!this.isMobileView()) {
+      return;
+    }
+    $('.chat-shell').addClass('mobile-chat-open');
+    $('body').addClass('chat-mobile-open');
+  }
+
+  startMessagesAutoRefresh() {
+    if (this.messagesRefreshTimer) {
+      clearInterval(this.messagesRefreshTimer);
+    }
+
+    this.messagesRefreshTimer = setInterval(() => {
+      if ($('#messagesTab').hasClass('is-active')) {
+        this.loadMessagingData();
+      }
+    }, 5000);
   }
 
   loadUserProfile() {
@@ -157,6 +217,11 @@ class UserProfilePage {
   }
 
   loadMessagingData() {
+    if (this.isLoadingMessages) {
+      return;
+    }
+
+    this.isLoadingMessages = true;
     this.app.ajaxHelper({
       url: 'apiUserProfile.php',
       action: 'loadMessagingData',
@@ -181,6 +246,9 @@ class UserProfilePage {
 
         this.renderConversationList();
         this.renderActiveConversation();
+      },
+      onComplete: () => {
+        this.isLoadingMessages = false;
       }
     });
   }
@@ -331,6 +399,7 @@ class UserProfilePage {
     this.activeConversationUserId = parseInt(userId || 0, 10);
     this.renderConversationList();
     this.renderActiveConversation();
+    this.openMobileConversation();
   }
 
   sendMessage() {

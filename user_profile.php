@@ -114,9 +114,12 @@ include "INC/navbar.php";
 
 							<div class="chat-main">
 								<div class="chat-main-head border-bottom d-flex justify-content-between align-items-center" id="chatMainHead">
-									<div>
+									<div class="d-flex align-items-center">
+										<button type="button" class="btn btn-sm btn-outline-secondary mr-2 d-none" id="chatBackBtn">Back</button>
+										<div>
 										<div class="font-weight-bold" id="chatActiveName">Select a teammate</div>
 										<small class="text-muted" id="chatActiveMeta">Use this channel for information, reports, and suggestions.</small>
+										</div>
 									</div>
 								</div>
 								<div class="chat-thread" id="chatThread">
