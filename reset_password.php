@@ -7,6 +7,11 @@ if (!empty($_SESSION['isLogedin'])) {
     exit;
 }
 
+// Ensure CSRF token exists for the form submission
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 include "INC/header.php";
 
 $token = isset($_GET['token']) ? trim(strval($_GET['token'])) : '';
@@ -14,8 +19,8 @@ $token = isset($_GET['token']) ? trim(strval($_GET['token'])) : '';
 
 <div class="container py-4">
 
-    <!-- RESET PASSWORD TAB -->
-    <div class="tab-content panel-box" id="resetPwdTab">
+    <!-- RESET PASSWORD -->
+    <div class="panel-box" id="resetPwdTab">
         <h4 class="text-center text-info mb-4">Reset Your Password</h4>
         <div class="col-lg-6 m-auto d-block">
             <?php if ($token === ''): ?>
@@ -67,5 +72,6 @@ $token = isset($_GET['token']) ? trim(strval($_GET['token'])) : '';
 <?php include "INC/footer.php"; ?>
 <script src="scripts/reset_password.js?v=<?= asset_ver('scripts/reset_password.js') ?>"></script>
 
+</div>
 </body>
 </html>
