@@ -1,7 +1,12 @@
 class UserProfilePage {
   constructor() {
-    const csrf   = $('meta[name="csrf-token"]').attr('content') || '';
-    this.app     = new AppCore(csrf);
+    const csrf = $('meta[name="csrf-token"]').attr('content') || '';
+    this.app = new AppCore(csrf);
+    this.currentUserId = 0;
+    this.users = [];
+    this.messagePool = [];
+    this.activeConversationUserId = 0;
+    this.chatFilter = '';
     this.bindEvents();
     this.initialize();
   }
@@ -12,6 +17,13 @@ class UserProfilePage {
   }
 
   bindEvents() {
+    $(document).on('click', '.profile-tab-btn', (e) => {
+      const tabId = String($(e.currentTarget).data('profileTab') || '');
+      if (tabId) {
+        this.switchProfileTab(tabId);
+      }
+    });
+
     $('#emailForm').on('submit', (e) => {
       e.preventDefault();
       this.changeEmail();
@@ -27,8 +39,20 @@ class UserProfilePage {
       this.sendMessage();
     });
 
+    $('#chatSearch').on('input', (e) => {
+      this.chatFilter = String($(e.currentTarget).val() || '').trim().toLowerCase();
+      this.renderConversationList();
+    });
+
     $('#refreshMessagesBtn').on('click', () => {
       this.loadMessagingData();
+    });
+
+    $(document).on('click', '.chat-conversation-item', (e) => {
+      const userId = parseInt($(e.currentTarget).data('userId'), 10);
+      if (!Number.isNaN(userId) && userId > 0) {
+        this.selectConversation(userId);
+      }
     });
 
     $(document).on('click', '.message-read-btn', (e) => {
@@ -37,6 +61,13 @@ class UserProfilePage {
         this.markMessageRead(messageId);
       }
     });
+  }
+
+  switchProfileTab(tabId) {
+    $('.profile-tab-btn').removeClass('active');
+    $(`.profile-tab-btn[data-profile-tab="${tabId}"]`).addClass('active');
+    $('.profile-tab-panel').removeClass('is-active');
+    $(`#${tabId}`).addClass('is-active');
   }
 
   loadUserProfile() {
@@ -133,103 +164,177 @@ class UserProfilePage {
       errorMsg: 'Failed to load company messages',
       onSuccess: (response) => {
         const data = response.data || {};
-        this.renderMessagingUsers(data.users || []);
-        this.renderInbox(data.inbox || []);
-        this.renderSent(data.sent || []);
-        $('#messageUnreadBadge').text(`Unread: ${parseInt(data.unread_count || 0, 10)}`);
+        this.currentUserId = parseInt(data.current_user_id || 0, 10);
+        this.users = Array.isArray(data.users) ? data.users : [];
+        const inbox = Array.isArray(data.inbox) ? data.inbox : [];
+        const sent = Array.isArray(data.sent) ? data.sent : [];
+        this.messagePool = [...inbox, ...sent];
+
+        const unreadCount = parseInt(data.unread_count || 0, 10);
+        $('#messageUnreadBadge').text(String(unreadCount));
+        $('#globalMessageUnreadBadge').text(String(unreadCount));
+        $('#globalMessageUnreadBadge').toggleClass('badge-danger', unreadCount > 0).toggleClass('badge-light', unreadCount <= 0);
+
+        if (this.activeConversationUserId <= 0 && this.users.length) {
+          this.activeConversationUserId = parseInt(this.users[0].user_id || 0, 10);
+        }
+
+        this.renderConversationList();
+        this.renderActiveConversation();
       }
     });
   }
 
-  renderMessagingUsers(users) {
-    const $select = $('#messageRecipient');
-    $select.empty();
-    $select.append('<option value="">Select colleague</option>');
+  getUserById(userId) {
+    return this.users.find((item) => parseInt(item.user_id || 0, 10) === parseInt(userId || 0, 10)) || null;
+  }
 
-    if (!Array.isArray(users) || !users.length) {
-      $select.append('<option value="" disabled>No other active users found</option>');
-      return;
-    }
-
-    users.forEach((user) => {
+  buildConversationRows() {
+    return this.users.map((user) => {
       const userId = parseInt(user.user_id || 0, 10);
-      const label = `${user.full_name || 'User'} (${user.role_name || 'User'}) - ${user.email || ''}`;
-      $select.append(`<option value="${userId}">${AppCore.escapeHtml(label)}</option>`);
+      const messages = this.messagePool
+        .filter((message) => {
+          const senderId = parseInt(message.sender_user_id || 0, 10);
+          const recipientId = parseInt(message.recipient_user_id || 0, 10);
+          return (senderId === userId && recipientId === this.currentUserId)
+            || (recipientId === userId && senderId === this.currentUserId);
+        })
+        .sort((a, b) => parseInt(b.created_at || 0, 10) - parseInt(a.created_at || 0, 10));
+
+      const latest = messages[0] || null;
+      const unread = messages.filter((message) => {
+        const senderId = parseInt(message.sender_user_id || 0, 10);
+        return senderId === userId && parseInt(message.is_read || 0, 10) === 0;
+      }).length;
+
+      return {
+        user,
+        userId,
+        latest,
+        unread
+      };
+    }).sort((a, b) => {
+      const at = parseInt(a.latest?.created_at || 0, 10);
+      const bt = parseInt(b.latest?.created_at || 0, 10);
+      return bt - at;
     });
   }
 
-  renderInbox(messages) {
-    this.renderMessageList({
-      selector: '#messageInboxList',
-      messages,
-      mode: 'inbox',
-      emptyText: 'No messages received yet.'
+  renderConversationList() {
+    const rows = this.buildConversationRows().filter((row) => {
+      if (!this.chatFilter) return true;
+      const hay = `${row.user.full_name || ''} ${row.user.email || ''} ${row.user.role_name || ''}`.toLowerCase();
+      return hay.includes(this.chatFilter);
     });
-  }
 
-  renderSent(messages) {
-    this.renderMessageList({
-      selector: '#messageSentList',
-      messages,
-      mode: 'sent',
-      emptyText: 'No messages sent yet.'
-    });
-  }
-
-  renderMessageList({ selector, messages, mode, emptyText }) {
-    const $container = $(selector);
-    if (!Array.isArray(messages) || !messages.length) {
-      $container.html(`<div class="list-group-item text-muted">${AppCore.escapeHtml(emptyText)}</div>`);
+    const $container = $('#chatConversationList');
+    if (!rows.length) {
+      $container.html('<div class="text-muted p-3">No matching teammates.</div>');
       return;
     }
 
-    const html = messages.map((message) => {
-      const subject = AppCore.escapeHtml(message.subject || '(No subject)');
-      const body = AppCore.escapeHtml(message.body || '').replace(/\n/g, '<br>');
-      const category = AppCore.escapeHtml(message.category || 'info');
-      const createdAt = this.app.formatDateSafe(message.created_at, '-');
-      const isRead = parseInt(message.is_read || 0, 10) === 1;
-      const partyName = mode === 'inbox'
-        ? AppCore.escapeHtml(message.sender_name || 'Unknown user')
-        : AppCore.escapeHtml(message.recipient_name || 'Unknown user');
-      const partyEmail = mode === 'inbox'
-        ? AppCore.escapeHtml(message.sender_email || '')
-        : AppCore.escapeHtml(message.recipient_email || '');
-      const badgeClass = category === 'report'
-        ? 'badge-warning'
-        : category === 'suggestion'
-          ? 'badge-primary'
-          : 'badge-info';
-      const readButton = mode === 'inbox' && !isRead
-        ? `<button type="button" class="btn btn-sm btn-outline-success message-read-btn" data-message-id="${parseInt(message.message_id || 0, 10)}">Mark read</button>`
-        : '';
-
+    const html = rows.map((row) => {
+      const activeClass = row.userId === this.activeConversationUserId ? 'is-active' : '';
+      const name = AppCore.escapeHtml(row.user.full_name || 'User');
+      const meta = AppCore.escapeHtml(row.user.role_name || 'User');
+      const previewRaw = row.latest ? (row.latest.body || row.latest.subject || '') : 'No messages yet';
+      const preview = AppCore.escapeHtml(previewRaw).slice(0, 58);
+      const time = row.latest ? this.app.formatDateSafe(row.latest.created_at, '-') : '-';
+      const unreadBadge = row.unread > 0 ? `<span class="badge badge-success">${row.unread}</span>` : '';
       return `
-        <div class="list-group-item ${mode === 'inbox' && !isRead ? 'bg-light' : ''}">
-          <div class="d-flex justify-content-between align-items-start mb-2">
-            <div>
-              <div class="font-weight-bold">${subject}</div>
-              <div class="small text-muted">${mode === 'inbox' ? 'From' : 'To'}: ${partyName}${partyEmail ? ` &lt;${partyEmail}&gt;` : ''}</div>
+        <button type="button" class="chat-conversation-item ${activeClass}" data-user-id="${row.userId}">
+          <div class="d-flex justify-content-between align-items-start">
+            <div class="text-left">
+              <div class="font-weight-bold">${name}</div>
+              <small class="text-muted d-block">${meta}</small>
+              <small class="text-muted d-block">${preview}</small>
             </div>
             <div class="text-right ml-2">
-              <span class="badge ${badgeClass}">${category}</span>
-              <div class="small text-muted mt-1">${createdAt}</div>
+              <small class="text-muted d-block">${time}</small>
+              ${unreadBadge}
             </div>
           </div>
-          <div class="small mb-2" style="white-space: normal;">${body}</div>
-          <div class="d-flex justify-content-between align-items-center">
-            <span class="small ${isRead ? 'text-success' : 'text-warning'}">${isRead ? 'Read' : 'Unread'}</span>
-            ${readButton}
-          </div>
-        </div>
+        </button>
       `;
     }).join('');
 
     $container.html(html);
   }
 
+  getActiveConversationMessages() {
+    const activeUserId = parseInt(this.activeConversationUserId || 0, 10);
+    if (activeUserId <= 0) return [];
+
+    return this.messagePool
+      .filter((message) => {
+        const senderId = parseInt(message.sender_user_id || 0, 10);
+        const recipientId = parseInt(message.recipient_user_id || 0, 10);
+        return (senderId === activeUserId && recipientId === this.currentUserId)
+          || (recipientId === activeUserId && senderId === this.currentUserId);
+      })
+      .sort((a, b) => parseInt(a.created_at || 0, 10) - parseInt(b.created_at || 0, 10));
+  }
+
+  renderActiveConversation() {
+    const activeUser = this.getUserById(this.activeConversationUserId);
+    const $thread = $('#chatThread');
+
+    if (!activeUser) {
+      $('#chatActiveName').text('Select a teammate');
+      $('#chatActiveMeta').text('Use this channel for information, reports, and suggestions.');
+      $thread.html('<div class="chat-empty">Choose a teammate from the left to start messaging.</div>');
+      return;
+    }
+
+    $('#chatActiveName').text(activeUser.full_name || 'User');
+    $('#chatActiveMeta').text(`${activeUser.role_name || 'User'} | ${activeUser.email || ''}`);
+
+    const messages = this.getActiveConversationMessages();
+    if (!messages.length) {
+      $thread.html('<div class="chat-empty">No messages yet. Say hello.</div>');
+      return;
+    }
+
+    const html = messages.map((message) => {
+      const senderId = parseInt(message.sender_user_id || 0, 10);
+      const outgoing = senderId === this.currentUserId;
+      const bubbleClass = outgoing ? 'chat-bubble-out' : 'chat-bubble-in';
+      const status = outgoing
+        ? (parseInt(message.is_read || 0, 10) === 1 ? 'Read' : 'Sent')
+        : (parseInt(message.is_read || 0, 10) === 1 ? 'Read' : 'Unread');
+      const body = AppCore.escapeHtml(message.body || '').replace(/\n/g, '<br>');
+      const category = AppCore.escapeHtml(message.category || 'info');
+      const subject = AppCore.escapeHtml(message.subject || 'Message');
+      const time = this.app.formatDateSafe(message.created_at, '-');
+      const markBtn = (!outgoing && parseInt(message.is_read || 0, 10) === 0)
+        ? `<button type="button" class="btn btn-sm btn-outline-success message-read-btn" data-message-id="${parseInt(message.message_id || 0, 10)}">Mark read</button>`
+        : '';
+
+      return `
+        <div class="chat-bubble-row ${outgoing ? 'is-out' : 'is-in'}">
+          <div class="chat-bubble ${bubbleClass}">
+            <div class="chat-bubble-title">${subject}</div>
+            <div class="chat-bubble-category">${category}</div>
+            <div class="chat-bubble-body">${body}</div>
+            <div class="chat-bubble-meta">${time} • ${status}</div>
+            ${markBtn}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    $thread.html(html);
+    $thread.scrollTop($thread[0].scrollHeight);
+  }
+
+  selectConversation(userId) {
+    this.activeConversationUserId = parseInt(userId || 0, 10);
+    this.renderConversationList();
+    this.renderActiveConversation();
+  }
+
   sendMessage() {
-    const recipientUserId = parseInt($('#messageRecipient').val(), 10);
+    const recipientUserId = parseInt(this.activeConversationUserId || 0, 10);
     const category = $('#messageCategory').val();
     const subject = $('#messageSubject').val().trim();
     const body = $('#messageBody').val().trim();
@@ -255,13 +360,14 @@ class UserProfilePage {
       data: {
         recipient_user_id: recipientUserId,
         category,
-        subject,
+        subject: subject || `${category.toUpperCase()} update`,
         body
       },
       successMsg: 'Message sent successfully',
       errorMsg: 'Failed to send message',
       onSuccess: () => {
-        $('#messageForm')[0].reset();
+        $('#messageBody').val('');
+        $('#messageSubject').val('');
         this.loadMessagingData();
       }
     });

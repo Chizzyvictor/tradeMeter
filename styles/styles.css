@@ -268,6 +268,219 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 .tab-content { display: none; }
 #loginTab, #home { display: block; }
 
+.profile-tab-nav {
+    display: inline-flex;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    padding: 4px;
+    background: var(--color-input);
+    margin-bottom: 1rem;
+}
+
+.profile-tab-btn {
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    border-radius: 999px;
+    padding: 0.45rem 1rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.profile-tab-btn.active {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.profile-tab-panel {
+    display: none;
+}
+
+.profile-tab-panel.is-active {
+    display: block;
+}
+
+.chat-shell {
+    min-height: 620px;
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+}
+
+.chat-sidebar {
+    background: var(--color-input);
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-sidebar-head {
+    padding: 0.9rem 1rem;
+    background: #0b141a;
+    color: #fff;
+}
+
+.dark-mode .chat-sidebar-head {
+    background: #111b21;
+}
+
+.chat-conversation-list {
+    overflow-y: auto;
+    max-height: 100%;
+}
+
+.chat-conversation-item {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+    background: #fff;
+    padding: 0.75rem 0.85rem;
+    text-align: left;
+}
+
+.dark-mode .chat-conversation-item {
+    background: #111b21;
+    border-bottom-color: rgba(71, 85, 105, 0.35);
+}
+
+.chat-conversation-item:hover,
+.chat-conversation-item.is-active {
+    background: #e9edef;
+}
+
+.dark-mode .chat-conversation-item:hover,
+.dark-mode .chat-conversation-item.is-active {
+    background: #202c33;
+}
+
+.chat-main {
+    display: flex;
+    flex-direction: column;
+    background: #efeae2;
+}
+
+.dark-mode .chat-main {
+    background: #0b141a;
+}
+
+.chat-main-head {
+    padding: 0.75rem 1rem;
+    background: #f0f2f5;
+}
+
+.dark-mode .chat-main-head {
+    background: #202c33;
+}
+
+.chat-thread {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    background-image: radial-gradient(rgba(15, 23, 42, 0.05) 0.6px, transparent 0.6px);
+    background-size: 12px 12px;
+}
+
+.dark-mode .chat-thread {
+    background-image: radial-gradient(rgba(203, 213, 225, 0.07) 0.6px, transparent 0.6px);
+}
+
+.chat-empty {
+    color: var(--color-text-muted);
+    text-align: center;
+    padding-top: 2.5rem;
+}
+
+.chat-bubble-row {
+    display: flex;
+    margin-bottom: 0.75rem;
+}
+
+.chat-bubble-row.is-out {
+    justify-content: flex-end;
+}
+
+.chat-bubble {
+    max-width: min(76%, 560px);
+    border-radius: 0.7rem;
+    padding: 0.6rem 0.75rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.chat-bubble-in {
+    background: #fff;
+    border-top-left-radius: 0.2rem;
+}
+
+.chat-bubble-out {
+    background: #d9fdd3;
+    border-top-right-radius: 0.2rem;
+}
+
+.dark-mode .chat-bubble-in {
+    background: #202c33;
+}
+
+.dark-mode .chat-bubble-out {
+    background: #005c4b;
+}
+
+.chat-bubble-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    opacity: 0.9;
+}
+
+.chat-bubble-category {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #0f766e;
+    margin-bottom: 0.25rem;
+}
+
+.chat-bubble-body {
+    white-space: normal;
+    word-break: break-word;
+}
+
+.chat-bubble-meta {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    margin-top: 0.25rem;
+}
+
+.chat-compose {
+    padding: 0.65rem 0.75rem;
+    background: #f0f2f5;
+}
+
+.dark-mode .chat-compose {
+    background: #202c33;
+}
+
+.chat-compose-input {
+    resize: none;
+    min-height: 46px;
+    max-height: 120px;
+}
+
+@media (max-width: 991.98px) {
+    .chat-shell {
+        grid-template-columns: 1fr;
+        min-height: auto;
+    }
+
+    .chat-sidebar {
+        border-right: none !important;
+        border-bottom: 1px solid var(--color-border);
+        max-height: 280px;
+    }
+
+    .chat-thread {
+        min-height: 280px;
+    }
+}
+
 
 .viewMode {
    display: none;

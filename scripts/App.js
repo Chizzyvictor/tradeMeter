@@ -632,6 +632,26 @@ class Auth {
       }
     });
   }
+
+  loadGlobalMessageUnreadBadge() {
+    const $badge = $("#globalMessageUnreadBadge");
+    if (!$badge.length) {
+      return;
+    }
+
+    this.app.ajaxHelper({
+      url: "apiUserProfile.php",
+      action: "loadMessagingData",
+      data: {},
+      silent: true,
+      onSuccess: (res) => {
+        const unread = Number(res?.data?.unread_count || 0);
+        $badge.text(String(unread));
+        $badge.toggleClass("badge-danger", unread > 0);
+        $badge.toggleClass("badge-light", unread <= 0);
+      }
+    });
+  }
 }
 
 // ============================

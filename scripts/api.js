@@ -28,6 +28,8 @@ $(document).ready(function () {
     }
   });
 
+  AuthApp.loadGlobalMessageUnreadBadge();
+
   
     AuthApp.loadCompanyLogo();
 

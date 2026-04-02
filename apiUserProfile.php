@@ -251,6 +251,8 @@ switch ($action) {
 
         $inbox = [];
         $inboxStmt = $db->prepare("SELECT m.message_id,
+                                         m.sender_user_id,
+                                         m.recipient_user_id,
                                          m.category,
                                          m.subject,
                                          m.body,
@@ -274,6 +276,8 @@ switch ($action) {
         while ($row = $inboxRes->fetchArray(SQLITE3_ASSOC)) {
             $inbox[] = [
                 'message_id' => intval($row['message_id'] ?? 0),
+                'sender_user_id' => intval($row['sender_user_id'] ?? 0),
+                'recipient_user_id' => intval($row['recipient_user_id'] ?? 0),
                 'category' => $row['category'] ?? 'info',
                 'subject' => $row['subject'] ?? '',
                 'body' => $row['body'] ?? '',
@@ -287,6 +291,8 @@ switch ($action) {
 
         $sent = [];
         $sentStmt = $db->prepare("SELECT m.message_id,
+                                        m.sender_user_id,
+                                        m.recipient_user_id,
                                         m.category,
                                         m.subject,
                                         m.body,
@@ -310,6 +316,8 @@ switch ($action) {
         while ($row = $sentRes->fetchArray(SQLITE3_ASSOC)) {
             $sent[] = [
                 'message_id' => intval($row['message_id'] ?? 0),
+                'sender_user_id' => intval($row['sender_user_id'] ?? 0),
+                'recipient_user_id' => intval($row['recipient_user_id'] ?? 0),
                 'category' => $row['category'] ?? 'info',
                 'subject' => $row['subject'] ?? '',
                 'body' => $row['body'] ?? '',
@@ -323,6 +331,7 @@ switch ($action) {
 
         respond('success', 'Messaging data loaded', [
             'data' => [
+                'current_user_id' => $uid,
                 'users' => $users,
                 'inbox' => $inbox,
                 'sent' => $sent,
