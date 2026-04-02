@@ -302,6 +302,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 
 .chat-shell {
     min-height: 620px;
+    height: calc(100vh - 230px);
     display: grid;
     grid-template-columns: 320px 1fr;
     overflow: hidden;
@@ -312,21 +313,33 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     background: var(--color-input);
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .chat-sidebar-head {
     padding: 0.9rem 1rem;
     background: #0b141a;
     color: #fff;
+    position: sticky;
+    top: 0;
+    z-index: 3;
 }
 
 .dark-mode .chat-sidebar-head {
     background: #111b21;
 }
 
+.chat-sidebar-search {
+    position: sticky;
+    top: 59px;
+    z-index: 2;
+    background: var(--color-input);
+}
+
 .chat-conversation-list {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
-    max-height: 100%;
 }
 
 .chat-conversation-item {
@@ -357,6 +370,8 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     display: flex;
     flex-direction: column;
     background: #efeae2;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .dark-mode .chat-main {
@@ -366,6 +381,9 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 .chat-main-head {
     padding: 0.75rem 1rem;
     background: #f0f2f5;
+    position: sticky;
+    top: 0;
+    z-index: 3;
 }
 
 .dark-mode .chat-main-head {
@@ -374,8 +392,10 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 
 .chat-thread {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 1rem;
+    padding-bottom: 7.5rem;
     background-image: radial-gradient(rgba(15, 23, 42, 0.05) 0.6px, transparent 0.6px);
     background-size: 12px 12px;
 }
@@ -452,6 +472,9 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 .chat-compose {
     padding: 0.65rem 0.75rem;
     background: #f0f2f5;
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
 }
 
 .dark-mode .chat-compose {

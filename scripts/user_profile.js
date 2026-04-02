@@ -10,6 +10,8 @@ class UserProfilePage {
     this.messagesRefreshTimer = null;
     this.isLoadingMessages = false;
     this.wasMobileView = window.matchMedia('(max-width: 991.98px)').matches;
+    this.pendingAutoScroll = false;
+    this.lastRenderedConversationUserId = 0;
     this.bindEvents();
     this.initialize();
   }
@@ -349,14 +351,40 @@ class UserProfilePage {
       .sort((a, b) => parseInt(a.created_at || 0, 10) - parseInt(b.created_at || 0, 10));
   }
 
+  isThreadNearBottom() {
+    const thread = $('#chatThread')[0];
+    if (!thread) {
+      return true;
+    }
+
+    const remaining = thread.scrollHeight - thread.scrollTop - thread.clientHeight;
+    return remaining < 120;
+  }
+
+  scrollThreadToBottom(force = false) {
+    const thread = $('#chatThread')[0];
+    if (!thread) {
+      return;
+    }
+
+    if (force || this.isThreadNearBottom()) {
+      thread.scrollTop = thread.scrollHeight;
+    }
+  }
+
   renderActiveConversation() {
     const activeUser = this.getUserById(this.activeConversationUserId);
     const $thread = $('#chatThread');
+    const activeConversationUserId = parseInt(this.activeConversationUserId || 0, 10);
+    const shouldForceScroll = this.pendingAutoScroll || this.lastRenderedConversationUserId !== activeConversationUserId;
+    const shouldKeepBottom = shouldForceScroll || this.isThreadNearBottom();
 
     if (!activeUser) {
       $('#chatActiveName').text('Select a teammate');
       $('#chatActiveMeta').text('Use this channel for information, reports, and suggestions.');
       $thread.html('<div class="chat-empty">Choose a teammate from the left to start messaging.</div>');
+      this.lastRenderedConversationUserId = 0;
+      this.pendingAutoScroll = false;
       return;
     }
 
@@ -398,11 +426,16 @@ class UserProfilePage {
     }).join('');
 
     $thread.html(html);
-    $thread.scrollTop($thread[0].scrollHeight);
+    if (shouldKeepBottom) {
+      this.scrollThreadToBottom(true);
+    }
+    this.lastRenderedConversationUserId = activeConversationUserId;
+    this.pendingAutoScroll = false;
   }
 
   selectConversation(userId) {
     this.activeConversationUserId = parseInt(userId || 0, 10);
+    this.pendingAutoScroll = true;
     this.renderConversationList();
     this.renderActiveConversation();
     this.openMobileConversation();
@@ -441,6 +474,7 @@ class UserProfilePage {
       successMsg: 'Message sent successfully',
       errorMsg: 'Failed to send message',
       onSuccess: () => {
+        this.pendingAutoScroll = true;
         $('#messageBody').val('');
         $('#messageSubject').val('');
         this.loadMessagingData();
