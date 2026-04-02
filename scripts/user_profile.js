@@ -9,6 +9,7 @@ class UserProfilePage {
     this.chatFilter = '';
     this.messagesRefreshTimer = null;
     this.isLoadingMessages = false;
+    this.wasMobileView = window.matchMedia('(max-width: 991.98px)').matches;
     this.bindEvents();
     this.initialize();
   }
@@ -91,15 +92,20 @@ class UserProfilePage {
   }
 
   applyMobileChatMode() {
-    if (!this.isMobileView()) {
+    const isMobile = this.isMobileView();
+
+    if (!isMobile) {
       $('.chat-shell').removeClass('mobile-chat-open');
       $('body').removeClass('chat-mobile-open');
+      this.wasMobileView = false;
       return;
     }
 
-    if ($('#messagesTab').hasClass('is-active')) {
+    if (!this.wasMobileView && $('#messagesTab').hasClass('is-active')) {
       this.showMobileConversationList();
     }
+
+    this.wasMobileView = true;
   }
 
   showMobileConversationList() {
