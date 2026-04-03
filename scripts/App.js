@@ -62,9 +62,6 @@ class AppCore {
       topbuyers: "topBuyers"
     };
 
-    if (typeof AppCore.sessionExpiryHandled === "undefined") {
-      AppCore.sessionExpiryHandled = false;
-    }
   }
 
   normalizeResponseKeys(payload) {
@@ -118,62 +115,6 @@ class AppCore {
     return String(normalized?.reference || fallback || "");
   }
 
-  isSessionExpiredMessage(message) {
-    return /session expired/i.test(String(message || ""));
-  }
-
-  isLoginRoute() {
-    const path = String(window.location.pathname || "").toLowerCase();
-    return /\/login\.php$/.test(path);
-  }
-
-  shouldTraceSessionExpiry() {
-    try {
-      return window.localStorage.getItem("tm_debug_session_expiry") === "1";
-    } catch (_error) {
-      return false;
-    }
-  }
-
-  traceSessionExpiry(message, meta = {}) {
-    if (!this.shouldTraceSessionExpiry()) return;
-
-    const payload = {
-      at: new Date().toISOString(),
-      path: window.location.pathname,
-      ...meta
-    };
-    console.info(`[TM][session-expiry] ${message}`, payload);
-  }
-
-  handleSessionExpired() {
-    if (AppCore.sessionExpiryHandled) {
-      this.traceSessionExpiry("ignored duplicate trigger", {
-        alreadyHandled: true
-      });
-      return;
-    }
-
-    AppCore.sessionExpiryHandled = true;
-    this.traceSessionExpiry("handling trigger", {
-      alreadyHandled: false,
-      onLoginRoute: this.isLoginRoute()
-    });
-
-    if (this.isLoginRoute()) {
-      this.traceSessionExpiry("no redirect on login route");
-      return;
-    }
-
-    this.traceSessionExpiry("redirecting to login.php");
-    try {
-      window.sessionStorage.setItem("tm_session_expired_notice", "1");
-    } catch (_error) {
-      // Ignore storage failures and continue redirect.
-    }
-    window.location.replace("login.php");
-  }
-
   // Core utilities: AJAX, alerts, helpers, CSRF, etc.
 	ajaxHelper({
 		url = "",
@@ -216,11 +157,6 @@ class AppCore {
         const normalizedRes = this.normalizeResponseKeys(res || {});
         const ok = normalizedRes?.status === "success";
 
-        if (!ok && this.isSessionExpiredMessage(this.getResponseText(normalizedRes))) {
-          this.handleSessionExpired();
-          return;
-        }
-
         if (!silent) {
           this.showAlert(
           this.getResponseText(normalizedRes, ok ? successMsg : errorMsg),
@@ -256,10 +192,6 @@ class AppCore {
           }
         }
 
-        if (this.isSessionExpiredMessage(msg)) {
-          this.handleSessionExpired();
-          return;
-        }
         this.showAlert(msg, "error");
         console.error("AJAX Error:", status, error, xhr.responseText);
 				if (typeof onError === "function") onError(msg);

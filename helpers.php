@@ -119,23 +119,6 @@ function appNormalizeBusinessDateTime($value, bool $allowDateOnly = false, ?stri
     throw new InvalidArgumentException('Invalid datetime format. Expected YYYY-MM-DD HH:MM:SS.');
 }
 
-
-
-
-if (!isset($_SESSION['cid'])) {
-    session_unset();
-    session_destroy();    
-    respond("error", "Session expired. ");
-}
-
-if (!isset($_SESSION['last_activity']) || time() - $_SESSION['last_activity'] > 15000 ) {
-    session_unset();
-    session_destroy();
-    respond("error", "Session expired due to inactivity.");
-}
-$_SESSION['last_activity'] = time();
-
-
 // -------------------------
 // Database Connection
 // -------------------------
