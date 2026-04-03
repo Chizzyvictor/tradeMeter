@@ -29,6 +29,7 @@ $(document).ready(function () {
   });
 
   AuthApp.loadGlobalMessageUnreadBadge();
+  AuthApp.startPresenceHeartbeat();
 
   
     AuthApp.loadCompanyLogo();

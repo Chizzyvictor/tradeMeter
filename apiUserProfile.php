@@ -549,6 +549,30 @@ switch ($action) {
         respond('success', 'Messages marked as read');
         break;
 
+    case 'heartbeatPresence':
+        $uid = currentProfileUserId();
+        if ($uid <= 0) {
+            respond('error', 'Session expired. Please log in again');
+        }
+
+        ensureUsersPresenceColumn($db);
+
+        $heartbeatStmt = $db->prepare("UPDATE users
+                                      SET last_seen_at = :now
+                                      WHERE user_id = :uid
+                                        AND cid = :cid");
+        if (!$heartbeatStmt) {
+            respond('error', 'Failed to update presence');
+        }
+
+        $heartbeatStmt->bindValue(':now', time(), SQLITE3_INTEGER);
+        $heartbeatStmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
+        $heartbeatStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $heartbeatStmt->execute();
+
+        respond('success', 'Presence updated');
+        break;
+
     default:
         respond('error', 'Unknown action');
 }

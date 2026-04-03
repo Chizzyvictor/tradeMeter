@@ -654,6 +654,34 @@ class Auth {
       }
     });
   }
+
+  pingPresence() {
+    this.app.ajaxHelper({
+      url: "apiUserProfile.php",
+      action: "heartbeatPresence",
+      data: {},
+      silent: true
+    });
+  }
+
+  startPresenceHeartbeat(intervalMs = 15000) {
+    // Initial ping once per page load.
+    this.pingPresence();
+
+    // Keep presence fresh while tab is active.
+    setInterval(() => {
+      if (!document.hidden) {
+        this.pingPresence();
+      }
+    }, intervalMs);
+
+    // Immediate ping when user returns to the tab.
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        this.pingPresence();
+      }
+    });
+  }
 }
 
 // ============================
