@@ -166,7 +166,11 @@ class AppCore {
     }
 
     this.traceSessionExpiry("redirecting to login.php");
-    alert("Your session has expired. Please log in again.");
+    try {
+      window.sessionStorage.setItem("tm_session_expired_notice", "1");
+    } catch (_error) {
+      // Ignore storage failures and continue redirect.
+    }
     window.location.replace("login.php");
   }
 

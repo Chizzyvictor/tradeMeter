@@ -1,6 +1,6 @@
-const STATIC_CACHE = "trademeter-static-v2";
-const PAGE_CACHE = "trademeter-pages-v2";
-const IMAGE_CACHE = "trademeter-images-v2";
+const STATIC_CACHE = "trademeter-static-v3";
+const PAGE_CACHE = "trademeter-pages-v3";
+const IMAGE_CACHE = "trademeter-images-v3";
 const OFFLINE_URL = "/TradeMeter/offline.html";
 
 const CORE_ASSETS = [
