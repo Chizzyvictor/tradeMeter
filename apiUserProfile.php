@@ -19,6 +19,16 @@ function ensureUserMessagesTable(AppDbConnection $db): void {
     $db->exec("CREATE INDEX IF NOT EXISTS idx_user_messages_recipient ON user_messages(recipient_user_id)");
     $db->exec("CREATE INDEX IF NOT EXISTS idx_user_messages_sender ON user_messages(sender_user_id)");
     $db->exec("CREATE INDEX IF NOT EXISTS idx_user_messages_created_at ON user_messages(created_at)");
+
+    // Migrate: add is_delivered column if not present
+    $existingCols = [];
+    $colRes = $db->query("PRAGMA table_info(user_messages)");
+    while ($col = $colRes->fetchArray(SQLITE3_ASSOC)) {
+        $existingCols[] = $col['name'];
+    }
+    if (!in_array('is_delivered', $existingCols, true)) {
+        $db->exec("ALTER TABLE user_messages ADD COLUMN is_delivered INTEGER NOT NULL DEFAULT 0");
+    }
 }
 
 function currentProfileUserId(): int {
@@ -212,6 +222,18 @@ switch ($action) {
 
         ensureUserMessagesTable($db);
 
+        // Mark all messages sent to current user as delivered (recipient has loaded the chat)
+        $deliverStmt = $db->prepare("UPDATE user_messages
+                                     SET is_delivered = 1
+                                     WHERE cid = :cid
+                                       AND recipient_user_id = :uid
+                                       AND is_delivered = 0");
+        if ($deliverStmt) {
+            $deliverStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $deliverStmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
+            $deliverStmt->execute();
+        }
+
         $users = [];
         $usersStmt = $db->prepare("SELECT u.user_id,
                                          u.full_name,
@@ -257,6 +279,7 @@ switch ($action) {
                                          m.subject,
                                          m.body,
                                          m.is_read,
+                                         m.is_delivered,
                                          m.read_at,
                                          m.created_at,
                                          sender.full_name AS sender_name,
@@ -282,6 +305,7 @@ switch ($action) {
                 'subject' => $row['subject'] ?? '',
                 'body' => $row['body'] ?? '',
                 'is_read' => intval($row['is_read'] ?? 0),
+                'is_delivered' => intval($row['is_delivered'] ?? 1),
                 'read_at' => intval($row['read_at'] ?? 0),
                 'created_at' => intval($row['created_at'] ?? 0),
                 'sender_name' => $row['sender_name'] ?? 'Unknown user',
@@ -297,6 +321,7 @@ switch ($action) {
                                         m.subject,
                                         m.body,
                                         m.is_read,
+                                        m.is_delivered,
                                         m.read_at,
                                         m.created_at,
                                         recipient.full_name AS recipient_name,
@@ -322,6 +347,7 @@ switch ($action) {
                 'subject' => $row['subject'] ?? '',
                 'body' => $row['body'] ?? '',
                 'is_read' => intval($row['is_read'] ?? 0),
+                'is_delivered' => intval($row['is_delivered'] ?? 0),
                 'read_at' => intval($row['read_at'] ?? 0),
                 'created_at' => intval($row['created_at'] ?? 0),
                 'recipient_name' => $row['recipient_name'] ?? 'Unknown user',
@@ -452,6 +478,39 @@ switch ($action) {
         $updateStmt->execute();
 
         respond('success', 'Message marked as read');
+        break;
+
+    case 'markMessagesRead':
+        $uid = currentProfileUserId();
+        if ($uid <= 0) {
+            respond('error', 'Session expired. Please log in again');
+        }
+
+        ensureUserMessagesTable($db);
+
+        $idsRaw = json_decode((string)($_POST['message_ids'] ?? '[]'), true);
+        if (!is_array($idsRaw) || empty($idsRaw)) {
+            respond('success', 'Nothing to mark');
+        }
+
+        $ids = array_values(array_filter(array_map('intval', $idsRaw), static function (int $id) {
+            return $id > 0;
+        }));
+
+        if (empty($ids)) {
+            respond('success', 'Nothing to mark');
+        }
+
+        $placeholders = implode(',', $ids); // all integers, safe to interpolate
+        $now = time();
+        $db->exec("UPDATE user_messages
+                   SET is_read = 1, read_at = {$now}
+                   WHERE cid = {$cid}
+                     AND recipient_user_id = {$uid}
+                     AND is_read = 0
+                     AND message_id IN ({$placeholders})");
+
+        respond('success', 'Messages marked as read');
         break;
 
     default:

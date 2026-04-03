@@ -122,6 +122,7 @@ class AppCore {
 		dir = "",
 		data = {},
 		onSuccess = null,
+		onError = null,
 		onComplete = null,
 		successMsg = "Operation successful.",
 		errorMsg = "Operation failed.",
@@ -198,6 +199,7 @@ class AppCore {
 
 				this.showAlert(msg, "error");
 				console.error("AJAX Error:", status, error, xhr.responseText);
+				if (typeof onError === "function") onError(msg);
 			},
 			complete: () => {
 				if (typeof onComplete === "function") onComplete();

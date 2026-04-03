@@ -12,6 +12,12 @@ class UserProfilePage {
     this.wasMobileView = window.matchMedia('(max-width: 991.98px)').matches;
     this.pendingAutoScroll = false;
     this.lastRenderedConversationUserId = 0;
+    // Smart-scroll state
+    this.userScrolledUp = false;
+    this.seenMessageIds = new Set();
+    this.newMsgCount = 0;
+    // IntersectionObserver for auto-marking messages read
+    this._readObserver = null;
     this.bindEvents();
     this.initialize();
   }
@@ -74,6 +80,18 @@ class UserProfilePage {
       if (!Number.isNaN(messageId) && messageId > 0) {
         this.markMessageRead(messageId);
       }
+    });
+
+    // Thread scroll — track whether user has scrolled up
+    $(document).on('scroll', '#chatThread', () => {
+      this.onThreadScroll();
+    });
+
+    // New-message badge click — jump to bottom
+    $('#chatNewMsgBadge').on('click', () => {
+      this.userScrolledUp = false;
+      this.hideNewMsgBadge();
+      this.scrollThreadToBottom(true);
     });
 
     // Auto-grow textarea
@@ -268,7 +286,6 @@ class UserProfilePage {
         }
 
         this.renderConversationList();
-        this.pendingAutoScroll = true;
         this.renderActiveConversation();
       },
       onComplete: () => {
@@ -400,8 +417,14 @@ class UserProfilePage {
     const activeUser = this.getUserById(this.activeConversationUserId);
     const $thread = $('#chatThread');
     const activeConversationUserId = parseInt(this.activeConversationUserId || 0, 10);
-    const shouldForceScroll = this.pendingAutoScroll || this.lastRenderedConversationUserId !== activeConversationUserId;
-    const shouldKeepBottom = shouldForceScroll || this.isThreadNearBottom();
+    const isNewConversation = this.lastRenderedConversationUserId !== activeConversationUserId;
+
+    if (isNewConversation) {
+      this.userScrolledUp = false;
+      this.seenMessageIds.clear();
+      this.newMsgCount = 0;
+      this.hideNewMsgBadge();
+    }
 
     if (!activeUser) {
       $('#chatActiveName').text('Select a teammate');
@@ -423,10 +446,21 @@ class UserProfilePage {
     const messages = this.getActiveConversationMessages();
     if (!messages.length) {
       $thread.html('<div class="chat-empty"><i class="fas fa-comment-dots fa-3x mb-3 d-block"></i>No messages yet — say hello!</div>');
+      this.seenMessageIds.clear();
+      this.lastRenderedConversationUserId = activeConversationUserId;
+      this.pendingAutoScroll = false;
       return;
     }
 
-    // Find first unread incoming message index for unread divider
+    // Detect newly arrived messages (IDs not seen in previous render)
+    const newlyArrivedIds = !isNewConversation
+      ? messages.filter((m) => !this.seenMessageIds.has(parseInt(m.message_id, 10))).map((m) => parseInt(m.message_id, 10))
+      : [];
+
+    // Update the seen-IDs set
+    messages.forEach((m) => this.seenMessageIds.add(parseInt(m.message_id, 10)));
+
+    // Find first unread incoming message index for divider
     const firstUnreadIdx = messages.findIndex((m) =>
       parseInt(m.sender_user_id || 0, 10) !== this.currentUserId &&
       parseInt(m.is_read || 0, 10) === 0
@@ -440,6 +474,8 @@ class UserProfilePage {
       const outgoing = senderId === this.currentUserId;
       const ts = parseInt(message.created_at || 0, 10);
       const isRead = parseInt(message.is_read || 0, 10) === 1;
+      const isDelivered = parseInt(message.is_delivered || 0, 10) === 1;
+      const msgId = parseInt(message.message_id || 0, 10);
 
       // Date group separator
       const dateLabel = this.dateGroupLabel(ts);
@@ -448,7 +484,7 @@ class UserProfilePage {
         lastDateGroup = dateLabel;
       }
 
-      // Unread messages divider (shown before the first unread)
+      // Unread divider before first unread incoming message
       if (index === firstUnreadIdx && firstUnreadIdx > 0) {
         const remaining = messages.length - firstUnreadIdx;
         html += `<div class="chat-unread-sep"><span><i class="fas fa-arrow-down mr-1"></i>${remaining} unread message${remaining !== 1 ? 's' : ''} below</span></div>`;
@@ -459,19 +495,30 @@ class UserProfilePage {
       const subject = message.subject ? AppCore.escapeHtml(message.subject) : '';
       const timeStr = this.formatTime(ts);
 
+      // 4-state tick indicator for outgoing messages
       let readIndicator = '';
       if (outgoing) {
-        readIndicator = isRead
-          ? '<span class="chat-tick read" title="Read"><i class="fas fa-check-double"></i></span>'
-          : '<span class="chat-tick sent" title="Delivered"><i class="fas fa-check"></i></span>';
+        if (isRead) {
+          readIndicator = '<span class="chat-tick tick-read" title="Read"><i class="fas fa-check-double"></i></span>';
+        } else if (isDelivered) {
+          readIndicator = '<span class="chat-tick tick-delivered" title="Delivered"><i class="fas fa-check-double"></i></span>';
+        } else {
+          readIndicator = '<span class="chat-tick tick-sent" title="Sent"><i class="fas fa-check"></i></span>';
+        }
       }
 
-      const markBtn = (!outgoing && !isRead)
-        ? `<button type="button" class="chat-mark-read-btn message-read-btn" data-message-id="${parseInt(message.message_id || 0, 10)}"><i class="fas fa-check mr-1"></i>Mark as read</button>`
+      const isUnread = !outgoing && !isRead;
+      const markBtn = isUnread
+        ? `<button type="button" class="chat-mark-read-btn message-read-btn" data-message-id="${msgId}"><i class="fas fa-check mr-1"></i>Mark as read</button>`
+        : '';
+
+      // Add data attrs on incoming rows for IntersectionObserver
+      const rowAttrs = !outgoing
+        ? `data-message-id="${msgId}"${isUnread ? ' data-unread="1"' : ''}`
         : '';
 
       html += `
-        <div class="chat-bubble-row ${outgoing ? 'is-out' : 'is-in'}">
+        <div class="chat-bubble-row ${outgoing ? 'is-out' : 'is-in'}" ${rowAttrs}>
           <div class="chat-bubble ${outgoing ? 'chat-bubble-out' : 'chat-bubble-in'}">
             ${subject ? `<div class="chat-bubble-title">${subject}</div>` : ''}
             <span class="chat-cat-chip ${category}">${category}</span>
@@ -487,9 +534,21 @@ class UserProfilePage {
     });
 
     $thread.html(html);
-    if (shouldKeepBottom) {
+
+    // ---- Scroll decision ----
+    const shouldScroll = this.pendingAutoScroll || !this.userScrolledUp;
+    if (shouldScroll) {
       this.scrollThreadToBottom(true);
+      this.hideNewMsgBadge();
+      this.newMsgCount = 0;
+    } else if (newlyArrivedIds.length > 0) {
+      this.newMsgCount += newlyArrivedIds.length;
+      this.showNewMsgBadge(this.newMsgCount);
     }
+
+    // IntersectionObserver: auto-mark incoming unread messages as read when visible
+    this.setupReadObserver();
+
     this.lastRenderedConversationUserId = activeConversationUserId;
     this.pendingAutoScroll = false;
   }
@@ -497,6 +556,10 @@ class UserProfilePage {
   selectConversation(userId) {
     this.activeConversationUserId = parseInt(userId || 0, 10);
     this.pendingAutoScroll = true;
+    this.userScrolledUp = false;
+    this.seenMessageIds.clear();
+    this.newMsgCount = 0;
+    this.hideNewMsgBadge();
     this.renderConversationList();
     this.renderActiveConversation();
     this.openMobileConversation();
@@ -523,6 +586,13 @@ class UserProfilePage {
       return;
     }
 
+    // Optimistic bubble
+    this.appendOptimisticBubble(subject, category, body);
+    $('#messageBody').val('').css('height', 'auto');
+    $('#messageSubject').val('');
+    this.userScrolledUp = false;
+    this.scrollThreadToBottom(true);
+
     this.app.ajaxHelper({
       url: 'apiUserProfile.php',
       action: 'sendMessage',
@@ -532,13 +602,15 @@ class UserProfilePage {
         subject: subject || `${category.toUpperCase()} update`,
         body
       },
-      successMsg: 'Message sent successfully',
+      silent: true,
       errorMsg: 'Failed to send message',
       onSuccess: () => {
         this.pendingAutoScroll = true;
-        $('#messageBody').val('');
-        $('#messageSubject').val('');
+        this.userScrolledUp = false;
         this.loadMessagingData();
+      },
+      onError: () => {
+        this.markOptimisticFailed();
       }
     });
   }
@@ -552,6 +624,148 @@ class UserProfilePage {
       errorMsg: 'Failed to update message',
       onSuccess: () => {
         this.loadMessagingData();
+      }
+    });
+  }
+
+  /* -------------------------------------------------------
+   * Thread scroll tracker
+   * ------------------------------------------------------- */
+  onThreadScroll() {
+    const nearBottom = this.isThreadNearBottom();
+    if (nearBottom) {
+      if (this.userScrolledUp) {
+        this.userScrolledUp = false;
+        this.hideNewMsgBadge();
+        this.newMsgCount = 0;
+      }
+    } else {
+      this.userScrolledUp = true;
+    }
+  }
+
+  /* -------------------------------------------------------
+   * New-message badge
+   * ------------------------------------------------------- */
+  showNewMsgBadge(count) {
+    $('#chatNewMsgCount').text(count);
+    $('#chatNewMsgBadge').addClass('visible');
+  }
+
+  hideNewMsgBadge() {
+    $('#chatNewMsgBadge').removeClass('visible');
+  }
+
+  /* -------------------------------------------------------
+   * Optimistic bubble for send
+   * ------------------------------------------------------- */
+  appendOptimisticBubble(subject, category, body) {
+    const now = this.formatTime(Math.floor(Date.now() / 1000));
+    const safeSubject = subject ? `<div class="chat-bubble-title">${AppCore.escapeHtml(subject)}</div>` : '';
+    const safeCat = AppCore.escapeHtml(category || 'info');
+    const safeBody = AppCore.escapeHtml(body || '').replace(/\n/g, '<br>');
+    const html = `
+      <div class="chat-bubble-row is-out" data-optimistic="true">
+        <div class="chat-bubble chat-bubble-out">
+          ${safeSubject}
+          <span class="chat-cat-chip ${safeCat}">${safeCat}</span>
+          <div class="chat-bubble-body">${safeBody}</div>
+          <div class="chat-bubble-meta">
+            <span>${now}</span>
+            <span class="chat-tick tick-pending" title="Sending…"><i class="fas fa-clock"></i></span>
+          </div>
+        </div>
+      </div>
+    `;
+    $('#chatThread').append(html);
+  }
+
+  markOptimisticFailed() {
+    const $last = $('#chatThread [data-optimistic="true"]').last();
+    $last.find('.chat-tick')
+      .removeClass('tick-pending')
+      .addClass('tick-failed')
+      .attr('title', 'Not sent')
+      .html('<i class="fas fa-exclamation-circle"></i>');
+    $last.find('.chat-bubble-meta').append(
+      ' <span style="font-size:0.7rem;color:#ef4444;">Not sent</span>'
+    );
+  }
+
+  /* -------------------------------------------------------
+   * IntersectionObserver: auto-mark incoming unread as read
+   * ------------------------------------------------------- */
+  setupReadObserver() {
+    if (this._readObserver) {
+      this._readObserver.disconnect();
+      this._readObserver = null;
+    }
+
+    const thread = document.getElementById('chatThread');
+    if (!thread) return;
+
+    const unreadRows = thread.querySelectorAll('.chat-bubble-row.is-in[data-unread="1"]');
+    if (!unreadRows.length) return;
+
+    this._readObserver = new IntersectionObserver((entries) => {
+      const toMark = [];
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const msgId = parseInt(entry.target.dataset.messageId, 10);
+          if (msgId > 0) {
+            toMark.push(msgId);
+            this._readObserver.unobserve(entry.target);
+          }
+        }
+      });
+      if (toMark.length) {
+        this.batchMarkRead(toMark);
+      }
+    }, { root: thread, threshold: 0.6 });
+
+    unreadRows.forEach((el) => this._readObserver.observe(el));
+  }
+
+  /* -------------------------------------------------------
+   * Batch mark-read + local update (no full re-render)
+   * ------------------------------------------------------- */
+  batchMarkRead(messageIds) {
+    this.app.ajaxHelper({
+      url: 'apiUserProfile.php',
+      action: 'markMessagesRead',
+      data: { message_ids: JSON.stringify(messageIds) },
+      silent: true,
+      errorMsg: null,
+      onSuccess: () => {
+        // Update local pool
+        messageIds.forEach((id) => {
+          const msg = this.messagePool.find((m) => parseInt(m.message_id, 10) === id);
+          if (msg) {
+            msg.is_read = 1;
+            msg.read_at = Math.floor(Date.now() / 1000);
+          }
+        });
+
+        // Remove the mark-read buttons and data-unread attrs from those rows
+        messageIds.forEach((id) => {
+          const $row = $(`#chatThread .chat-bubble-row.is-in[data-message-id="${id}"]`);
+          $row.find('.chat-mark-read-btn').remove();
+          $row.removeAttr('data-unread');
+        });
+
+        // Update unread count badges
+        const unread = this.messagePool.filter((m) =>
+          parseInt(m.recipient_user_id, 10) === this.currentUserId &&
+          parseInt(m.is_read, 10) === 0
+        ).length;
+        $('#messageUnreadBadge').text(unread > 0 ? String(unread) : '');
+        $('#globalMessageUnreadBadge').text(String(unread));
+        $('#globalMessageUnreadBadge')
+          .toggleClass('badge-danger', unread > 0)
+          .toggleClass('badge-light', unread <= 0);
+
+        // Refresh conversation list preview
+        this.renderConversationList();
       }
     });
   }

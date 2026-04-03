@@ -621,6 +621,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
+    position: relative;
     background-color: #e5ddd5;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cpath fill='none' stroke='%23c5b9ae' stroke-width='0.6' d='M0 30h60M30 0v60'/%3E%3C/svg%3E");
     background-size: 60px 60px;
@@ -854,18 +855,85 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
    TICK MARKS (READ RECEIPTS)
    ================================================================ */
 .chat-tick {
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     line-height: 1;
+    flex-shrink: 0;
 }
 
-.chat-tick.sent { color: rgba(0, 0, 0, 0.35); }
-.chat-tick.read { color: #53bdeb; }
+/* 1 tick — saved, not yet fetched by recipient */
+.chat-tick.tick-sent { color: rgba(0, 0, 0, 0.38); }
 
-.dark-mode .chat-tick.sent { color: rgba(255, 255, 255, 0.3); }
+/* 2 ticks dark — recipient loaded the conversation */
+.chat-tick.tick-delivered { color: rgba(0, 0, 0, 0.38); }
+
+/* 2 ticks blue — recipient marked as read / auto-read */
+.chat-tick.tick-read { color: #53bdeb; }
+
+/* Clock — optimistic, waiting for server confirmation */
+.chat-tick.tick-pending { color: rgba(0, 0, 0, 0.3); animation: clock-spin 1.4s linear infinite; }
+
+/* Red X — send failed */
+.chat-tick.tick-failed { color: #ef4444; }
+
+@keyframes clock-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+.dark-mode .chat-tick.tick-sent,
+.dark-mode .chat-tick.tick-delivered { color: rgba(255, 255, 255, 0.32); }
 
 /* ================================================================
-   MARK-READ BUTTON
+   NEW MESSAGE BADGE (floats above compose when scrolled up)
    ================================================================ */
+.chat-new-msg-wrap {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 15;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    /* height 0 so it doesn't displace flex siblings */
+    flex: 0 0 0px;
+    overflow: visible;
+}
+
+.chat-new-msg-badge {
+    display: none;
+    align-items: center;
+    gap: 0.3rem;
+    position: relative;
+    bottom: 3.8rem;     /* float above the compose bar */
+    background: #075e54;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 0.32rem 0.9rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    pointer-events: auto;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+}
+
+.chat-new-msg-badge.visible {
+    display: inline-flex;
+    animation: fadeInUp 0.18s ease;
+}
+
+.dark-mode .chat-new-msg-badge {
+    background: #25d366;
+    color: #111b21;
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
 .chat-mark-read-btn {
     border: none;
     background: transparent;
