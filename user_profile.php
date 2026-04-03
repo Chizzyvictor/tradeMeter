@@ -151,7 +151,8 @@ include "INC/navbar.php";
 								<div class="chat-new-msg-wrap" id="chatNewMsgWrap">
 									<button type="button" class="chat-new-msg-badge" id="chatNewMsgBadge">
 										<i class="fas fa-arrow-down"></i>
-										<span id="chatNewMsgCount">0</span> new
+										<span id="chatNewMsgCount">0</span>
+										<span id="chatNewMsgLabel">new messages</span>
 									</button>
 								</div>
 

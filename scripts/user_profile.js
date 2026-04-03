@@ -82,10 +82,11 @@ class UserProfilePage {
       }
     });
 
-    // Thread scroll — track whether user has scrolled up
-    $('#chatThread').on('scroll', () => {
+    // Thread scroll — debounced tracking for smoother updates
+    const onThreadScrollDebounced = this.debounce(() => {
       this.onThreadScroll();
-    });
+    }, 100);
+    $('#chatThread').on('scroll', onThreadScrollDebounced);
 
     // New-message badge click — jump to bottom
     $('#chatNewMsgBadge').on('click', () => {
@@ -156,6 +157,18 @@ class UserProfilePage {
     }
     $('.chat-shell').addClass('mobile-chat-open');
     $('body').addClass('chat-mobile-open');
+  }
+
+  debounce(callback, wait = 80) {
+    let timeoutId = null;
+    return (...args) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(() => {
+        callback.apply(this, args);
+      }, wait);
+    };
   }
 
   startMessagesAutoRefresh() {
@@ -656,7 +669,10 @@ class UserProfilePage {
    * New-message badge
    * ------------------------------------------------------- */
   showNewMsgBadge(count) {
-    $('#chatNewMsgCount').text(count);
+    const safeCount = Math.max(0, parseInt(count || 0, 10));
+    const label = safeCount === 1 ? 'new message' : 'new messages';
+    $('#chatNewMsgCount').text(safeCount);
+    $('#chatNewMsgLabel').text(label);
     $('#chatNewMsgBadge').addClass('visible');
   }
 

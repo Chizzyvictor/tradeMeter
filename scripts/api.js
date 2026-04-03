@@ -3,6 +3,13 @@
 // ============================
 $(document).ready(function () {
 
+  const path = String(window.location.pathname || "").toLowerCase();
+  const isPublicPage = /\/(login|reset_password|verify_email|companies)\.php$/.test(path);
+
+  if (isPublicPage) {
+    return;
+  }
+
 
   const csrf_token = $('meta[name="csrf-token"]').attr('content') || "";
   const App = new AppCore(csrf_token);
