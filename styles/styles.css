@@ -510,6 +510,32 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     min-width: 0;
 }
 
+.chat-conv-name-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.chat-presence-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    background: #94a3b8;
+}
+
+.chat-presence-dot.is-online {
+    background: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.chat-presence-dot.is-offline {
+    background: #94a3b8;
+}
+
 .chat-conv-time {
     font-size: 0.7rem;
     color: var(--color-text-muted);
@@ -668,6 +694,11 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+#chatActiveMeta .chat-presence-dot {
+    margin-right: 0.3rem;
+    vertical-align: middle;
 }
 
 .chat-thread {

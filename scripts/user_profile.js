@@ -348,6 +348,7 @@ class UserProfilePage {
       const name = AppCore.escapeHtml(row.user.full_name || 'User');
       const initials = UserProfilePage.avatarInitials(row.user.full_name || 'U');
       const color = UserProfilePage.avatarColor(row.user.full_name || 'U');
+      const online = parseInt(row.user.is_online || 0, 10) === 1;
       let previewRaw = '';
       if (row.latest) {
         const isMine = parseInt(row.latest.sender_user_id || 0, 10) === this.currentUserId;
@@ -358,12 +359,13 @@ class UserProfilePage {
       const preview = AppCore.escapeHtml(previewRaw).slice(0, 55);
       const time = row.latest ? this.relativeTime(row.latest.created_at) : '';
       const unreadBadge = row.unread > 0 ? `<span class="chat-unread-badge">${row.unread}</span>` : '';
+      const presenceDot = `<span class="chat-presence-dot ${online ? 'is-online' : 'is-offline'}" title="${online ? 'Online' : 'Offline'}"></span>`;
       return `
         <button type="button" class="chat-conversation-item ${activeClass}" data-user-id="${row.userId}">
           <div class="chat-avatar" style="background:${color}">${initials}</div>
           <div class="chat-conv-body">
             <div class="chat-conv-top">
-              <span class="chat-conv-name">${name}</span>
+              <span class="chat-conv-name-wrap">${presenceDot}<span class="chat-conv-name">${name}</span></span>
               <span class="chat-conv-time">${time}</span>
             </div>
             <div class="chat-conv-bottom">
@@ -439,9 +441,15 @@ class UserProfilePage {
     // Update chat header
     const initials = UserProfilePage.avatarInitials(activeUser.full_name || 'U');
     const color = UserProfilePage.avatarColor(activeUser.full_name || 'U');
+    const isOnline = parseInt(activeUser.is_online || 0, 10) === 1;
     $('#chatHeadAvatar').html(`<div class="chat-avatar chat-avatar-sm" style="background:${color}">${initials}</div>`);
     $('#chatActiveName').text(activeUser.full_name || 'User');
-    $('#chatActiveMeta').text(activeUser.role_name || 'Member');
+    if (isOnline) {
+      $('#chatActiveMeta').html('<span class="chat-presence-dot is-online"></span> Active now');
+    } else {
+      const lastSeen = this.formatLastSeen(activeUser.last_seen_at);
+      $('#chatActiveMeta').text(lastSeen ? `Last seen ${lastSeen}` : 'Last seen recently');
+    }
 
     const messages = this.getActiveConversationMessages();
     if (!messages.length) {
@@ -800,6 +808,26 @@ class UserProfilePage {
     if (msgDay.getTime() === today.getTime())     return 'Today';
     if (msgDay.getTime() === yesterday.getTime()) return 'Yesterday';
     return new Date(ms).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  }
+
+  formatLastSeen(ts) {
+    const seen = parseInt(ts || 0, 10);
+    if (!seen) return '';
+
+    const now = Math.floor(Date.now() / 1000);
+    const diff = Math.max(0, now - seen);
+
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+
+    const d = new Date(seen * 1000);
+    return d.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   }
 
   /* -------------------------------------------------------

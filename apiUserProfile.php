@@ -35,6 +35,18 @@ function currentProfileUserId(): int {
     return intval($_SESSION['user_id'] ?? 0);
 }
 
+function ensureUsersPresenceColumn(AppDbConnection $db): void {
+    $existingCols = [];
+    $colRes = $db->query("PRAGMA table_info(users)");
+    while ($col = $colRes->fetchArray(SQLITE3_ASSOC)) {
+        $existingCols[] = $col['name'];
+    }
+
+    if (!in_array('last_seen_at', $existingCols, true)) {
+        $db->exec("ALTER TABLE users ADD COLUMN last_seen_at INTEGER");
+    }
+}
+
 $cid = intval($_SESSION['cid'] ?? 0);
 if ($cid <= 0) {
     respond('error', 'Invalid session. Please log in again.');
@@ -221,6 +233,21 @@ switch ($action) {
         }
 
         ensureUserMessagesTable($db);
+        ensureUsersPresenceColumn($db);
+
+        $now = time();
+
+        // Presence heartbeat for current user.
+        $heartbeatStmt = $db->prepare("UPDATE users
+                                      SET last_seen_at = :now
+                                      WHERE user_id = :uid
+                                        AND cid = :cid");
+        if ($heartbeatStmt) {
+            $heartbeatStmt->bindValue(':now', $now, SQLITE3_INTEGER);
+            $heartbeatStmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
+            $heartbeatStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $heartbeatStmt->execute();
+        }
 
         // Mark all messages sent to current user as delivered (recipient has loaded the chat)
         $deliverStmt = $db->prepare("UPDATE user_messages
@@ -238,6 +265,12 @@ switch ($action) {
         $usersStmt = $db->prepare("SELECT u.user_id,
                                          u.full_name,
                                          u.email,
+                                         u.last_seen_at,
+                                         CASE
+                                             WHEN u.last_seen_at IS NOT NULL
+                                              AND :now - u.last_seen_at <= 20 THEN 1
+                                             ELSE 0
+                                         END AS is_online,
                                          COALESCE((
                                             SELECT r.role_name
                                             FROM user_roles ur
@@ -261,13 +294,16 @@ switch ($action) {
         }
         $usersStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
         $usersStmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
+        $usersStmt->bindValue(':now', $now, SQLITE3_INTEGER);
         $usersRes = $usersStmt->execute();
         while ($row = $usersRes->fetchArray(SQLITE3_ASSOC)) {
             $users[] = [
                 'user_id' => intval($row['user_id'] ?? 0),
                 'full_name' => $row['full_name'] ?? '',
                 'email' => $row['email'] ?? '',
-                'role_name' => $row['role_name'] ?? 'User'
+                'role_name' => $row['role_name'] ?? 'User',
+                'last_seen_at' => intval($row['last_seen_at'] ?? 0),
+                'is_online' => intval($row['is_online'] ?? 0)
             ];
         }
 
