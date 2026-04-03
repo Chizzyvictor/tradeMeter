@@ -568,7 +568,11 @@ class FormValidator {
 // Auth
 // ============================
 class Auth {
-  constructor(appCore) { this.app = appCore; }
+  constructor(appCore) {
+    this.app = appCore;
+    this.globalMessageBadgeRefreshTimer = null;
+    this.globalMessageBadgeVisibilityHandlerBound = false;
+  }
   login(data) {
     this.app.ajaxHelper({
       url: "apiAuthentications.php",
@@ -648,6 +652,30 @@ class Auth {
         $badge.toggleClass("badge-light", unread <= 0);
       }
     });
+  }
+
+  startGlobalMessageUnreadBadgeAutoRefresh(intervalMs = 10000) {
+    // Initial fetch once per page load.
+    this.loadGlobalMessageUnreadBadge();
+
+    // Avoid duplicate timers when this initializer is called more than once.
+    if (!this.globalMessageBadgeRefreshTimer) {
+      this.globalMessageBadgeRefreshTimer = setInterval(() => {
+        if (!document.hidden) {
+          this.loadGlobalMessageUnreadBadge();
+        }
+      }, intervalMs);
+    }
+
+    // Refresh immediately when the tab gains focus again.
+    if (!this.globalMessageBadgeVisibilityHandlerBound) {
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) {
+          this.loadGlobalMessageUnreadBadge();
+        }
+      });
+      this.globalMessageBadgeVisibilityHandlerBound = true;
+    }
   }
 
   pingPresence() {

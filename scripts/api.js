@@ -1,6 +1,8 @@
 // ============================
 // Init
 // ============================
+const GLOBAL_MESSAGE_BADGE_REFRESH_INTERVAL_MS = 10000;
+
 $(document).ready(function () {
 
   const path = String(window.location.pathname || "").toLowerCase();
@@ -35,7 +37,7 @@ $(document).ready(function () {
     }
   });
 
-  AuthApp.loadGlobalMessageUnreadBadge();
+  AuthApp.startGlobalMessageUnreadBadgeAutoRefresh(GLOBAL_MESSAGE_BADGE_REFRESH_INTERVAL_MS);
   AuthApp.startPresenceHeartbeat();
 
   
