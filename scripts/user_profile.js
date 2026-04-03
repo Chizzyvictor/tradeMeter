@@ -268,6 +268,7 @@ class UserProfilePage {
         }
 
         this.renderConversationList();
+        this.pendingAutoScroll = true;
         this.renderActiveConversation();
       },
       onComplete: () => {
