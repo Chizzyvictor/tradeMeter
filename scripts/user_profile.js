@@ -83,7 +83,7 @@ class UserProfilePage {
     });
 
     // Thread scroll — track whether user has scrolled up
-    $(document).on('scroll', '#chatThread', () => {
+    $('#chatThread').on('scroll', () => {
       this.onThreadScroll();
     });
 
