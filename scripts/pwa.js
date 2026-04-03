@@ -4,6 +4,31 @@
   let updateToast = null;
   let activeRegistration = null;
 
+  function isPublicAuthRoute() {
+    const path = String(window.location.pathname || "").toLowerCase();
+    return /\/(login|reset_password|verify_email|companies)\.php$/.test(path);
+  }
+
+  async function cleanupServiceWorkersAndCaches() {
+    if (!("serviceWorker" in navigator)) return;
+
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    } catch (_error) {
+      // Ignore SW cleanup errors.
+    }
+
+    if (!("caches" in window)) return;
+
+    try {
+      const cacheKeys = await caches.keys();
+      await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+    } catch (_error) {
+      // Ignore cache cleanup errors.
+    }
+  }
+
   function createInstallBanner() {
     if (installBanner) return installBanner;
 
@@ -128,6 +153,11 @@
       localStorage.removeItem("trademeter-install-dismissed");
     } catch (_error) {}
   });
+
+  if (isPublicAuthRoute()) {
+    cleanupServiceWorkersAndCaches();
+    return;
+  }
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", async () => {
