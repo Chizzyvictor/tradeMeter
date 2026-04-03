@@ -8,16 +8,6 @@ $(document).ready(() => {
   const AuthApp = new Auth(AppCoreInstance);
   const Validator = new FormValidator();
 
-  try {
-    const shouldShowSessionNotice = window.sessionStorage.getItem("tm_session_expired_notice") === "1";
-    if (shouldShowSessionNotice) {
-      window.sessionStorage.removeItem("tm_session_expired_notice");
-      AppCoreInstance.showAlert("Session expired. Please log in again.", "error");
-    }
-  } catch (_error) {
-    // Ignore sessionStorage failures in restricted browsing modes.
-  }
-
   // ============================
   // SELECTORS
   // ============================
