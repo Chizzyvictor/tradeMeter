@@ -116,13 +116,16 @@ switch ($action) {
         }
         $purchaseStatsRow = $purchaseStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
+        $salesDateFilterAlias = str_replace('t.', 's.', $dateFilterAlias);
+        $previousSalesDateFilterAlias = str_replace('t.', 's.', $previousDateFilterAlias);
+
         $profitStatsStmt = $db->prepare(" 
             SELECT
                 COALESCE(SUM((COALESCE(si.costPrice, 0) - COALESCE(p.cost_price, 0)) * COALESCE(si.qty, 0)), 0) AS profit
             FROM sales_items si
             INNER JOIN sales s ON s.sale_id = si.sale_id
             INNER JOIN products p ON p.product_id = si.product_id AND p.cid = s.cid
-            WHERE s.cid = :profit_cid {$dateFilterAlias}
+            WHERE s.cid = :profit_cid {$salesDateFilterAlias}
         ");
         $profitStatsStmt->bindValue(':profit_cid', $cid, SQLITE3_INTEGER);
         foreach ($dateFilterAliasParams as $key => $value) {
@@ -166,7 +169,7 @@ switch ($action) {
                 FROM sales_items si
                 INNER JOIN sales s ON s.sale_id = si.sale_id
                 INNER JOIN products p ON p.product_id = si.product_id AND p.cid = s.cid
-                WHERE s.cid = :profit_cid {$previousDateFilterAlias}
+                WHERE s.cid = :profit_cid {$previousSalesDateFilterAlias}
             ");
             $previousProfitStatsStmt->bindValue(':profit_cid', $cid, SQLITE3_INTEGER);
             foreach ($previousDateFilterAliasParams as $key => $value) {
