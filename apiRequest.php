@@ -116,8 +116,23 @@ switch ($action) {
         }
         $purchaseStatsRow = $purchaseStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
+        $profitStatsStmt = $db->prepare(" 
+            SELECT
+                COALESCE(SUM((COALESCE(si.costPrice, 0) - COALESCE(p.cost_price, 0)) * COALESCE(si.qty, 0)), 0) AS profit
+            FROM sales_items si
+            INNER JOIN sales s ON s.sale_id = si.sale_id
+            INNER JOIN products p ON p.product_id = si.product_id AND p.cid = s.cid
+            WHERE s.cid = :profit_cid {$dateFilterAlias}
+        ");
+        $profitStatsStmt->bindValue(':profit_cid', $cid, SQLITE3_INTEGER);
+        foreach ($dateFilterAliasParams as $key => $value) {
+            $profitStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
+        }
+        $profitStatsRow = $profitStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+
         $previousSalesStatsRow = [];
         $previousPurchaseStatsRow = [];
+        $previousProfitStatsRow = [];
         if ($range !== 'all') {
             $previousSalesStatsStmt = $db->prepare(" 
                 SELECT
@@ -144,6 +159,20 @@ switch ($action) {
                 $previousPurchaseStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
             }
             $previousPurchaseStatsRow = $previousPurchaseStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+
+            $previousProfitStatsStmt = $db->prepare(" 
+                SELECT
+                    COALESCE(SUM((COALESCE(si.costPrice, 0) - COALESCE(p.cost_price, 0)) * COALESCE(si.qty, 0)), 0) AS profit
+                FROM sales_items si
+                INNER JOIN sales s ON s.sale_id = si.sale_id
+                INNER JOIN products p ON p.product_id = si.product_id AND p.cid = s.cid
+                WHERE s.cid = :profit_cid {$previousDateFilterAlias}
+            ");
+            $previousProfitStatsStmt->bindValue(':profit_cid', $cid, SQLITE3_INTEGER);
+            foreach ($previousDateFilterAliasParams as $key => $value) {
+                $previousProfitStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
+            }
+            $previousProfitStatsRow = $previousProfitStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
         }
 
         $inventoryValueStmt = $db->prepare(" 
@@ -245,8 +274,8 @@ switch ($action) {
         $previousTotalSales = floatval($previousSalesStatsRow['total_sales'] ?? 0);
         $previousTotalPurchases = floatval($previousPurchaseStatsRow['total_purchases'] ?? 0);
         $previousRangeTransactions = intval($previousSalesStatsRow['sales_count'] ?? 0) + intval($previousPurchaseStatsRow['purchase_count'] ?? 0);
-        $previousProfit = $previousTotalSales - $previousTotalPurchases;
-        $profit = $totalSales - $totalPurchases;
+        $previousProfit = floatval($previousProfitStatsRow['profit'] ?? 0);
+        $profit = floatval($profitStatsRow['profit'] ?? 0);
 
         $trendSummary = [
             "totalSales" => [
