@@ -82,6 +82,16 @@ if (!$isManagerOrOwner) {
             <strong>Employees</strong>
             <small class="text-muted">Click employee row for details and activities</small>
           </div>
+          <div class="card-body border-bottom">
+            <div class="row align-items-center">
+              <div class="col-md-6 mb-2 mb-md-0">
+                <input type="text" id="attendanceEmployeeSearch" class="form-control" placeholder="Search employees by name, email, role, or performance...">
+              </div>
+              <div class="col-md-6 text-md-right">
+                <small class="text-muted" id="attendanceSearchSummary">Showing all employees</small>
+              </div>
+            </div>
+          </div>
           <div class="card-body p-0">
             <div class="table-responsive">
               <table class="table table-hover table-striped mb-0" id="attendanceEmployeesTable">
@@ -117,8 +127,15 @@ if (!$isManagerOrOwner) {
           <div class="card-body">
             <div class="row mb-3">
               <div class="col-md-4 mb-2"><div class="border rounded p-2"><small>Email</small><div id="attendanceEmployeeEmail">-</div></div></div>
-              <div class="col-md-4 mb-2"><div class="border rounded p-2"><small>PIN</small><div id="attendanceEmployeePinState">-</div></div></div>
-              <div class="col-md-4 mb-2"><div class="border rounded p-2"><small>Biometric</small><div id="attendanceEmployeeBiometricState">-</div></div></div>
+              <div class="col-md-4 mb-2"><div class="border rounded p-2"><small>Sign-In Auth</small><div id="attendanceEmployeeAuthState">-</div></div></div>
+              <div class="col-md-4 mb-2"><div class="border rounded p-2"><small>GPI</small><div id="attendanceEmployeeGpi">-</div></div></div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-sm-6 col-lg-3 mb-2"><div class="border rounded p-2"><small>Attendance Days</small><div id="attendanceEmployeeAttendanceDays">0</div></div></div>
+              <div class="col-sm-6 col-lg-3 mb-2"><div class="border rounded p-2"><small>On Time</small><div id="attendanceEmployeeOnTimeDays">0</div></div></div>
+              <div class="col-sm-6 col-lg-3 mb-2"><div class="border rounded p-2"><small>Late Days</small><div id="attendanceEmployeeLateDays">0</div></div></div>
+              <div class="col-sm-6 col-lg-3 mb-2"><div class="border rounded p-2"><small>Total Fine</small><div id="attendanceEmployeeTotalFine">N0.00</div></div></div>
             </div>
 
             <div class="row">

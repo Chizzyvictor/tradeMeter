@@ -4,9 +4,11 @@ class EmployeeAttendancePage {
     this.app = new AppCore(csrf);
     this.AuthApp = new Auth(this.app);
     this.employees = [];
+    this.filteredEmployees = [];
     this.currentEmployeeId = 0;
     this.chart = null;
     this.currentRole = 'user';
+    this.searchTerm = '';
 
     this.bindEvents();
     this.initialize();
@@ -21,7 +23,6 @@ class EmployeeAttendancePage {
         return;
       }
       this.loadOverview();
-      this.loadEmployeeOptionsForModals();
       this.loadAttendancePolicyMeta();
     });
   }
@@ -38,14 +39,9 @@ class EmployeeAttendancePage {
       $('#attendanceSignInModal').modal('show');
     });
 
-    $('#attendanceSignInMethod').on('change', () => {
-      const method = String($('#attendanceSignInMethod').val() || 'pin');
-      $('#attendanceSignInSecretLabel').text(method === 'biometric' ? 'Biometric Token' : 'PIN');
-    });
-
-    $('#attendanceCredentialMethod').on('change', () => {
-      const method = String($('#attendanceCredentialMethod').val() || 'pin');
-      $('#attendanceCredentialSecretLabel').text(method === 'biometric' ? 'Biometric Token' : 'PIN');
+    $('#attendanceEmployeeSearch').on('input', (e) => {
+      this.searchTerm = String($(e.currentTarget).val() || '').trim().toLowerCase();
+      this.renderEmployees(this.employees);
     });
 
     $('#attendanceSignInForm').on('submit', (e) => {
@@ -56,11 +52,6 @@ class EmployeeAttendancePage {
     $('#attendanceSignOutForm').on('submit', (e) => {
       e.preventDefault();
       this.signOutEmployee();
-    });
-
-    $('#attendanceCredentialForm').on('submit', (e) => {
-      e.preventDefault();
-      this.saveCredential();
     });
 
     $('#attendanceBackToListBtn').on('click', () => {
@@ -79,18 +70,6 @@ class EmployeeAttendancePage {
       if (!userId) return;
       $('#attendanceSignOutEmployee').val(String(userId));
       $('#attendanceSignOutModal').modal('show');
-    });
-
-    $(document).on('click', '.attendance-credential-btn', (e) => {
-      e.stopPropagation();
-      if (this.currentRole !== 'owner') {
-        this.app.showAlert('Only owner can set credentials', 'error');
-        return;
-      }
-      const userId = Number($(e.currentTarget).data('id')) || 0;
-      if (!userId) return;
-      $('#attendanceCredentialUserId').val(String(userId));
-      $('#attendanceCredentialModal').modal('show');
     });
   }
 
@@ -134,20 +113,29 @@ class EmployeeAttendancePage {
     const $tbody = $('#attendanceEmployeesTable tbody');
     if (!$tbody.length) return;
 
-    if (!rows.length) {
+    const filteredRows = (rows || []).filter((row) => {
+      if (!this.searchTerm) return true;
+      const haystack = `${row.full_name || ''} ${row.email || ''} ${row.role_name || ''} ${row.performance_label || ''}`.toLowerCase();
+      return haystack.includes(this.searchTerm);
+    });
+    this.filteredEmployees = filteredRows;
+    $('#attendanceSearchSummary').text(
+      filteredRows.length === (rows || []).length
+        ? `Showing all ${filteredRows.length} employees`
+        : `Showing ${filteredRows.length} of ${(rows || []).length} employees`
+    );
+
+    if (!filteredRows.length) {
       $tbody.html('<tr><td colspan="9" class="text-center text-muted">No employees found</td></tr>');
       return;
     }
 
-    const html = rows.map((row) => {
+    const html = filteredRows.map((row) => {
       const gpi = Number(row.gpi || 0);
       const tone = String(row.performance_tone || 'danger');
       const badgeClass = tone === 'success' ? 'badge-success' : (tone === 'warning' ? 'badge-warning text-dark' : 'badge-danger');
       const onTime = Number(row.on_time_days || 0);
       const late = Number(row.late_days || 0);
-      const credentialButton = this.currentRole === 'owner'
-        ? `<button class="btn btn-sm btn-outline-info attendance-credential-btn" data-id="${row.user_id}">Credential</button>`
-        : '';
 
       return `
         <tr class="attendance-employee-row" data-id="${row.user_id}" style="cursor:pointer;">
@@ -161,7 +149,6 @@ class EmployeeAttendancePage {
           <td><span class="badge ${badgeClass}">${row.performance_label || 'Needs attention'}</span></td>
           <td>
             <button class="btn btn-sm btn-outline-dark attendance-signout-btn" data-id="${row.user_id}">Sign-Out</button>
-            ${credentialButton}
           </td>
         </tr>
       `;
@@ -176,19 +163,17 @@ class EmployeeAttendancePage {
       options.push(`<option value="${e.user_id}">${e.full_name} (${e.role_name})</option>`);
     });
 
-    $('#attendanceSignInEmployee').html(options.join(''));
     $('#attendanceSignOutEmployee').html(options.join(''));
   }
 
   signInEmployee() {
-    const user_id = Number($('#attendanceSignInEmployee').val()) || 0;
-    const method = String($('#attendanceSignInMethod').val() || 'pin');
-    const secret = String($('#attendanceSignInSecret').val() || '').trim();
+    const email = String($('#attendanceSignInEmail').val() || '').trim().toLowerCase();
+    const password = String($('#attendanceSignInPassword').val() || '');
     const notes = String($('#attendanceSignInNotes').val() || '').trim();
     const $btn = $('#attendanceSignInSubmitBtn');
 
-    if (!user_id || !secret) {
-      this.app.showAlert('Employee and credential are required', 'error');
+    if (!email || !password) {
+      this.app.showAlert('Employee email and password are required', 'error');
       return;
     }
 
@@ -197,13 +182,14 @@ class EmployeeAttendancePage {
     this.app.ajaxHelper({
       url: 'apiEmployeeAttendance.php',
       action: 'signInEmployee',
-      data: { user_id, method, secret, notes },
-      onSuccess: () => {
+      data: { email, password, notes },
+      onSuccess: (res) => {
         $('#attendanceSignInForm')[0].reset();
         AppCore.safeHideModal('#attendanceSignInModal');
         this.loadOverview();
-        if (this.currentEmployeeId === user_id) {
-          this.loadEmployeeProfile(user_id);
+        const userId = Number(res?.data?.user_id || 0);
+        if (userId > 0 && this.currentEmployeeId === userId) {
+          this.loadEmployeeProfile(userId);
         }
       },
       onComplete: () => {
@@ -240,39 +226,6 @@ class EmployeeAttendancePage {
     });
   }
 
-  saveCredential() {
-    if (this.currentRole !== 'owner') {
-      this.app.showAlert('Only owner can set credentials', 'error');
-      return;
-    }
-
-    const user_id = Number($('#attendanceCredentialUserId').val()) || 0;
-    const method = String($('#attendanceCredentialMethod').val() || 'pin');
-    const secret = String($('#attendanceCredentialSecret').val() || '').trim();
-    const $btn = $('#attendanceCredentialSubmitBtn');
-
-    if (!user_id || !secret) {
-      this.app.showAlert('Employee and credential are required', 'error');
-      return;
-    }
-
-    $btn.prop('disabled', true);
-
-    this.app.ajaxHelper({
-      url: 'apiEmployeeAttendance.php',
-      action: 'saveAttendanceCredential',
-      data: { user_id, method, secret },
-      onSuccess: () => {
-        $('#attendanceCredentialForm')[0].reset();
-        AppCore.safeHideModal('#attendanceCredentialModal');
-        this.loadOverview();
-      },
-      onComplete: () => {
-        $btn.prop('disabled', false);
-      }
-    });
-  }
-
   loadEmployeeProfile(userId) {
     const range = String($('#attendanceRange').val() || '30d');
 
@@ -283,6 +236,7 @@ class EmployeeAttendancePage {
       onSuccess: (res) => {
         const data = res.data || {};
         const profile = data.profile || {};
+        const summary = data.summary || {};
         const activities = Array.isArray(data.activities) ? data.activities : [];
 
         this.currentEmployeeId = Number(profile.user_id || userId) || userId;
@@ -291,8 +245,12 @@ class EmployeeAttendancePage {
         $('#attendanceEmployeeTitle').text(profile.full_name || 'Employee');
         $('#attendanceEmployeeRoleBadge').text(profile.role_name || 'Role');
         $('#attendanceEmployeeEmail').text(profile.email || '-');
-        $('#attendanceEmployeePinState').html(Number(profile.has_pin) === 1 ? '<span class="badge badge-success">Configured</span>' : '<span class="badge badge-secondary">Not Set</span>');
-        $('#attendanceEmployeeBiometricState').html(Number(profile.has_biometric) === 1 ? '<span class="badge badge-success">Configured</span>' : '<span class="badge badge-secondary">Not Set</span>');
+        $('#attendanceEmployeeAuthState').text(profile.signin_auth || 'Email + Password');
+        $('#attendanceEmployeeGpi').html(`<span class="badge badge-${summary.performance_tone === 'success' ? 'success' : (summary.performance_tone === 'warning' ? 'warning text-dark' : 'danger')}">${this.app.formatNumber(summary.gpi || 0)}</span>`);
+        $('#attendanceEmployeeAttendanceDays').text(String(Number(summary.attendance_days || 0)));
+        $('#attendanceEmployeeOnTimeDays').text(String(Number(summary.on_time_days || 0)));
+        $('#attendanceEmployeeLateDays').text(String(Number(summary.late_days || 0)));
+        $('#attendanceEmployeeTotalFine').text(`N${this.app.formatNumber(summary.total_fine || 0)}`);
 
         this.renderActivities(activities);
         this.renderChart(data.chart || {});

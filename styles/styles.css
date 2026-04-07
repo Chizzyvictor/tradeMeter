@@ -350,6 +350,19 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     display: block;
 }
 
+#userPerformanceCard .border.rounded {
+    min-height: 84px;
+    background: rgba(255, 255, 255, 0.76);
+}
+
+.dark-mode #userPerformanceCard .border.rounded {
+    background: rgba(30, 41, 59, 0.72);
+}
+
+#profilePerformanceChart {
+    min-height: 260px;
+}
+
 /* ================================================================
    CHAT SHELL
    ================================================================ */
@@ -2186,6 +2199,11 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 
 #attendanceEmployeeChart {
     min-height: 260px;
+}
+
+#attendanceEmployeeSearch {
+    border-radius: 999px;
+    padding-left: 1rem;
 }
 
 /* ====== TRANSACTIONS MOBILE FALLBACK ====== */

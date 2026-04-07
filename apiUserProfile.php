@@ -47,6 +47,78 @@ function ensureUsersPresenceColumn(AppDbConnection $db): void {
     }
 }
 
+function ensureProfileAttendanceTables(AppDbConnection $db): void {
+    $db->exec("CREATE TABLE IF NOT EXISTS employee_attendance_logs (
+        attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        attendance_date TEXT NOT NULL,
+        signin_at TEXT,
+        signout_at TEXT,
+        signin_method TEXT NOT NULL DEFAULT 'account_password',
+        minutes_late INTEGER DEFAULT 0,
+        late_grade TEXT DEFAULT 'on_time',
+        fine_amount REAL DEFAULT 0,
+        notes TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (cid, user_id, attendance_date)
+    )");
+
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_attendance_logs_cid_date ON employee_attendance_logs(cid, attendance_date)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_attendance_logs_user_date ON employee_attendance_logs(user_id, attendance_date)");
+}
+
+function profileAttendanceRangeMeta(string $range): array {
+    $range = strtolower(trim($range));
+    if (!in_array($range, ['7d', '30d', 'all'], true)) {
+        $range = '30d';
+    }
+
+    if ($range === 'all') {
+        return ['range' => 'all', 'filter' => '', 'params' => []];
+    }
+
+    $daysMap = ['7d' => 6, '30d' => 29];
+    $todayStart = new DateTimeImmutable('today');
+    $from = $todayStart->modify('-' . $daysMap[$range] . ' days');
+    $to = $todayStart->modify('+1 day');
+
+    return [
+        'range' => $range,
+        'filter' => ' AND attendance_date >= :from_date AND attendance_date < :to_date',
+        'params' => [
+            ':from_date' => $from->format('Y-m-d'),
+            ':to_date' => $to->format('Y-m-d'),
+        ],
+    ];
+}
+
+function profileComputePerformanceMetrics(int $attendanceDays, int $lateDays, int $lateMinutes): array {
+    $lateRate = $attendanceDays > 0 ? ($lateDays / $attendanceDays) : 0;
+    $avgLatePenalty = $attendanceDays > 0 ? min(1.0, ($lateMinutes / max(1, $attendanceDays)) / 60.0) : 0;
+    $absencePenalty = max(0.0, 1.0 - ($attendanceDays / max(1, 22)));
+    $attendanceScore = min(100, ($attendanceDays / max(1, 22)) * 100);
+    $lateScore = ($lateRate * 35) + ($avgLatePenalty * 20);
+    $gpi = max(0.0, round($attendanceScore - $lateScore - ($absencePenalty * 20), 2));
+
+    $tone = 'danger';
+    $label = 'Needs attention';
+    if ($gpi >= 80) {
+        $tone = 'success';
+        $label = 'Excellent';
+    } elseif ($gpi >= 60) {
+        $tone = 'warning';
+        $label = 'Average';
+    }
+
+    return [
+        'gpi' => $gpi,
+        'performance_tone' => $tone,
+        'performance_label' => $label,
+    ];
+}
+
 $cid = intval($_SESSION['cid'] ?? 0);
 if ($cid <= 0) {
     respond('error', 'Invalid session. Please log in again.');
@@ -93,6 +165,108 @@ switch ($action) {
                 'company' => $row['cName'],
                 'role' => $row['role_name'] ?? 'User',
                 'created_at' => $row['created_at']
+            ]
+        ]);
+        break;
+
+    case 'loadPerformanceSummary':
+        $uid = intval($_SESSION['user_id'] ?? 0);
+        if ($uid <= 0) {
+            respond('error', 'Session expired. Please log in again');
+        }
+
+        ensureProfileAttendanceTables($db);
+
+        $roleStmt = $db->prepare("SELECT COALESCE((
+                                        SELECT r.role_name
+                                        FROM user_roles ur
+                                        JOIN roles r ON r.role_id = ur.role_id
+                                        WHERE ur.user_id = :uid
+                                        ORDER BY CASE lower(r.role_name)
+                                            WHEN 'owner' THEN 1
+                                            WHEN 'manager' THEN 2
+                                            WHEN 'staff' THEN 3
+                                            ELSE 4 END
+                                        LIMIT 1
+                                    ), 'User') AS role_name");
+        $roleStmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
+        $roleName = strtolower((string)(($roleStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [])['role_name'] ?? 'user'));
+        if ($roleName === 'owner') {
+            respond('success', 'Owner performance not tracked', [
+                'data' => [
+                    'can_view' => false,
+                    'message' => 'Owner attendance performance is not tracked on this page.'
+                ]
+            ]);
+        }
+
+        $range = (string)($_POST['range'] ?? '30d');
+        $rangeMeta = profileAttendanceRangeMeta($range);
+
+        $stmt = $db->prepare("SELECT attendance_date,
+                                     signin_at,
+                                     signout_at,
+                                     minutes_late,
+                                     fine_amount
+                              FROM employee_attendance_logs
+                              WHERE cid = :cid AND user_id = :uid {$rangeMeta['filter']}
+                              ORDER BY attendance_date DESC
+                              LIMIT 120");
+        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $stmt->bindValue(':uid', $uid, SQLITE3_INTEGER);
+        bindParams($stmt, $rangeMeta['params']);
+        $res = $stmt->execute();
+
+        $attendanceDays = 0;
+        $onTimeDays = 0;
+        $lateDays = 0;
+        $signOutDays = 0;
+        $lateMinutes = 0;
+        $totalFine = 0.0;
+        $labels = [];
+        $onTimeChart = [];
+        $lateChart = [];
+
+        while ($res && ($row = $res->fetchArray(SQLITE3_ASSOC))) {
+            $minutes = intval($row['minutes_late'] ?? 0);
+            $attendanceDays++;
+            $lateMinutes += $minutes;
+            $totalFine += floatval($row['fine_amount'] ?? 0);
+            if ($minutes > 0) {
+                $lateDays++;
+            } else {
+                $onTimeDays++;
+            }
+            if (!empty($row['signout_at'])) {
+                $signOutDays++;
+            }
+
+            $labels[] = (string)($row['attendance_date'] ?? '');
+            $onTimeChart[] = $minutes <= 0 ? 1 : 0;
+            $lateChart[] = $minutes > 0 ? 1 : 0;
+        }
+
+        $performance = profileComputePerformanceMetrics($attendanceDays, $lateDays, $lateMinutes);
+
+        respond('success', 'Performance summary loaded', [
+            'data' => [
+                'can_view' => true,
+                'summary' => [
+                    'attendance_days' => $attendanceDays,
+                    'on_time_days' => $onTimeDays,
+                    'late_days' => $lateDays,
+                    'signout_days' => $signOutDays,
+                    'late_minutes' => $lateMinutes,
+                    'total_fine' => round($totalFine, 2),
+                    'gpi' => floatval($performance['gpi']),
+                    'performance_tone' => (string)$performance['performance_tone'],
+                    'performance_label' => (string)$performance['performance_label'],
+                ],
+                'chart' => [
+                    'labels' => array_reverse($labels),
+                    'on_time' => array_reverse($onTimeChart),
+                    'late' => array_reverse($lateChart),
+                ]
             ]
         ]);
         break;

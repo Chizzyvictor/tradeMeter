@@ -55,6 +55,38 @@ include "INC/navbar.php";
 							</div>
 						</div>
 
+						<div class="card shadow-sm mb-4 user-profile-section-card" id="userPerformanceCard" style="display:none;">
+							<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
+								<span>My Performance</span>
+								<select id="profilePerformanceRange" class="form-control form-control-sm w-auto">
+									<option value="7d">Last 7 Days</option>
+									<option value="30d" selected>Last 30 Days</option>
+									<option value="all">All Time</option>
+								</select>
+							</div>
+							<div class="card-body">
+								<div class="row mb-3">
+									<div class="col-sm-6 col-lg-3 mb-2"><div class="border rounded p-2"><small>GPI</small><div id="profilePerformanceGpi">0.00</div></div></div>
+									<div class="col-sm-6 col-lg-3 mb-2"><div class="border rounded p-2"><small>Attendance Days</small><div id="profileAttendanceDays">0</div></div></div>
+									<div class="col-sm-6 col-lg-3 mb-2"><div class="border rounded p-2"><small>On Time</small><div id="profileOnTimeDays">0</div></div></div>
+									<div class="col-sm-6 col-lg-3 mb-2"><div class="border rounded p-2"><small>Late Days</small><div id="profileLateDays">0</div></div></div>
+								</div>
+								<div class="row">
+									<div class="col-lg-5 mb-3">
+										<canvas id="profilePerformanceChart" height="220"></canvas>
+									</div>
+									<div class="col-lg-7 mb-3">
+										<div class="row">
+											<div class="col-sm-6 mb-2"><div class="border rounded p-2"><small>Total Fine</small><div id="profileTotalFine">N0.00</div></div></div>
+											<div class="col-sm-6 mb-2"><div class="border rounded p-2"><small>Late Minutes</small><div id="profileLateMinutes">0</div></div></div>
+											<div class="col-sm-6 mb-2"><div class="border rounded p-2"><small>Sign-Out Days</small><div id="profileSignOutDays">0</div></div></div>
+											<div class="col-sm-6 mb-2"><div class="border rounded p-2"><small>Performance</small><div id="profilePerformanceLabel">-</div></div></div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
 						<div class="card shadow-sm mb-4 user-profile-section-card">
 							<div class="card-header font-weight-bold">Change Email</div>
 							<div class="card-body">
@@ -185,4 +217,5 @@ include "INC/navbar.php";
 
 <?php include "INC/footer.php"; ?>
 
+<script src="assets/vendor/js/chart.umd.min.js"></script>
 <script src="scripts/user_profile.js?v=<?= asset_ver('scripts/user_profile.js') ?>"></script>

@@ -14,16 +14,6 @@ function attendanceEnsureSchema(AppDbConnection $db): void {
         UNIQUE (cid)
     )");
 
-    $db->exec("CREATE TABLE IF NOT EXISTS employee_attendance_credentials (
-        credential_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cid INTEGER NOT NULL,
-        user_id INTEGER NOT NULL,
-        pin_hash TEXT,
-        biometric_hash TEXT,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (cid, user_id)
-    )");
-
     $db->exec("CREATE TABLE IF NOT EXISTS employee_attendance_logs (
         attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
         cid INTEGER NOT NULL,
@@ -44,7 +34,6 @@ function attendanceEnsureSchema(AppDbConnection $db): void {
     $db->exec("CREATE INDEX IF NOT EXISTS idx_attendance_logs_cid_date ON employee_attendance_logs(cid, attendance_date)");
     $db->exec("CREATE INDEX IF NOT EXISTS idx_attendance_logs_user_date ON employee_attendance_logs(user_id, attendance_date)");
     $db->exec("CREATE INDEX IF NOT EXISTS idx_attendance_policy_cid ON attendance_policies(cid)");
-    $db->exec("CREATE INDEX IF NOT EXISTS idx_attendance_credentials_user ON employee_attendance_credentials(user_id, cid)");
 }
 
 function attendanceIsManagerOrOwner(AppDbConnection $db): bool {
@@ -143,34 +132,57 @@ function attendanceCalculateLateMeta(string $signinAt, array $policy): array {
     ];
 }
 
-function attendanceVerifyCredential(AppDbConnection $db, int $cid, int $userId, string $method, string $secret): bool {
-    if ($method === '' || $secret === '') {
-        return false;
-    }
-
-    $stmt = $db->prepare("SELECT pin_hash, biometric_hash
-                          FROM employee_attendance_credentials
-                          WHERE cid = :cid AND user_id = :uid
+function attendanceResolveUserByLogin(AppDbConnection $db, int $cid, string $email): ?array {
+    $stmt = $db->prepare("SELECT u.user_id,
+                                 u.full_name,
+                                 u.email,
+                                 u.password,
+                                 u.is_active,
+                                 COALESCE((
+                                    SELECT r.role_name
+                                    FROM user_roles ur
+                                    JOIN roles r ON r.role_id = ur.role_id
+                                    WHERE ur.user_id = u.user_id
+                                    ORDER BY CASE lower(r.role_name)
+                                        WHEN 'owner' THEN 1
+                                        WHEN 'manager' THEN 2
+                                        WHEN 'staff' THEN 3
+                                        ELSE 4 END
+                                    LIMIT 1
+                                 ), 'User') AS role_name
+                          FROM users u
+                          WHERE u.cid = :cid
+                            AND lower(u.email) = lower(:email)
                           LIMIT 1");
     $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-    $stmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+    $stmt->bindValue(':email', $email, SQLITE3_TEXT);
     $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    return is_array($row) ? $row : null;
+}
 
-    if (!$row) {
-        return false;
+function attendanceComputePerformanceMetrics(int $attendanceDays, int $lateDays, int $lateMinutes): array {
+    $lateRate = $attendanceDays > 0 ? ($lateDays / $attendanceDays) : 0;
+    $avgLatePenalty = $attendanceDays > 0 ? min(1.0, ($lateMinutes / max(1, $attendanceDays)) / 60.0) : 0;
+    $absencePenalty = max(0.0, 1.0 - ($attendanceDays / max(1, 22)));
+    $attendanceScore = min(100, ($attendanceDays / max(1, 22)) * 100);
+    $lateScore = ($lateRate * 35) + ($avgLatePenalty * 20);
+    $gpi = max(0.0, round($attendanceScore - $lateScore - ($absencePenalty * 20), 2));
+
+    $tone = 'danger';
+    $label = 'Needs attention';
+    if ($gpi >= 80) {
+        $tone = 'success';
+        $label = 'Excellent';
+    } elseif ($gpi >= 60) {
+        $tone = 'warning';
+        $label = 'Average';
     }
 
-    if ($method === 'pin') {
-        $hash = (string)($row['pin_hash'] ?? '');
-        return $hash !== '' && password_verify($secret, $hash);
-    }
-
-    if ($method === 'biometric') {
-        $hash = (string)($row['biometric_hash'] ?? '');
-        return $hash !== '' && password_verify($secret, $hash);
-    }
-
-    return false;
+    return [
+        'gpi' => $gpi,
+        'performance_tone' => $tone,
+        'performance_label' => $label,
+    ];
 }
 
 function attendanceBuildRangeFilter(string $range): array {
@@ -284,12 +296,8 @@ try {
                                                 WHEN 'staff' THEN 3
                                                 ELSE 4 END
                                             LIMIT 1
-                                         ), 'User') AS role_name,
-                                         CASE WHEN c.pin_hash IS NULL OR c.pin_hash = '' THEN 0 ELSE 1 END AS has_pin,
-                                         CASE WHEN c.biometric_hash IS NULL OR c.biometric_hash = '' THEN 0 ELSE 1 END AS has_biometric
+                                                                                 ), 'User') AS role_name
                                   FROM users u
-                                  LEFT JOIN employee_attendance_credentials c
-                                    ON c.cid = u.cid AND c.user_id = u.user_id
                                   WHERE u.cid = :cid
                                     AND lower(COALESCE((
                                         SELECT r2.role_name
@@ -314,85 +322,43 @@ try {
                     'role_name' => (string)($row['role_name'] ?? 'User'),
                     'is_active' => intval($row['is_active'] ?? 0),
                     'created_at' => intval($row['created_at'] ?? 0),
-                    'has_pin' => intval($row['has_pin'] ?? 0),
-                    'has_biometric' => intval($row['has_biometric'] ?? 0),
                 ];
             }
 
             respond('success', 'Employees loaded', ['data' => $employees]);
             break;
 
-        case 'saveAttendanceCredential':
-            attendanceEnsureOwnerOnly($db);
-
-            $employeeId = intval($_POST['user_id'] ?? 0);
-            $method = strtolower(trim((string)($_POST['method'] ?? 'pin')));
-            $secret = trim((string)($_POST['secret'] ?? ''));
-
-            if ($employeeId <= 0) {
-                respond('error', 'Employee is required.');
-            }
-
-            if (!in_array($method, ['pin', 'biometric'], true)) {
-                respond('error', 'Invalid credential method.');
-            }
-
-            if ($method === 'pin' && !preg_match('/^\d{4,8}$/', $secret)) {
-                respond('error', 'PIN must be 4 to 8 digits.');
-            }
-
-            if ($method === 'biometric' && strlen($secret) < 4) {
-                respond('error', 'Biometric token must be at least 4 characters.');
-            }
-
-            $check = $db->prepare("SELECT 1 FROM users WHERE user_id = :uid AND cid = :cid LIMIT 1");
-            $check->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
-            $check->bindValue(':cid', $cid, SQLITE3_INTEGER);
-            if (!$check->execute()->fetchArray(SQLITE3_ASSOC)) {
-                respond('error', 'Employee not found.');
-            }
-
-            $hashed = password_hash($secret, PASSWORD_DEFAULT);
-            $column = $method === 'pin' ? 'pin_hash' : 'biometric_hash';
-
-            $insert = $db->prepare("INSERT INTO employee_attendance_credentials (cid, user_id, pin_hash, biometric_hash, updated_at)
-                                    VALUES (:cid, :uid, :pin_hash, :biometric_hash, :updated_at)");
-            $insert->bindValue(':cid', $cid, SQLITE3_INTEGER);
-            $insert->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
-            $insert->bindValue(':pin_hash', $method === 'pin' ? $hashed : null, $method === 'pin' ? SQLITE3_TEXT : SQLITE3_NULL);
-            $insert->bindValue(':biometric_hash', $method === 'biometric' ? $hashed : null, $method === 'biometric' ? SQLITE3_TEXT : SQLITE3_NULL);
-            $insert->bindValue(':updated_at', appNowBusinessDateTime(), SQLITE3_TEXT);
-
-            try {
-                $insert->execute();
-            } catch (Throwable $e) {
-                $update = $db->prepare("UPDATE employee_attendance_credentials
-                                        SET {$column} = :hash,
-                                            updated_at = :updated_at
-                                        WHERE cid = :cid AND user_id = :uid");
-                $update->bindValue(':hash', $hashed, SQLITE3_TEXT);
-                $update->bindValue(':updated_at', appNowBusinessDateTime(), SQLITE3_TEXT);
-                $update->bindValue(':cid', $cid, SQLITE3_INTEGER);
-                $update->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
-                $update->execute();
-            }
-
-            respond('success', ucfirst($method) . ' credential saved.');
-            break;
-
         case 'signInEmployee':
-            $employeeId = intval($_POST['user_id'] ?? 0);
-            $method = strtolower(trim((string)($_POST['method'] ?? 'pin')));
-            $secret = trim((string)($_POST['secret'] ?? ''));
+            $email = strtolower(trim((string)($_POST['email'] ?? '')));
+            $password = (string)($_POST['password'] ?? '');
             $notes = trim((string)($_POST['notes'] ?? ''));
 
-            if ($employeeId <= 0) {
-                respond('error', 'Employee is required.');
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                respond('error', 'Valid employee email is required.');
             }
 
-            if (!attendanceVerifyCredential($db, $cid, $employeeId, $method, $secret)) {
-                respond('error', 'Credential verification failed.');
+            if ($password === '') {
+                respond('error', 'Employee password is required.');
             }
+
+            $employee = attendanceResolveUserByLogin($db, $cid, $email);
+            if (!$employee) {
+                respond('error', 'Employee account not found.');
+            }
+
+            if (intval($employee['is_active'] ?? 0) !== 1) {
+                respond('error', 'Employee account is inactive.');
+            }
+
+            if (strtolower((string)($employee['role_name'] ?? '')) === 'owner') {
+                respond('error', 'Owner attendance is not tracked here.');
+            }
+
+            if (!password_verify($password, (string)($employee['password'] ?? ''))) {
+                respond('error', 'Employee login credentials are invalid.');
+            }
+
+            $employeeId = intval($employee['user_id'] ?? 0);
 
             $todayDate = date('Y-m-d');
             $existing = $db->prepare("SELECT attendance_id, signin_at
@@ -423,7 +389,7 @@ try {
                                             updated_at = :updated_at
                                         WHERE attendance_id = :attendance_id AND cid = :cid");
                 $update->bindValue(':signin_at', $signinAt, SQLITE3_TEXT);
-                $update->bindValue(':signin_method', $method, SQLITE3_TEXT);
+                $update->bindValue(':signin_method', 'account_password', SQLITE3_TEXT);
                 $update->bindValue(':minutes_late', intval($lateMeta['minutes_late']), SQLITE3_INTEGER);
                 $update->bindValue(':late_grade', (string)$lateMeta['late_grade'], SQLITE3_TEXT);
                 $update->bindValue(':fine_amount', floatval($lateMeta['fine_amount']), SQLITE3_FLOAT);
@@ -442,7 +408,7 @@ try {
                 $ins->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
                 $ins->bindValue(':attendance_date', $todayDate, SQLITE3_TEXT);
                 $ins->bindValue(':signin_at', $signinAt, SQLITE3_TEXT);
-                $ins->bindValue(':signin_method', $method, SQLITE3_TEXT);
+                $ins->bindValue(':signin_method', 'account_password', SQLITE3_TEXT);
                 $ins->bindValue(':minutes_late', intval($lateMeta['minutes_late']), SQLITE3_INTEGER);
                 $ins->bindValue(':late_grade', (string)$lateMeta['late_grade'], SQLITE3_TEXT);
                 $ins->bindValue(':fine_amount', floatval($lateMeta['fine_amount']), SQLITE3_FLOAT);
@@ -452,7 +418,13 @@ try {
                 $ins->execute();
             }
 
-            respond('success', 'Employee signed in.', ['data' => $lateMeta]);
+            respond('success', 'Employee signed in.', [
+                'data' => array_merge($lateMeta, [
+                    'user_id' => $employeeId,
+                    'full_name' => (string)($employee['full_name'] ?? ''),
+                    'email' => (string)($employee['email'] ?? ''),
+                ])
+            ]);
             break;
 
         case 'signOutEmployee':
@@ -567,22 +539,7 @@ try {
                 $lateMinutes = intval($row['total_late_minutes'] ?? 0);
                 $totalFine = floatval($row['total_fine'] ?? 0);
 
-                $lateRate = $attendanceDays > 0 ? ($lateDays / $attendanceDays) : 0;
-                $avgLatePenalty = $attendanceDays > 0 ? min(1.0, ($lateMinutes / max(1, $attendanceDays)) / 60.0) : 0;
-                $absencePenalty = max(0.0, 1.0 - ($attendanceDays / max(1, 22)));
-                $attendanceScore = min(100, ($attendanceDays / max(1, 22)) * 100);
-                $lateScore = ($lateRate * 35) + ($avgLatePenalty * 20);
-                $gpi = max(0.0, round($attendanceScore - $lateScore - ($absencePenalty * 20), 2));
-
-                $tone = 'danger';
-                $label = 'Needs attention';
-                if ($gpi >= 80) {
-                    $tone = 'success';
-                    $label = 'Excellent';
-                } elseif ($gpi >= 60) {
-                    $tone = 'warning';
-                    $label = 'Average';
-                }
+                $performance = attendanceComputePerformanceMetrics($attendanceDays, $lateDays, $lateMinutes);
 
                 $employees[$employeeId]['attendance_days'] = $attendanceDays;
                 $employees[$employeeId]['on_time_days'] = $onTimeDays;
@@ -590,9 +547,9 @@ try {
                 $employees[$employeeId]['signout_days'] = $signoutDays;
                 $employees[$employeeId]['total_late_minutes'] = $lateMinutes;
                 $employees[$employeeId]['total_fine'] = $totalFine;
-                $employees[$employeeId]['gpi'] = $gpi;
-                $employees[$employeeId]['performance_tone'] = $tone;
-                $employees[$employeeId]['performance_label'] = $label;
+                $employees[$employeeId]['gpi'] = floatval($performance['gpi']);
+                $employees[$employeeId]['performance_tone'] = (string)$performance['performance_tone'];
+                $employees[$employeeId]['performance_label'] = (string)$performance['performance_label'];
             }
 
             $summaryStmt = $db->prepare("SELECT
@@ -641,12 +598,8 @@ try {
                                                         WHEN 'staff' THEN 3
                                                         ELSE 4 END
                                                     LIMIT 1
-                                                ), 'User') AS role_name,
-                                                CASE WHEN c.pin_hash IS NULL OR c.pin_hash = '' THEN 0 ELSE 1 END AS has_pin,
-                                                CASE WHEN c.biometric_hash IS NULL OR c.biometric_hash = '' THEN 0 ELSE 1 END AS has_biometric
+                                                                                                ), 'User') AS role_name
                                          FROM users u
-                                         LEFT JOIN employee_attendance_credentials c
-                                           ON c.cid = u.cid AND c.user_id = u.user_id
                                          WHERE u.cid = :cid AND u.user_id = :uid
                                          LIMIT 1");
             $profileStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
@@ -677,10 +630,27 @@ try {
             $chartLabels = [];
             $chartOnTime = [];
             $chartLate = [];
+            $attendanceDays = 0;
+            $lateDays = 0;
+            $lateMinutes = 0;
+            $onTimeDays = 0;
+            $totalFine = 0.0;
+            $signoutDays = 0;
 
             while ($activityRes && ($row = $activityRes->fetchArray(SQLITE3_ASSOC))) {
                 $minutesLate = intval($row['minutes_late'] ?? 0);
                 $dateLabel = (string)($row['attendance_date'] ?? '');
+                $attendanceDays++;
+                $lateMinutes += $minutesLate;
+                $totalFine += floatval($row['fine_amount'] ?? 0);
+                if ($minutesLate > 0) {
+                    $lateDays++;
+                } else {
+                    $onTimeDays++;
+                }
+                if (!empty($row['signout_at'])) {
+                    $signoutDays++;
+                }
 
                 $activities[] = [
                     'attendance_date' => $dateLabel,
@@ -699,6 +669,8 @@ try {
                 $chartLate[] = $minutesLate > 0 ? 1 : 0;
             }
 
+            $performance = attendanceComputePerformanceMetrics($attendanceDays, $lateDays, $lateMinutes);
+
             respond('success', 'Employee profile loaded', [
                 'data' => [
                     'profile' => [
@@ -707,8 +679,18 @@ try {
                         'email' => (string)($profile['email'] ?? ''),
                         'role_name' => (string)($profile['role_name'] ?? 'User'),
                         'is_active' => intval($profile['is_active'] ?? 0),
-                        'has_pin' => intval($profile['has_pin'] ?? 0),
-                        'has_biometric' => intval($profile['has_biometric'] ?? 0),
+                        'signin_auth' => 'Email + Password',
+                    ],
+                    'summary' => [
+                        'attendance_days' => $attendanceDays,
+                        'on_time_days' => $onTimeDays,
+                        'late_days' => $lateDays,
+                        'signout_days' => $signoutDays,
+                        'total_late_minutes' => $lateMinutes,
+                        'total_fine' => round($totalFine, 2),
+                        'gpi' => floatval($performance['gpi']),
+                        'performance_tone' => (string)$performance['performance_tone'],
+                        'performance_label' => (string)$performance['performance_label'],
                     ],
                     'activities' => $activities,
                     'chart' => [

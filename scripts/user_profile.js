@@ -5,6 +5,7 @@ class UserProfilePage {
     this.currentUserId = 0;
     this.users = [];
     this.messagePool = [];
+    this.performanceChart = null;
     this.activeConversationUserId = 0;
     this.chatFilter = '';
     this.messagesRefreshTimer = null;
@@ -24,6 +25,7 @@ class UserProfilePage {
 
   initialize() {
     this.loadUserProfile();
+    this.loadPerformanceSummary();
     this.loadMessagingData();
     this.startMessagesAutoRefresh();
   }
@@ -44,6 +46,10 @@ class UserProfilePage {
     $('#passwordForm').on('submit', (e) => {
       e.preventDefault();
       this.changePassword();
+    });
+
+    $('#profilePerformanceRange').on('change', () => {
+      this.loadPerformanceSummary();
     });
 
     $('#messageForm').on('submit', (e) => {
@@ -201,6 +207,89 @@ class UserProfilePage {
         }
       },
       errorMsg: 'Error loading profile'
+    });
+  }
+
+  loadPerformanceSummary() {
+    const range = String($('#profilePerformanceRange').val() || '30d');
+
+    this.app.ajaxHelper({
+      url: 'apiUserProfile.php',
+      action: 'loadPerformanceSummary',
+      data: { range },
+      silent: true,
+      onSuccess: (response) => {
+        const data = response.data || {};
+        if (!data.can_view) {
+          $('#userPerformanceCard').hide();
+          return;
+        }
+
+        $('#userPerformanceCard').show();
+        this.renderPerformanceSummary(data.summary || {});
+        this.renderPerformanceChart(data.chart || {});
+      }
+    });
+  }
+
+  renderPerformanceSummary(summary) {
+    const tone = String(summary.performance_tone || 'danger');
+    const badgeClass = tone === 'success' ? 'badge-success' : (tone === 'warning' ? 'badge-warning text-dark' : 'badge-danger');
+
+    $('#profilePerformanceGpi').html(`<span class="badge ${badgeClass}">${this.app.formatNumber(summary.gpi || 0)}</span>`);
+    $('#profileAttendanceDays').text(String(Number(summary.attendance_days || 0)));
+    $('#profileOnTimeDays').text(String(Number(summary.on_time_days || 0)));
+    $('#profileLateDays').text(String(Number(summary.late_days || 0)));
+    $('#profileTotalFine').text(`N${this.app.formatNumber(summary.total_fine || 0)}`);
+    $('#profileLateMinutes').text(String(Number(summary.late_minutes || 0)));
+    $('#profileSignOutDays').text(String(Number(summary.signout_days || 0)));
+    $('#profilePerformanceLabel').html(`<span class="badge ${badgeClass}">${AppCore.escapeHtml(summary.performance_label || '-')}</span>`);
+  }
+
+  renderPerformanceChart(chartData) {
+    const labels = Array.isArray(chartData.labels) ? chartData.labels : [];
+    const onTime = Array.isArray(chartData.on_time) ? chartData.on_time : [];
+    const late = Array.isArray(chartData.late) ? chartData.late : [];
+    const ctx = document.getElementById('profilePerformanceChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+
+    if (this.performanceChart) {
+      this.performanceChart.destroy();
+      this.performanceChart = null;
+    }
+
+    this.performanceChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'On Time',
+            data: onTime,
+            backgroundColor: 'rgba(34, 197, 94, 0.75)'
+          },
+          {
+            label: 'Late',
+            data: late,
+            backgroundColor: 'rgba(245, 158, 11, 0.75)'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top' }
+        },
+        scales: {
+          x: { stacked: true },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            ticks: { stepSize: 1 }
+          }
+        }
+      }
     });
   }
 

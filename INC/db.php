@@ -433,19 +433,6 @@ function appEnsureCoreBusinessSchema(AppDbConnection $db): void {
         );
         ",
         "
-        CREATE TABLE IF NOT EXISTS employee_attendance_credentials (
-            credential_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cid INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            pin_hash TEXT,
-            biometric_hash TEXT,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-            UNIQUE (cid, user_id)
-        );
-        ",
-        "
         CREATE TABLE IF NOT EXISTS employee_attendance_logs (
             attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
             cid INTEGER NOT NULL,
@@ -502,8 +489,7 @@ function appEnsureCoreBusinessIndexes(AppDbConnection $db): void {
         "CREATE INDEX IF NOT EXISTS idx_inventory_cid_product_id ON inventory(cid, product_id);",
         "CREATE INDEX IF NOT EXISTS idx_attendance_logs_cid_date ON employee_attendance_logs(cid, attendance_date);",
         "CREATE INDEX IF NOT EXISTS idx_attendance_logs_user_date ON employee_attendance_logs(user_id, attendance_date);",
-        "CREATE INDEX IF NOT EXISTS idx_attendance_policy_cid ON attendance_policies(cid);",
-        "CREATE INDEX IF NOT EXISTS idx_attendance_credentials_user ON employee_attendance_credentials(user_id, cid);"
+        "CREATE INDEX IF NOT EXISTS idx_attendance_policy_cid ON attendance_policies(cid);"
     ];
 
     foreach ($indexes as $index) {
