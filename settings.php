@@ -61,6 +61,39 @@ include "INC/navbar.php";
 						</div>
 					</div>
 
+					<div class="card shadow-sm mb-4 settings-section-card settings-owner-section" style="display:none;">
+						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
+							<span>Employee Attendance Policy</span>
+							<span class="badge badge-dark">Owner Only</span>
+						</div>
+						<div class="card-body">
+							<form id="attendancePolicyForm">
+								<div class="form-row">
+									<div class="form-group col-md-3">
+										<label for="attendanceResumptionTime">Resumption Time</label>
+										<input type="time" id="attendanceResumptionTime" class="form-control" required>
+									</div>
+									<div class="form-group col-md-3">
+										<label for="attendanceFine0To15">0-15 mins late</label>
+										<input type="number" id="attendanceFine0To15" class="form-control" min="0" step="0.01" required>
+									</div>
+									<div class="form-group col-md-3">
+										<label for="attendanceFine15To60">15-60 mins late</label>
+										<input type="number" id="attendanceFine15To60" class="form-control" min="0" step="0.01" required>
+									</div>
+									<div class="form-group col-md-3">
+										<label for="attendanceFine60Plus">1hr+ late</label>
+										<input type="number" id="attendanceFine60Plus" class="form-control" min="0" step="0.01" required>
+									</div>
+								</div>
+								<div class="settings-form-actions">
+									<button type="submit" class="btn btn-primary" id="saveAttendancePolicyBtn">Save Attendance Policy</button>
+								</div>
+							</form>
+							<small class="text-muted d-block mt-2">Late fines are applied automatically on employee sign-in.</small>
+						</div>
+					</div>
+
 					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section settings-backup-section">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
 							<span>User Management</span>

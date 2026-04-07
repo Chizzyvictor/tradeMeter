@@ -828,6 +828,111 @@
 </div>
 
 
+
+<!-- ============================
+     ATTENDANCE SIGN-IN MODAL
+============================= -->
+<div class="modal fade" id="attendanceSignInModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow rounded">
+      <form id="attendanceSignInForm">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title"><i class="fa fa-fingerprint mr-2"></i>Employee Sign-In</h5>
+          <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Employee</label>
+            <select id="attendanceSignInEmployee" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label>Auth Method</label>
+            <select id="attendanceSignInMethod" class="form-control" required>
+              <option value="pin">PIN</option>
+              <option value="biometric">Biometric</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label id="attendanceSignInSecretLabel">PIN</label>
+            <input type="password" id="attendanceSignInSecret" class="form-control" required>
+            <small class="text-muted">For biometric mode, use employee biometric token.</small>
+          </div>
+          <div class="form-group">
+            <label>Notes (optional)</label>
+            <input type="text" id="attendanceSignInNotes" class="form-control" maxlength="200">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success btn-block" id="attendanceSignInSubmitBtn">Sign In Employee</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================
+     ATTENDANCE SIGN-OUT MODAL
+============================= -->
+<div class="modal fade" id="attendanceSignOutModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow rounded">
+      <form id="attendanceSignOutForm">
+        <div class="modal-header bg-secondary text-white">
+          <h5 class="modal-title"><i class="fa fa-sign-out-alt mr-2"></i>Employee Sign-Out</h5>
+          <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Employee</label>
+            <select id="attendanceSignOutEmployee" class="form-control" required></select>
+          </div>
+          <p class="text-muted mb-0">Sign-out can only happen after a valid sign-in for today.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-dark btn-block" id="attendanceSignOutSubmitBtn">Sign Out Employee</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================
+     ATTENDANCE CREDENTIAL MODAL
+============================= -->
+<div class="modal fade" id="attendanceCredentialModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow rounded">
+      <form id="attendanceCredentialForm">
+        <div class="modal-header bg-info text-white">
+          <h5 class="modal-title"><i class="fa fa-key mr-2"></i>Set Attendance Credential</h5>
+          <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="attendanceCredentialUserId">
+          <div class="form-group">
+            <label>Method</label>
+            <select id="attendanceCredentialMethod" class="form-control" required>
+              <option value="pin">PIN</option>
+              <option value="biometric">Biometric</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label id="attendanceCredentialSecretLabel">PIN</label>
+            <input type="password" id="attendanceCredentialSecret" class="form-control" required>
+            <small class="text-muted">Only owner can update credentials.</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-info btn-block" id="attendanceCredentialSubmitBtn">Save Credential</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
 <!-- Image Viewer -->
 <div id="imageViewer" class="image-viewer">
     

@@ -15,6 +15,7 @@
                 <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'partners.php' ? 'active' : ''; ?>" href="partners.php">Partners</a></li>
                 <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'transactions.php' ? 'active' : ''; ?>" href="transactions.php">Transactions</a></li>
                 <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'inventory.php' ? 'active' : ''; ?>" href="inventory.php">Inventory</a></li>
+                <li class="nav-item" id="attendanceNavItem"><a class="nav-link <?php echo $currentPage === 'employees_attendance.php' ? 'active' : ''; ?>" href="employees_attendance.php">Attendance</a></li>
                 <li class="nav-item">
                     <a class="nav-link <?php echo $currentPage === 'user_profile.php' ? 'active' : ''; ?>" href="user_profile.php">
                         My Profile

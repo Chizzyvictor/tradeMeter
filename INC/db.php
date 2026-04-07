@@ -417,6 +417,54 @@ function appEnsureCoreBusinessSchema(AppDbConnection $db): void {
             FOREIGN KEY (sid) REFERENCES partner(sid) ON DELETE CASCADE
         );
         ",
+        "
+        CREATE TABLE IF NOT EXISTS attendance_policies (
+            policy_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER NOT NULL,
+            resumption_time TEXT NOT NULL DEFAULT '09:00',
+            fine_0_15 REAL NOT NULL DEFAULT 200,
+            fine_15_60 REAL NOT NULL DEFAULT 500,
+            fine_60_plus REAL NOT NULL DEFAULT 1000,
+            updated_by INTEGER,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE,
+            FOREIGN KEY (updated_by) REFERENCES users(user_id) ON DELETE SET NULL,
+            UNIQUE (cid)
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS employee_attendance_credentials (
+            credential_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            pin_hash TEXT,
+            biometric_hash TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+            UNIQUE (cid, user_id)
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS employee_attendance_logs (
+            attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            attendance_date TEXT NOT NULL,
+            signin_at TEXT,
+            signout_at TEXT,
+            signin_method TEXT NOT NULL DEFAULT 'pin',
+            minutes_late INTEGER DEFAULT 0,
+            late_grade TEXT DEFAULT 'on_time',
+            fine_amount REAL DEFAULT 0,
+            notes TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+            UNIQUE (cid, user_id, attendance_date)
+        );
+        ",
     ];
 
     foreach ($schema as $sql) {
@@ -451,7 +499,11 @@ function appEnsureCoreBusinessIndexes(AppDbConnection $db): void {
         "CREATE INDEX IF NOT EXISTS idx_purchases_cid_createdAt ON purchases(cid, createdAt);",
         "CREATE INDEX IF NOT EXISTS idx_purchases_partner_cid ON purchases(partner_id, cid);",
         "CREATE INDEX IF NOT EXISTS idx_sales_partner_cid ON sales(partner_id, cid);",
-        "CREATE INDEX IF NOT EXISTS idx_inventory_cid_product_id ON inventory(cid, product_id);"
+        "CREATE INDEX IF NOT EXISTS idx_inventory_cid_product_id ON inventory(cid, product_id);",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_logs_cid_date ON employee_attendance_logs(cid, attendance_date);",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_logs_user_date ON employee_attendance_logs(user_id, attendance_date);",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_policy_cid ON attendance_policies(cid);",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_credentials_user ON employee_attendance_credentials(user_id, cid);"
     ];
 
     foreach ($indexes as $index) {

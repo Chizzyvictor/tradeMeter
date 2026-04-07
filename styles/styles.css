@@ -2130,6 +2130,64 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     }
 }
 
+/* Employee attendance dashboard */
+.attendance-page {
+    background: linear-gradient(165deg, #f6f8fb 0%, #eef6ff 42%, #fff7ec 100%);
+    min-height: calc(100vh - 120px);
+}
+
+.attendance-stat-card {
+    border: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+}
+
+.attendance-stat-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.08;
+    pointer-events: none;
+    background: radial-gradient(circle at top right, #ffffff, transparent 55%);
+}
+
+.attendance-stat-indigo {
+    background: linear-gradient(135deg, #243b53 0%, #334e68 100%);
+    color: #fff;
+}
+
+.attendance-stat-green {
+    background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+    color: #fff;
+}
+
+.attendance-stat-amber {
+    background: linear-gradient(135deg, #b45309 0%, #f59e0b 100%);
+    color: #fff;
+}
+
+.attendance-stat-rose {
+    background: linear-gradient(135deg, #9f1239 0%, #e11d48 100%);
+    color: #fff;
+}
+
+#attendanceDetailsTab .card,
+#attendanceListTab .card {
+    border-radius: 16px;
+}
+
+#attendanceActivitiesTable td,
+#attendanceActivitiesTable th,
+#attendanceEmployeesTable td,
+#attendanceEmployeesTable th {
+    vertical-align: middle;
+}
+
+#attendanceEmployeeChart {
+    min-height: 260px;
+}
+
 /* ====== TRANSACTIONS MOBILE FALLBACK ====== */
 .transactions-page-actions {
     display: flex;

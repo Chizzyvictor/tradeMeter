@@ -22,8 +22,10 @@ $(document).ready(function () {
   AuthApp.loadCurrentUserContext((user) => {
     const role = user?.role || "User";
     const name = user?.full_name || "";
+    const roleLower = String(role || '').toLowerCase();
     const $badge = $("#currentUserRoleBadge");
     const $dashboardUserContext = $("#dashboardUserContext");
+    const $attendanceNavItem = $('#attendanceNavItem');
 
     if ($badge.length) {
       $badge.text(`Role: ${role}`);
@@ -34,6 +36,10 @@ $(document).ready(function () {
 
     if ($dashboardUserContext.length) {
       $dashboardUserContext.text(`User: ${name || "-"} | Role: ${role}`);
+    }
+
+    if ($attendanceNavItem.length && !['owner', 'manager'].includes(roleLower)) {
+      $attendanceNavItem.hide();
     }
   });
 

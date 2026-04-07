@@ -6,6 +6,7 @@ class SettingsPage {
     this.roles = [];
     this.canManageUsers = false;
     this.canManageBackups = false;
+    this.isOwner = false;
     this.backupSupported = false;
 
     this.bindEvents();
@@ -27,7 +28,15 @@ class SettingsPage {
 
         this.AuthApp.loadCurrentUserContext((user) => {
           const roleName = String(user?.role || '').toLowerCase();
+          this.isOwner = roleName === 'owner';
           this.canManageBackups = roleName === 'owner';
+
+          if (this.isOwner) {
+            $('.settings-owner-section').show();
+            this.loadAttendancePolicy();
+          } else {
+            $('.settings-owner-section').hide();
+          }
 
           if (this.canManageBackups) {
             $('.settings-backup-section').show();
@@ -126,6 +135,11 @@ class SettingsPage {
     $('#smtpTestEmailForm').on('submit', (e) => {
       e.preventDefault();
       this.sendSmtpTestEmail();
+    });
+
+    $('#attendancePolicyForm').on('submit', (e) => {
+      e.preventDefault();
+      this.saveAttendancePolicy();
     });
 
     $(document).on('click', '.save-user-role-btn', (e) => {
@@ -636,6 +650,63 @@ class SettingsPage {
       url: 'apiAuthentications.php',
       action: 'sendSmtpTestEmail',
       data: { email },
+      onComplete: () => {
+        $btn.prop('disabled', false);
+      }
+    });
+  }
+
+  loadAttendancePolicy() {
+    if (!this.isOwner) return;
+
+    this.app.ajaxHelper({
+      url: 'apiEmployeeAttendance.php',
+      action: 'loadAttendancePolicy',
+      data: {},
+      silent: true,
+      onSuccess: (res) => {
+        const data = res.data || {};
+        $('#attendanceResumptionTime').val(String(data.resumption_time || '09:00'));
+        $('#attendanceFine0To15').val(String(data.fine_0_15 ?? 200));
+        $('#attendanceFine15To60').val(String(data.fine_15_60 ?? 500));
+        $('#attendanceFine60Plus').val(String(data.fine_60_plus ?? 1000));
+      }
+    });
+  }
+
+  saveAttendancePolicy() {
+    if (!this.isOwner) return;
+
+    const resumption_time = String($('#attendanceResumptionTime').val() || '').trim();
+    const fine_0_15 = Number($('#attendanceFine0To15').val() || 0);
+    const fine_15_60 = Number($('#attendanceFine15To60').val() || 0);
+    const fine_60_plus = Number($('#attendanceFine60Plus').val() || 0);
+    const $btn = $('#saveAttendancePolicyBtn');
+
+    if (!resumption_time) {
+      this.app.showAlert('Resumption time is required', 'error');
+      return;
+    }
+
+    if (fine_0_15 < 0 || fine_15_60 < 0 || fine_60_plus < 0) {
+      this.app.showAlert('Fine values cannot be negative', 'error');
+      return;
+    }
+
+    $btn.prop('disabled', true);
+
+    this.app.ajaxHelper({
+      url: 'apiEmployeeAttendance.php',
+      action: 'saveAttendancePolicy',
+      data: {
+        resumption_time,
+        fine_0_15,
+        fine_15_60,
+        fine_60_plus
+      },
+      onSuccess: () => {
+        this.loadAttendancePolicy();
+      },
       onComplete: () => {
         $btn.prop('disabled', false);
       }
