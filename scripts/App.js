@@ -881,7 +881,7 @@ class Dashboard {
 
       this.updateDashboardBadges(res, selectedRange);
 
-      this.renderTopTable("#topSellingProductsTable tbody", res.topSellingProducts, (item) => {
+      this.renderTopTable("#topSellingProductsTable tbody", res.top?.products || res.topSellingProducts, (item) => {
        const qty = this.app.toNumber(item.total_qty, 0);
        const amount = this.app.formatCurrency(item.total_amount || 0);
        return `
@@ -893,7 +893,7 @@ class Dashboard {
        `;
      });
 
-     this.renderTopTable("#topSuppliersTable tbody", res.topSuppliers, (item) => {
+     this.renderTopTable("#topSuppliersTable tbody", res.top?.suppliers || res.topSuppliers, (item) => {
        const txns = this.app.toNumber(item.transactions, 0);
        const amount = this.app.formatCurrency(item.total_amount || 0);
        return `
@@ -905,7 +905,7 @@ class Dashboard {
        `;
      });
 
-      this.renderTopTable("#topBuyersTable tbody", res.topBuyers, (item) => {
+      this.renderTopTable("#topBuyersTable tbody", res.top?.buyers || res.topBuyers, (item) => {
         const txns = this.app.toNumber(item.transactions, 0);
         const amount = this.app.formatCurrency(item.total_amount || 0);
         return `

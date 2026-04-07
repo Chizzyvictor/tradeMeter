@@ -446,7 +446,12 @@ function appEnsureCoreBusinessIndexes(AppDbConnection $db): void {
         "CREATE INDEX IF NOT EXISTS idx_partner_ledger_partner ON partner_ledger(sid);",
         "CREATE INDEX IF NOT EXISTS idx_users_cid ON users(cid);",
         "CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);",
-        "CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions(role_id);"
+        "CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions(role_id);",
+        "CREATE INDEX IF NOT EXISTS idx_sales_cid_createdAt ON sales(cid, createdAt);",
+        "CREATE INDEX IF NOT EXISTS idx_purchases_cid_createdAt ON purchases(cid, createdAt);",
+        "CREATE INDEX IF NOT EXISTS idx_purchases_partner_cid ON purchases(partner_id, cid);",
+        "CREATE INDEX IF NOT EXISTS idx_sales_partner_cid ON sales(partner_id, cid);",
+        "CREATE INDEX IF NOT EXISTS idx_inventory_cid_product_id ON inventory(cid, product_id);"
     ];
 
     foreach ($indexes as $index) {

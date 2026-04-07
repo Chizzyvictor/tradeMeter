@@ -82,6 +82,19 @@ function appNowBusinessDateTime(): string {
     return date('Y-m-d H:i:s');
 }
 
+function bindParams($stmt, array $params): void {
+    foreach ($params as $key => $value) {
+        $stmt->bindValue($key, $value, SQLITE3_TEXT);
+    }
+}
+
+function calcGrowth(float $current, float $previous): float {
+    if ($previous == 0) {
+        return $current > 0 ? 100.0 : 0.0;
+    }
+    return round((($current - $previous) / $previous) * 100, 2);
+}
+
 function appIsBusinessDateTime($value): bool {
     return is_string($value) && preg_match(appBusinessDateTimePattern(), trim($value)) === 1;
 }

@@ -8,40 +8,23 @@ switch ($action) {
         requirePermission($db, 'view_reports');
 
         $cid = intval($cid);
-        $range = strtolower(trim($_POST['range'] ?? 'all'));
-
-        // Keep dashboard-heavy paths indexed for faster aggregates and top-N queries.
-        $db->exec("CREATE INDEX IF NOT EXISTS idx_partner_cid ON partner(cid)");
-        $db->exec("CREATE INDEX IF NOT EXISTS idx_sales_cid_createdAt ON sales(cid, createdAt)");
-        $db->exec("CREATE INDEX IF NOT EXISTS idx_purchases_cid_createdAt ON purchases(cid, createdAt)");
-        $db->exec("CREATE INDEX IF NOT EXISTS idx_sales_items_sale_id ON sales_items(sale_id)");
-        $db->exec("CREATE INDEX IF NOT EXISTS idx_purchases_partner_cid ON purchases(partner_id, cid)");
-        $db->exec("CREATE INDEX IF NOT EXISTS idx_sales_partner_cid ON sales(partner_id, cid)");
-        $db->exec("CREATE INDEX IF NOT EXISTS idx_inventory_cid_product_id ON inventory(cid, product_id)");
+        $allowedRanges = ['today', '7d', '30d', 'all'];
+        $rawRange = strtolower(trim((string)($_POST['range'] ?? 'all')));
+        $range = in_array($rawRange, $allowedRanges, true) ? $rawRange : 'all';
 
             $dateFilter = "";
             $dateFilterAlias = "";
             $previousDateFilter = "";
             $previousDateFilterAlias = "";
-            $rangeMap = ['today', '7d', '30d'];
             $dateFilterParams = [];
             $dateFilterAliasParams = [];
             $previousDateFilterParams = [];
             $previousDateFilterAliasParams = [];
 
-            if (!in_array($range, $rangeMap, true) && $range !== 'all') {
-            $range = 'all';
-        }
-
             if ($range !== 'all') {
+                $rangeDaysMap = ['today' => 0, '7d' => 6, '30d' => 29];
                 $todayStart = new DateTimeImmutable('today');
-                if ($range === 'today') {
-                    $from = $todayStart;
-                } elseif ($range === '7d') {
-                    $from = $todayStart->modify('-6 days');
-                } else {
-                    $from = $todayStart->modify('-29 days');
-                }
+                $from = $todayStart->modify('-' . $rangeDaysMap[$range] . ' days');
                 $to = $todayStart->modify('+1 day');
 
                 // Use range predicates instead of wrapping columns in date() for index-friendly filtering.
@@ -98,9 +81,7 @@ switch ($action) {
             WHERE cid = :sales_cid {$dateFilter}
         ");
         $salesStatsStmt->bindValue(':sales_cid', $cid, SQLITE3_INTEGER);
-        foreach ($dateFilterParams as $key => $value) {
-            $salesStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
-        }
+        bindParams($salesStatsStmt, $dateFilterParams);
         $salesStatsRow = $salesStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
         $purchaseStatsStmt = $db->prepare(" 
@@ -111,9 +92,7 @@ switch ($action) {
             WHERE cid = :purchase_cid {$dateFilter}
         ");
         $purchaseStatsStmt->bindValue(':purchase_cid', $cid, SQLITE3_INTEGER);
-        foreach ($dateFilterParams as $key => $value) {
-            $purchaseStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
-        }
+        bindParams($purchaseStatsStmt, $dateFilterParams);
         $purchaseStatsRow = $purchaseStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
         $salesDateFilterAlias = str_replace('t.', 's.', $dateFilterAlias);
@@ -128,9 +107,7 @@ switch ($action) {
             WHERE s.cid = :profit_cid {$salesDateFilterAlias}
         ");
         $profitStatsStmt->bindValue(':profit_cid', $cid, SQLITE3_INTEGER);
-        foreach ($dateFilterAliasParams as $key => $value) {
-            $profitStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
-        }
+        bindParams($profitStatsStmt, $dateFilterAliasParams);
         $profitStatsRow = $profitStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
         $previousSalesStatsRow = [];
@@ -145,9 +122,7 @@ switch ($action) {
                 WHERE cid = :sales_cid {$previousDateFilter}
             ");
             $previousSalesStatsStmt->bindValue(':sales_cid', $cid, SQLITE3_INTEGER);
-            foreach ($previousDateFilterParams as $key => $value) {
-                $previousSalesStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
-            }
+            bindParams($previousSalesStatsStmt, $previousDateFilterParams);
             $previousSalesStatsRow = $previousSalesStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
             $previousPurchaseStatsStmt = $db->prepare(" 
@@ -158,9 +133,7 @@ switch ($action) {
                 WHERE cid = :purchase_cid {$previousDateFilter}
             ");
             $previousPurchaseStatsStmt->bindValue(':purchase_cid', $cid, SQLITE3_INTEGER);
-            foreach ($previousDateFilterParams as $key => $value) {
-                $previousPurchaseStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
-            }
+            bindParams($previousPurchaseStatsStmt, $previousDateFilterParams);
             $previousPurchaseStatsRow = $previousPurchaseStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
             $previousProfitStatsStmt = $db->prepare(" 
@@ -172,9 +145,7 @@ switch ($action) {
                 WHERE s.cid = :profit_cid {$previousSalesDateFilterAlias}
             ");
             $previousProfitStatsStmt->bindValue(':profit_cid', $cid, SQLITE3_INTEGER);
-            foreach ($previousDateFilterAliasParams as $key => $value) {
-                $previousProfitStatsStmt->bindValue($key, $value, SQLITE3_TEXT);
-            }
+            bindParams($previousProfitStatsStmt, $previousDateFilterAliasParams);
             $previousProfitStatsRow = $previousProfitStatsStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
         }
 
@@ -202,16 +173,14 @@ switch ($action) {
                 COALESCE(SUM(si.total),0) AS total_amount
             FROM sales_items si
             INNER JOIN sales t ON t.sale_id = si.sale_id
-            INNER JOIN products pr ON pr.product_id = si.product_id
+            INNER JOIN products pr ON pr.product_id = si.product_id AND pr.cid = t.cid
             WHERE t.cid = :cid {$dateFilterAlias}
             GROUP BY pr.product_id, pr.product_name
             ORDER BY total_qty DESC, total_amount DESC
             LIMIT 5
         ");
         $topSellingStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-        foreach ($dateFilterAliasParams as $key => $value) {
-            $topSellingStmt->bindValue($key, $value, SQLITE3_TEXT);
-        }
+        bindParams($topSellingStmt, $dateFilterAliasParams);
         $topSellingRes = $topSellingStmt->execute();
         while($row = $topSellingRes->fetchArray(SQLITE3_ASSOC)){
             $topSellingProducts[] = $row;
@@ -232,9 +201,7 @@ switch ($action) {
             LIMIT 5
         ");
         $topSuppliersStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-        foreach ($dateFilterAliasParams as $key => $value) {
-            $topSuppliersStmt->bindValue($key, $value, SQLITE3_TEXT);
-        }
+        bindParams($topSuppliersStmt, $dateFilterAliasParams);
         $topSuppliersRes = $topSuppliersStmt->execute();
         while($row = $topSuppliersRes->fetchArray(SQLITE3_ASSOC)){
             $topSuppliers[] = $row;
@@ -255,9 +222,7 @@ switch ($action) {
             LIMIT 5
         ");
         $topBuyersStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-        foreach ($dateFilterAliasParams as $key => $value) {
-            $topBuyersStmt->bindValue($key, $value, SQLITE3_TEXT);
-        }
+        bindParams($topBuyersStmt, $dateFilterAliasParams);
         $topBuyersRes = $topBuyersStmt->execute();
         while($row = $topBuyersRes->fetchArray(SQLITE3_ASSOC)){
             $topBuyers[] = $row;
@@ -282,20 +247,24 @@ switch ($action) {
 
         $trendSummary = [
             "totalSales" => [
-                "current" => floatval($totalSales),
+                "current"  => floatval($totalSales),
                 "previous" => floatval($previousTotalSales),
+                "growth"   => calcGrowth(floatval($totalSales), floatval($previousTotalSales)),
             ],
             "totalPurchases" => [
-                "current" => floatval($totalPurchases),
+                "current"  => floatval($totalPurchases),
                 "previous" => floatval($previousTotalPurchases),
+                "growth"   => calcGrowth(floatval($totalPurchases), floatval($previousTotalPurchases)),
             ],
             "rangeTransactions" => [
-                "current" => intval($rangeTransactions),
+                "current"  => intval($rangeTransactions),
                 "previous" => intval($previousRangeTransactions),
+                "growth"   => calcGrowth(floatval($rangeTransactions), floatval($previousRangeTransactions)),
             ],
             "profit" => [
-                "current" => floatval($profit),
+                "current"  => floatval($profit),
                 "previous" => floatval($previousProfit),
+                "growth"   => calcGrowth(floatval($profit), floatval($previousProfit)),
             ],
         ];
 
@@ -328,9 +297,11 @@ switch ($action) {
                     "formatted" => number_format($profit, 2)
                 ]
             ],
-            "topSellingProducts" => $topSellingProducts,
-            "topSuppliers"       => $topSuppliers,
-            "topBuyers"          => $topBuyers,
+            "top" => [
+                "products"  => $topSellingProducts,
+                "suppliers" => $topSuppliers,
+                "buyers"    => $topBuyers,
+            ],
             "selectedRange"      => $range,
             "trendSummary"       => $trendSummary
         ]);
