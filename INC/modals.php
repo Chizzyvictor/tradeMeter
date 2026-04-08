@@ -891,6 +891,96 @@
 </div>
 
 
+<!-- ============================
+     ATTENDANCE SHIFT MODAL
+============================= -->
+<div class="modal fade" id="attendanceShiftModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow rounded">
+      <form id="attendanceShiftForm">
+        <div class="modal-header bg-info text-white">
+          <h5 class="modal-title"><i class="fa fa-clock mr-2"></i>Set Employee Shift</h5>
+          <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="attendanceShiftUserId">
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label>Shift Start</label>
+              <input type="time" id="attendanceShiftStart" class="form-control" required>
+            </div>
+            <div class="form-group col-md-6">
+              <label>Shift End</label>
+              <input type="time" id="attendanceShiftEnd" class="form-control" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label>Grace Minutes</label>
+              <input type="number" id="attendanceShiftGrace" class="form-control" min="0" value="0" required>
+            </div>
+            <div class="form-group col-md-6">
+              <label>Active</label>
+              <select id="attendanceShiftActive" class="form-control">
+                <option value="1">Yes</option>
+                <option value="0">No</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-info btn-block" id="attendanceShiftSubmitBtn">Save Shift Rule</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================
+     ATTENDANCE CORRECTION MODAL
+============================= -->
+<div class="modal fade" id="attendanceCorrectionModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow rounded">
+      <form id="attendanceCorrectionForm">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title"><i class="fa fa-edit mr-2"></i>Request Attendance Correction</h5>
+          <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Employee</label>
+            <select id="attendanceCorrectionEmployee" class="form-control" required></select>
+          </div>
+          <div class="form-group">
+            <label>Attendance Date</label>
+            <input type="date" id="attendanceCorrectionDate" class="form-control" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label>Proposed Sign-In (optional)</label>
+              <input type="datetime-local" id="attendanceCorrectionSignIn" class="form-control">
+            </div>
+            <div class="form-group col-md-6">
+              <label>Proposed Sign-Out (optional)</label>
+              <input type="datetime-local" id="attendanceCorrectionSignOut" class="form-control">
+            </div>
+          </div>
+          <div class="form-group mb-0">
+            <label>Reason</label>
+            <textarea id="attendanceCorrectionReason" class="form-control" rows="3" required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-warning btn-block" id="attendanceCorrectionSubmitBtn">Submit Correction Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
 <!-- Image Viewer -->
 <div id="imageViewer" class="image-viewer">
     

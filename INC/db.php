@@ -433,6 +433,19 @@ function appEnsureCoreBusinessSchema(AppDbConnection $db): void {
         );
         ",
         "
+        CREATE TABLE IF NOT EXISTS employee_shift_rules (
+            shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            shift_start TEXT NOT NULL DEFAULT '09:00',
+            shift_end TEXT NOT NULL DEFAULT '17:00',
+            grace_minutes INTEGER NOT NULL DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (cid, user_id)
+        );
+        ",
+        "
         CREATE TABLE IF NOT EXISTS employee_attendance_logs (
             attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
             cid INTEGER NOT NULL,
@@ -450,6 +463,26 @@ function appEnsureCoreBusinessSchema(AppDbConnection $db): void {
             FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
             UNIQUE (cid, user_id, attendance_date)
+        );
+        ",
+        "
+        CREATE TABLE IF NOT EXISTS attendance_corrections (
+            correction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cid INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            attendance_date TEXT NOT NULL,
+            requested_by INTEGER,
+            current_signin_at TEXT,
+            current_signout_at TEXT,
+            proposed_signin_at TEXT,
+            proposed_signout_at TEXT,
+            reason TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            reviewed_by INTEGER,
+            review_note TEXT,
+            reviewed_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         ",
     ];
@@ -489,7 +522,10 @@ function appEnsureCoreBusinessIndexes(AppDbConnection $db): void {
         "CREATE INDEX IF NOT EXISTS idx_inventory_cid_product_id ON inventory(cid, product_id);",
         "CREATE INDEX IF NOT EXISTS idx_attendance_logs_cid_date ON employee_attendance_logs(cid, attendance_date);",
         "CREATE INDEX IF NOT EXISTS idx_attendance_logs_user_date ON employee_attendance_logs(user_id, attendance_date);",
-        "CREATE INDEX IF NOT EXISTS idx_attendance_policy_cid ON attendance_policies(cid);"
+        "CREATE INDEX IF NOT EXISTS idx_attendance_policy_cid ON attendance_policies(cid);",
+        "CREATE INDEX IF NOT EXISTS idx_shift_rules_user ON employee_shift_rules(user_id, cid);",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_corrections_cid_status ON attendance_corrections(cid, status);",
+        "CREATE INDEX IF NOT EXISTS idx_attendance_corrections_user_date ON attendance_corrections(user_id, attendance_date);"
     ];
 
     foreach ($indexes as $index) {

@@ -14,6 +14,18 @@ function attendanceEnsureSchema(AppDbConnection $db): void {
         UNIQUE (cid)
     )");
 
+    $db->exec("CREATE TABLE IF NOT EXISTS employee_shift_rules (
+        shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        shift_start TEXT NOT NULL DEFAULT '09:00',
+        shift_end TEXT NOT NULL DEFAULT '17:00',
+        grace_minutes INTEGER NOT NULL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (cid, user_id)
+    )");
+
     $db->exec("CREATE TABLE IF NOT EXISTS employee_attendance_logs (
         attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
         cid INTEGER NOT NULL,
@@ -21,7 +33,7 @@ function attendanceEnsureSchema(AppDbConnection $db): void {
         attendance_date TEXT NOT NULL,
         signin_at TEXT,
         signout_at TEXT,
-        signin_method TEXT NOT NULL DEFAULT 'pin',
+        signin_method TEXT NOT NULL DEFAULT 'account_password',
         minutes_late INTEGER DEFAULT 0,
         late_grade TEXT DEFAULT 'on_time',
         fine_amount REAL DEFAULT 0,
@@ -31,9 +43,31 @@ function attendanceEnsureSchema(AppDbConnection $db): void {
         UNIQUE (cid, user_id, attendance_date)
     )");
 
+    $db->exec("CREATE TABLE IF NOT EXISTS attendance_corrections (
+        correction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        attendance_date TEXT NOT NULL,
+        requested_by INTEGER,
+        current_signin_at TEXT,
+        current_signout_at TEXT,
+        proposed_signin_at TEXT,
+        proposed_signout_at TEXT,
+        reason TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        reviewed_by INTEGER,
+        review_note TEXT,
+        reviewed_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )");
+
     $db->exec("CREATE INDEX IF NOT EXISTS idx_attendance_logs_cid_date ON employee_attendance_logs(cid, attendance_date)");
     $db->exec("CREATE INDEX IF NOT EXISTS idx_attendance_logs_user_date ON employee_attendance_logs(user_id, attendance_date)");
     $db->exec("CREATE INDEX IF NOT EXISTS idx_attendance_policy_cid ON attendance_policies(cid)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_shift_rules_user ON employee_shift_rules(user_id, cid)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_attendance_corrections_cid_status ON attendance_corrections(cid, status)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_attendance_corrections_user_date ON attendance_corrections(user_id, attendance_date)");
 }
 
 function attendanceIsManagerOrOwner(AppDbConnection $db): bool {
@@ -72,63 +106,23 @@ function attendanceGetPolicy(AppDbConnection $db, int $cid): array {
     ];
 }
 
-function attendanceGetRoleMapByUserId(AppDbConnection $db, int $cid): array {
-    $map = [];
-    $stmt = $db->prepare("SELECT u.user_id,
-                                 COALESCE((
-                                     SELECT r.role_name
-                                     FROM user_roles ur
-                                     JOIN roles r ON r.role_id = ur.role_id
-                                     WHERE ur.user_id = u.user_id
-                                     ORDER BY CASE lower(r.role_name)
-                                         WHEN 'owner' THEN 1
-                                         WHEN 'manager' THEN 2
-                                         WHEN 'staff' THEN 3
-                                         ELSE 4 END,
-                                         r.role_name ASC
-                                     LIMIT 1
-                                 ), 'User') AS role_name
-                          FROM users u
-                          WHERE u.cid = :cid");
+function attendanceGetShift(AppDbConnection $db, int $cid, int $userId): array {
+    $stmt = $db->prepare("SELECT shift_start, shift_end, grace_minutes, is_active
+                          FROM employee_shift_rules
+                          WHERE cid = :cid AND user_id = :uid
+                          LIMIT 1");
     $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-    $res = $stmt->execute();
-    while ($res && ($row = $res->fetchArray(SQLITE3_ASSOC))) {
-        $uid = intval($row['user_id'] ?? 0);
-        if ($uid > 0) {
-            $map[$uid] = (string)($row['role_name'] ?? 'User');
-        }
-    }
-    return $map;
-}
+    $stmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
-function attendanceCalculateLateMeta(string $signinAt, array $policy): array {
-    $signinTs = strtotime($signinAt);
-    $datePrefix = substr($signinAt, 0, 10);
-    $resumptionTime = trim((string)($policy['resumption_time'] ?? '09:00'));
-    $resumptionAt = strtotime($datePrefix . ' ' . $resumptionTime . ':00');
-    if ($signinTs === false || $resumptionAt === false) {
-        return ['minutes_late' => 0, 'late_grade' => 'on_time', 'fine_amount' => 0.0];
-    }
-
-    $minutesLate = max(0, intval(round(($signinTs - $resumptionAt) / 60)));
-    $grade = 'on_time';
-    $fine = 0.0;
-
-    if ($minutesLate > 0 && $minutesLate <= 15) {
-        $grade = 'late_low';
-        $fine = floatval($policy['fine_0_15'] ?? 200);
-    } elseif ($minutesLate > 15 && $minutesLate <= 60) {
-        $grade = 'late_mid';
-        $fine = floatval($policy['fine_15_60'] ?? 500);
-    } elseif ($minutesLate > 60) {
-        $grade = 'late_high';
-        $fine = floatval($policy['fine_60_plus'] ?? 1000);
-    }
+    $policy = attendanceGetPolicy($db, $cid);
+    $active = intval($row['is_active'] ?? 0) === 1;
 
     return [
-        'minutes_late' => $minutesLate,
-        'late_grade' => $grade,
-        'fine_amount' => $fine,
+        'shift_start' => $active ? (string)($row['shift_start'] ?? $policy['resumption_time']) : (string)$policy['resumption_time'],
+        'shift_end' => $active ? (string)($row['shift_end'] ?? '17:00') : '17:00',
+        'grace_minutes' => $active ? intval($row['grace_minutes'] ?? 0) : 0,
+        'is_active' => $active ? 1 : 0,
     ];
 }
 
@@ -158,6 +152,38 @@ function attendanceResolveUserByLogin(AppDbConnection $db, int $cid, string $ema
     $stmt->bindValue(':email', $email, SQLITE3_TEXT);
     $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
     return is_array($row) ? $row : null;
+}
+
+function attendanceCalculateLateMetaWithShift(string $signinAt, array $policy, array $shift): array {
+    $signinTs = strtotime($signinAt);
+    $datePrefix = substr($signinAt, 0, 10);
+    $shiftStart = trim((string)($shift['shift_start'] ?? $policy['resumption_time']));
+    $grace = max(0, intval($shift['grace_minutes'] ?? 0));
+    $startTs = strtotime($datePrefix . ' ' . $shiftStart . ':00');
+    if ($signinTs === false || $startTs === false) {
+        return ['minutes_late' => 0, 'late_grade' => 'on_time', 'fine_amount' => 0.0];
+    }
+
+    $minutesLate = max(0, intval(round(($signinTs - ($startTs + ($grace * 60))) / 60)));
+    $grade = 'on_time';
+    $fine = 0.0;
+
+    if ($minutesLate > 0 && $minutesLate <= 15) {
+        $grade = 'late_low';
+        $fine = floatval($policy['fine_0_15'] ?? 200);
+    } elseif ($minutesLate > 15 && $minutesLate <= 60) {
+        $grade = 'late_mid';
+        $fine = floatval($policy['fine_15_60'] ?? 500);
+    } elseif ($minutesLate > 60) {
+        $grade = 'late_high';
+        $fine = floatval($policy['fine_60_plus'] ?? 1000);
+    }
+
+    return [
+        'minutes_late' => $minutesLate,
+        'late_grade' => $grade,
+        'fine_amount' => $fine,
+    ];
 }
 
 function attendanceComputePerformanceMetrics(int $attendanceDays, int $lateDays, int $lateMinutes): array {
@@ -192,7 +218,7 @@ function attendanceBuildRangeFilter(string $range): array {
     }
 
     if ($range === 'all') {
-        return ['range' => 'all', 'from' => '', 'to' => '', 'filter' => '', 'params' => []];
+        return ['range' => 'all', 'filter' => '', 'params' => []];
     }
 
     $daysMap = ['today' => 0, '7d' => 6, '30d' => 29];
@@ -202,14 +228,64 @@ function attendanceBuildRangeFilter(string $range): array {
 
     return [
         'range' => $range,
-        'from' => $from->format('Y-m-d'),
-        'to' => $to->format('Y-m-d'),
         'filter' => ' AND l.attendance_date >= :from_date AND l.attendance_date < :to_date',
         'params' => [
             ':from_date' => $from->format('Y-m-d'),
             ':to_date' => $to->format('Y-m-d'),
         ],
     ];
+}
+
+function attendanceUpsertLog(AppDbConnection $db, int $cid, int $userId, string $date, ?string $signinAt, ?string $signoutAt, string $method, array $lateMeta, string $notes): void {
+    $existing = $db->prepare("SELECT attendance_id FROM employee_attendance_logs WHERE cid = :cid AND user_id = :uid AND attendance_date = :dt LIMIT 1");
+    $existing->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    $existing->bindValue(':uid', $userId, SQLITE3_INTEGER);
+    $existing->bindValue(':dt', $date, SQLITE3_TEXT);
+    $row = $existing->execute()->fetchArray(SQLITE3_ASSOC);
+
+    if ($row) {
+        $up = $db->prepare("UPDATE employee_attendance_logs
+                            SET signin_at = :signin_at,
+                                signout_at = :signout_at,
+                                signin_method = :signin_method,
+                                minutes_late = :minutes_late,
+                                late_grade = :late_grade,
+                                fine_amount = :fine_amount,
+                                notes = :notes,
+                                updated_at = :updated_at
+                            WHERE attendance_id = :aid AND cid = :cid");
+        $up->bindValue(':signin_at', $signinAt, $signinAt === null ? SQLITE3_NULL : SQLITE3_TEXT);
+        $up->bindValue(':signout_at', $signoutAt, $signoutAt === null ? SQLITE3_NULL : SQLITE3_TEXT);
+        $up->bindValue(':signin_method', $method, SQLITE3_TEXT);
+        $up->bindValue(':minutes_late', intval($lateMeta['minutes_late'] ?? 0), SQLITE3_INTEGER);
+        $up->bindValue(':late_grade', (string)($lateMeta['late_grade'] ?? 'on_time'), SQLITE3_TEXT);
+        $up->bindValue(':fine_amount', floatval($lateMeta['fine_amount'] ?? 0), SQLITE3_FLOAT);
+        $up->bindValue(':notes', $notes, SQLITE3_TEXT);
+        $up->bindValue(':updated_at', appNowBusinessDateTime(), SQLITE3_TEXT);
+        $up->bindValue(':aid', intval($row['attendance_id']), SQLITE3_INTEGER);
+        $up->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $up->execute();
+        return;
+    }
+
+    $ins = $db->prepare("INSERT INTO employee_attendance_logs (
+                            cid, user_id, attendance_date, signin_at, signout_at, signin_method, minutes_late, late_grade, fine_amount, notes, created_at, updated_at
+                        ) VALUES (
+                            :cid, :uid, :dt, :signin_at, :signout_at, :signin_method, :minutes_late, :late_grade, :fine_amount, :notes, :created_at, :updated_at
+                        )");
+    $ins->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    $ins->bindValue(':uid', $userId, SQLITE3_INTEGER);
+    $ins->bindValue(':dt', $date, SQLITE3_TEXT);
+    $ins->bindValue(':signin_at', $signinAt, $signinAt === null ? SQLITE3_NULL : SQLITE3_TEXT);
+    $ins->bindValue(':signout_at', $signoutAt, $signoutAt === null ? SQLITE3_NULL : SQLITE3_TEXT);
+    $ins->bindValue(':signin_method', $method, SQLITE3_TEXT);
+    $ins->bindValue(':minutes_late', intval($lateMeta['minutes_late'] ?? 0), SQLITE3_INTEGER);
+    $ins->bindValue(':late_grade', (string)($lateMeta['late_grade'] ?? 'on_time'), SQLITE3_TEXT);
+    $ins->bindValue(':fine_amount', floatval($lateMeta['fine_amount'] ?? 0), SQLITE3_FLOAT);
+    $ins->bindValue(':notes', $notes, SQLITE3_TEXT);
+    $ins->bindValue(':created_at', appNowBusinessDateTime(), SQLITE3_TEXT);
+    $ins->bindValue(':updated_at', appNowBusinessDateTime(), SQLITE3_TEXT);
+    $ins->execute();
 }
 
 try {
@@ -221,65 +297,56 @@ try {
 
     switch ($action) {
         case 'loadAttendancePolicy':
-            $policy = attendanceGetPolicy($db, $cid);
-            respond('success', 'Attendance policy loaded', ['data' => $policy]);
+            respond('success', 'Attendance policy loaded', ['data' => attendanceGetPolicy($db, $cid)]);
             break;
 
         case 'saveAttendancePolicy':
             attendanceEnsureOwnerOnly($db);
-
             $resumptionTime = trim((string)($_POST['resumption_time'] ?? '09:00'));
             $fine0To15 = floatval($_POST['fine_0_15'] ?? 200);
             $fine15To60 = floatval($_POST['fine_15_60'] ?? 500);
             $fine60Plus = floatval($_POST['fine_60_plus'] ?? 1000);
-
             if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $resumptionTime)) {
                 respond('error', 'Resumption time must be in HH:MM format.');
             }
-
             if ($fine0To15 < 0 || $fine15To60 < 0 || $fine60Plus < 0) {
                 respond('error', 'Fine values cannot be negative.');
             }
 
-            $stmt = $db->prepare("INSERT INTO attendance_policies (
-                                    cid, resumption_time, fine_0_15, fine_15_60, fine_60_plus, updated_by, updated_at
-                                  ) VALUES (
-                                    :cid, :resumption_time, :fine_0_15, :fine_15_60, :fine_60_plus, :updated_by, :updated_at
-                                  )");
-            $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-            $stmt->bindValue(':resumption_time', $resumptionTime, SQLITE3_TEXT);
-            $stmt->bindValue(':fine_0_15', $fine0To15, SQLITE3_FLOAT);
-            $stmt->bindValue(':fine_15_60', $fine15To60, SQLITE3_FLOAT);
-            $stmt->bindValue(':fine_60_plus', $fine60Plus, SQLITE3_FLOAT);
-            $stmt->bindValue(':updated_by', $uid > 0 ? $uid : null, $uid > 0 ? SQLITE3_INTEGER : SQLITE3_NULL);
-            $stmt->bindValue(':updated_at', appNowBusinessDateTime(), SQLITE3_TEXT);
-
+            $insert = $db->prepare("INSERT INTO attendance_policies (cid, resumption_time, fine_0_15, fine_15_60, fine_60_plus, updated_by, updated_at)
+                                    VALUES (:cid, :rt, :f1, :f2, :f3, :ub, :ua)");
+            $insert->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $insert->bindValue(':rt', $resumptionTime, SQLITE3_TEXT);
+            $insert->bindValue(':f1', $fine0To15, SQLITE3_FLOAT);
+            $insert->bindValue(':f2', $fine15To60, SQLITE3_FLOAT);
+            $insert->bindValue(':f3', $fine60Plus, SQLITE3_FLOAT);
+            $insert->bindValue(':ub', $uid > 0 ? $uid : null, $uid > 0 ? SQLITE3_INTEGER : SQLITE3_NULL);
+            $insert->bindValue(':ua', appNowBusinessDateTime(), SQLITE3_TEXT);
             try {
-                $stmt->execute();
+                $insert->execute();
             } catch (Throwable $e) {
-                $update = $db->prepare("UPDATE attendance_policies
-                                        SET resumption_time = :resumption_time,
-                                            fine_0_15 = :fine_0_15,
-                                            fine_15_60 = :fine_15_60,
-                                            fine_60_plus = :fine_60_plus,
-                                            updated_by = :updated_by,
-                                            updated_at = :updated_at
-                                        WHERE cid = :cid");
-                $update->bindValue(':cid', $cid, SQLITE3_INTEGER);
-                $update->bindValue(':resumption_time', $resumptionTime, SQLITE3_TEXT);
-                $update->bindValue(':fine_0_15', $fine0To15, SQLITE3_FLOAT);
-                $update->bindValue(':fine_15_60', $fine15To60, SQLITE3_FLOAT);
-                $update->bindValue(':fine_60_plus', $fine60Plus, SQLITE3_FLOAT);
-                $update->bindValue(':updated_by', $uid > 0 ? $uid : null, $uid > 0 ? SQLITE3_INTEGER : SQLITE3_NULL);
-                $update->bindValue(':updated_at', appNowBusinessDateTime(), SQLITE3_TEXT);
-                $update->execute();
+                $up = $db->prepare("UPDATE attendance_policies
+                                    SET resumption_time = :rt,
+                                        fine_0_15 = :f1,
+                                        fine_15_60 = :f2,
+                                        fine_60_plus = :f3,
+                                        updated_by = :ub,
+                                        updated_at = :ua
+                                    WHERE cid = :cid");
+                $up->bindValue(':cid', $cid, SQLITE3_INTEGER);
+                $up->bindValue(':rt', $resumptionTime, SQLITE3_TEXT);
+                $up->bindValue(':f1', $fine0To15, SQLITE3_FLOAT);
+                $up->bindValue(':f2', $fine15To60, SQLITE3_FLOAT);
+                $up->bindValue(':f3', $fine60Plus, SQLITE3_FLOAT);
+                $up->bindValue(':ub', $uid > 0 ? $uid : null, $uid > 0 ? SQLITE3_INTEGER : SQLITE3_NULL);
+                $up->bindValue(':ua', appNowBusinessDateTime(), SQLITE3_TEXT);
+                $up->execute();
             }
-
             respond('success', 'Attendance policy saved.');
             break;
 
         case 'loadEmployees':
-            $employees = [];
+            $rows = [];
             $stmt = $db->prepare("SELECT u.user_id,
                                          u.full_name,
                                          u.email,
@@ -296,8 +363,13 @@ try {
                                                 WHEN 'staff' THEN 3
                                                 ELSE 4 END
                                             LIMIT 1
-                                                                                 ), 'User') AS role_name
+                                         ), 'User') AS role_name,
+                                         COALESCE(sr.shift_start, '') AS shift_start,
+                                         COALESCE(sr.shift_end, '') AS shift_end,
+                                         COALESCE(sr.grace_minutes, 0) AS grace_minutes,
+                                         COALESCE(sr.is_active, 0) AS has_shift
                                   FROM users u
+                                  LEFT JOIN employee_shift_rules sr ON sr.cid = u.cid AND sr.user_id = u.user_id
                                   WHERE u.cid = :cid
                                     AND lower(COALESCE((
                                         SELECT r2.role_name
@@ -315,108 +387,91 @@ try {
             $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
             $res = $stmt->execute();
             while ($res && ($row = $res->fetchArray(SQLITE3_ASSOC))) {
-                $employees[] = [
+                $rows[] = [
                     'user_id' => intval($row['user_id'] ?? 0),
                     'full_name' => (string)($row['full_name'] ?? ''),
                     'email' => (string)($row['email'] ?? ''),
                     'role_name' => (string)($row['role_name'] ?? 'User'),
                     'is_active' => intval($row['is_active'] ?? 0),
                     'created_at' => intval($row['created_at'] ?? 0),
+                    'shift_start' => (string)($row['shift_start'] ?? ''),
+                    'shift_end' => (string)($row['shift_end'] ?? ''),
+                    'grace_minutes' => intval($row['grace_minutes'] ?? 0),
+                    'has_shift' => intval($row['has_shift'] ?? 0),
                 ];
             }
+            respond('success', 'Employees loaded', ['data' => $rows]);
+            break;
 
-            respond('success', 'Employees loaded', ['data' => $employees]);
+        case 'saveShiftRule':
+            $userId = intval($_POST['user_id'] ?? 0);
+            $shiftStart = trim((string)($_POST['shift_start'] ?? '09:00'));
+            $shiftEnd = trim((string)($_POST['shift_end'] ?? '17:00'));
+            $graceMinutes = max(0, intval($_POST['grace_minutes'] ?? 0));
+            $isActive = intval($_POST['is_active'] ?? 1) === 1 ? 1 : 0;
+
+            if ($userId <= 0) respond('error', 'Employee is required.');
+            if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $shiftStart)) respond('error', 'Shift start must be HH:MM.');
+            if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $shiftEnd)) respond('error', 'Shift end must be HH:MM.');
+
+            $insert = $db->prepare("INSERT INTO employee_shift_rules (cid, user_id, shift_start, shift_end, grace_minutes, is_active, updated_at)
+                                    VALUES (:cid, :uid, :ss, :se, :gm, :ia, :ua)");
+            $insert->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $insert->bindValue(':uid', $userId, SQLITE3_INTEGER);
+            $insert->bindValue(':ss', $shiftStart, SQLITE3_TEXT);
+            $insert->bindValue(':se', $shiftEnd, SQLITE3_TEXT);
+            $insert->bindValue(':gm', $graceMinutes, SQLITE3_INTEGER);
+            $insert->bindValue(':ia', $isActive, SQLITE3_INTEGER);
+            $insert->bindValue(':ua', appNowBusinessDateTime(), SQLITE3_TEXT);
+            try {
+                $insert->execute();
+            } catch (Throwable $e) {
+                $up = $db->prepare("UPDATE employee_shift_rules
+                                    SET shift_start = :ss,
+                                        shift_end = :se,
+                                        grace_minutes = :gm,
+                                        is_active = :ia,
+                                        updated_at = :ua
+                                    WHERE cid = :cid AND user_id = :uid");
+                $up->bindValue(':cid', $cid, SQLITE3_INTEGER);
+                $up->bindValue(':uid', $userId, SQLITE3_INTEGER);
+                $up->bindValue(':ss', $shiftStart, SQLITE3_TEXT);
+                $up->bindValue(':se', $shiftEnd, SQLITE3_TEXT);
+                $up->bindValue(':gm', $graceMinutes, SQLITE3_INTEGER);
+                $up->bindValue(':ia', $isActive, SQLITE3_INTEGER);
+                $up->bindValue(':ua', appNowBusinessDateTime(), SQLITE3_TEXT);
+                $up->execute();
+            }
+            respond('success', 'Shift rule saved.');
             break;
 
         case 'signInEmployee':
             $email = strtolower(trim((string)($_POST['email'] ?? '')));
             $password = (string)($_POST['password'] ?? '');
             $notes = trim((string)($_POST['notes'] ?? ''));
-
-            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                respond('error', 'Valid employee email is required.');
-            }
-
-            if ($password === '') {
-                respond('error', 'Employee password is required.');
-            }
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) respond('error', 'Valid employee email is required.');
+            if ($password === '') respond('error', 'Employee password is required.');
 
             $employee = attendanceResolveUserByLogin($db, $cid, $email);
-            if (!$employee) {
-                respond('error', 'Employee account not found.');
-            }
-
-            if (intval($employee['is_active'] ?? 0) !== 1) {
-                respond('error', 'Employee account is inactive.');
-            }
-
-            if (strtolower((string)($employee['role_name'] ?? '')) === 'owner') {
-                respond('error', 'Owner attendance is not tracked here.');
-            }
-
-            if (!password_verify($password, (string)($employee['password'] ?? ''))) {
-                respond('error', 'Employee login credentials are invalid.');
-            }
+            if (!$employee) respond('error', 'Employee account not found.');
+            if (intval($employee['is_active'] ?? 0) !== 1) respond('error', 'Employee account is inactive.');
+            if (strtolower((string)($employee['role_name'] ?? '')) === 'owner') respond('error', 'Owner attendance is not tracked here.');
+            if (!password_verify($password, (string)($employee['password'] ?? ''))) respond('error', 'Employee login credentials are invalid.');
 
             $employeeId = intval($employee['user_id'] ?? 0);
-
             $todayDate = date('Y-m-d');
-            $existing = $db->prepare("SELECT attendance_id, signin_at
-                                     FROM employee_attendance_logs
-                                     WHERE cid = :cid AND user_id = :uid AND attendance_date = :attendance_date
-                                     LIMIT 1");
+            $existing = $db->prepare("SELECT attendance_id, signin_at FROM employee_attendance_logs WHERE cid = :cid AND user_id = :uid AND attendance_date = :dt LIMIT 1");
             $existing->bindValue(':cid', $cid, SQLITE3_INTEGER);
             $existing->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
-            $existing->bindValue(':attendance_date', $todayDate, SQLITE3_TEXT);
+            $existing->bindValue(':dt', $todayDate, SQLITE3_TEXT);
             $existingRow = $existing->execute()->fetchArray(SQLITE3_ASSOC);
+            if ($existingRow && !empty($existingRow['signin_at'])) respond('error', 'Employee already signed in today.');
 
-            if ($existingRow && !empty($existingRow['signin_at'])) {
-                respond('error', 'Employee already signed in today.');
-            }
-
-            $policy = attendanceGetPolicy($db, $cid);
             $signinAt = appNowBusinessDateTime();
-            $lateMeta = attendanceCalculateLateMeta($signinAt, $policy);
-
-            if ($existingRow) {
-                $update = $db->prepare("UPDATE employee_attendance_logs
-                                        SET signin_at = :signin_at,
-                                            signin_method = :signin_method,
-                                            minutes_late = :minutes_late,
-                                            late_grade = :late_grade,
-                                            fine_amount = :fine_amount,
-                                            notes = :notes,
-                                            updated_at = :updated_at
-                                        WHERE attendance_id = :attendance_id AND cid = :cid");
-                $update->bindValue(':signin_at', $signinAt, SQLITE3_TEXT);
-                $update->bindValue(':signin_method', 'account_password', SQLITE3_TEXT);
-                $update->bindValue(':minutes_late', intval($lateMeta['minutes_late']), SQLITE3_INTEGER);
-                $update->bindValue(':late_grade', (string)$lateMeta['late_grade'], SQLITE3_TEXT);
-                $update->bindValue(':fine_amount', floatval($lateMeta['fine_amount']), SQLITE3_FLOAT);
-                $update->bindValue(':notes', $notes, SQLITE3_TEXT);
-                $update->bindValue(':updated_at', appNowBusinessDateTime(), SQLITE3_TEXT);
-                $update->bindValue(':attendance_id', intval($existingRow['attendance_id']), SQLITE3_INTEGER);
-                $update->bindValue(':cid', $cid, SQLITE3_INTEGER);
-                $update->execute();
-            } else {
-                $ins = $db->prepare("INSERT INTO employee_attendance_logs (
-                                        cid, user_id, attendance_date, signin_at, signin_method, minutes_late, late_grade, fine_amount, notes, created_at, updated_at
-                                    ) VALUES (
-                                        :cid, :uid, :attendance_date, :signin_at, :signin_method, :minutes_late, :late_grade, :fine_amount, :notes, :created_at, :updated_at
-                                    )");
-                $ins->bindValue(':cid', $cid, SQLITE3_INTEGER);
-                $ins->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
-                $ins->bindValue(':attendance_date', $todayDate, SQLITE3_TEXT);
-                $ins->bindValue(':signin_at', $signinAt, SQLITE3_TEXT);
-                $ins->bindValue(':signin_method', 'account_password', SQLITE3_TEXT);
-                $ins->bindValue(':minutes_late', intval($lateMeta['minutes_late']), SQLITE3_INTEGER);
-                $ins->bindValue(':late_grade', (string)$lateMeta['late_grade'], SQLITE3_TEXT);
-                $ins->bindValue(':fine_amount', floatval($lateMeta['fine_amount']), SQLITE3_FLOAT);
-                $ins->bindValue(':notes', $notes, SQLITE3_TEXT);
-                $ins->bindValue(':created_at', appNowBusinessDateTime(), SQLITE3_TEXT);
-                $ins->bindValue(':updated_at', appNowBusinessDateTime(), SQLITE3_TEXT);
-                $ins->execute();
-            }
+            $policy = attendanceGetPolicy($db, $cid);
+            $shift = attendanceGetShift($db, $cid, $employeeId);
+            $lateMeta = attendanceCalculateLateMetaWithShift($signinAt, $policy, $shift);
+            attendanceUpsertLog($db, $cid, $employeeId, $todayDate, $signinAt, null, 'account_password', $lateMeta, $notes);
 
             respond('success', 'Employee signed in.', [
                 'data' => array_merge($lateMeta, [
@@ -429,68 +484,259 @@ try {
 
         case 'signOutEmployee':
             $employeeId = intval($_POST['user_id'] ?? 0);
-            if ($employeeId <= 0) {
-                respond('error', 'Employee is required.');
-            }
-
+            if ($employeeId <= 0) respond('error', 'Employee is required.');
             $todayDate = date('Y-m-d');
-            $stmt = $db->prepare("SELECT attendance_id, signin_at, signout_at
-                                  FROM employee_attendance_logs
-                                  WHERE cid = :cid AND user_id = :uid AND attendance_date = :attendance_date
-                                  LIMIT 1");
+            $stmt = $db->prepare("SELECT attendance_id, signin_at, signout_at FROM employee_attendance_logs WHERE cid = :cid AND user_id = :uid AND attendance_date = :dt LIMIT 1");
             $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
             $stmt->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
-            $stmt->bindValue(':attendance_date', $todayDate, SQLITE3_TEXT);
+            $stmt->bindValue(':dt', $todayDate, SQLITE3_TEXT);
             $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+            if (!$row || empty($row['signin_at'])) respond('error', 'Employee has not signed in today.');
+            if (!empty($row['signout_at'])) respond('error', 'Employee already signed out today.');
 
-            if (!$row || empty($row['signin_at'])) {
-                respond('error', 'Employee has not signed in today.');
-            }
-
-            if (!empty($row['signout_at'])) {
-                respond('error', 'Employee already signed out today.');
-            }
-
-            $update = $db->prepare("UPDATE employee_attendance_logs
-                                    SET signout_at = :signout_at,
-                                        updated_at = :updated_at
-                                    WHERE attendance_id = :attendance_id AND cid = :cid");
-            $update->bindValue(':signout_at', appNowBusinessDateTime(), SQLITE3_TEXT);
-            $update->bindValue(':updated_at', appNowBusinessDateTime(), SQLITE3_TEXT);
-            $update->bindValue(':attendance_id', intval($row['attendance_id']), SQLITE3_INTEGER);
-            $update->bindValue(':cid', $cid, SQLITE3_INTEGER);
-            $update->execute();
-
+            $up = $db->prepare("UPDATE employee_attendance_logs SET signout_at = :so, updated_at = :ua WHERE attendance_id = :aid AND cid = :cid");
+            $up->bindValue(':so', appNowBusinessDateTime(), SQLITE3_TEXT);
+            $up->bindValue(':ua', appNowBusinessDateTime(), SQLITE3_TEXT);
+            $up->bindValue(':aid', intval($row['attendance_id']), SQLITE3_INTEGER);
+            $up->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $up->execute();
             respond('success', 'Employee signed out.');
             break;
 
-        case 'loadEmployeeOverview':
-            $range = strtolower(trim((string)($_POST['range'] ?? '30d')));
-            $rangeMeta = attendanceBuildRangeFilter($range);
+        case 'runAutoAbsence':
+            $targetDate = trim((string)($_POST['date'] ?? date('Y-m-d')));
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $targetDate)) respond('error', 'Date must be YYYY-MM-DD.');
 
-            $roleMap = attendanceGetRoleMapByUserId($db, $cid);
+            $roleMap = [];
+            $rstmt = $db->prepare("SELECT u.user_id,
+                                          COALESCE((
+                                            SELECT r.role_name
+                                            FROM user_roles ur
+                                            JOIN roles r ON r.role_id = ur.role_id
+                                            WHERE ur.user_id = u.user_id
+                                            ORDER BY CASE lower(r.role_name)
+                                                WHEN 'owner' THEN 1
+                                                WHEN 'manager' THEN 2
+                                                WHEN 'staff' THEN 3
+                                                ELSE 4 END
+                                            LIMIT 1
+                                          ), 'User') AS role_name
+                                   FROM users u
+                                   WHERE u.cid = :cid AND COALESCE(u.is_active, 1) = 1");
+            $rstmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $rres = $rstmt->execute();
+            while ($rres && ($rr = $rres->fetchArray(SQLITE3_ASSOC))) {
+                $roleMap[intval($rr['user_id'] ?? 0)] = strtolower((string)($rr['role_name'] ?? 'user'));
+            }
+
+            $inserted = 0;
+            foreach ($roleMap as $employeeId => $roleName) {
+                if ($employeeId <= 0 || $roleName === 'owner') continue;
+                $check = $db->prepare("SELECT 1 FROM employee_attendance_logs WHERE cid = :cid AND user_id = :uid AND attendance_date = :dt LIMIT 1");
+                $check->bindValue(':cid', $cid, SQLITE3_INTEGER);
+                $check->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
+                $check->bindValue(':dt', $targetDate, SQLITE3_TEXT);
+                if ($check->execute()->fetchArray(SQLITE3_ASSOC)) continue;
+
+                $meta = ['minutes_late' => 0, 'late_grade' => 'absent', 'fine_amount' => 0.0];
+                attendanceUpsertLog($db, $cid, $employeeId, $targetDate, null, null, 'auto_absence', $meta, 'Auto-marked absent');
+                $inserted++;
+            }
+            respond('success', 'Auto-absence completed.', ['data' => ['inserted' => $inserted, 'date' => $targetDate]]);
+            break;
+
+        case 'requestCorrection':
+            $employeeId = intval($_POST['user_id'] ?? 0);
+            $attendanceDate = trim((string)($_POST['attendance_date'] ?? ''));
+            $proposedSignin = trim((string)($_POST['proposed_signin_at'] ?? ''));
+            $proposedSignout = trim((string)($_POST['proposed_signout_at'] ?? ''));
+            $reason = trim((string)($_POST['reason'] ?? ''));
+
+            if ($employeeId <= 0) respond('error', 'Employee is required.');
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $attendanceDate)) respond('error', 'Attendance date must be YYYY-MM-DD.');
+            if ($reason === '') respond('error', 'Correction reason is required.');
+
+            $current = $db->prepare("SELECT signin_at, signout_at FROM employee_attendance_logs WHERE cid = :cid AND user_id = :uid AND attendance_date = :dt LIMIT 1");
+            $current->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $current->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
+            $current->bindValue(':dt', $attendanceDate, SQLITE3_TEXT);
+            $currentRow = $current->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+
+            $ins = $db->prepare("INSERT INTO attendance_corrections (
+                                    cid, user_id, attendance_date, requested_by, current_signin_at, current_signout_at,
+                                    proposed_signin_at, proposed_signout_at, reason, status, created_at, updated_at
+                                ) VALUES (
+                                    :cid, :uid, :dt, :rb, :csin, :csout, :psin, :psout, :reason, 'pending', :ca, :ua
+                                )");
+            $ins->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $ins->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
+            $ins->bindValue(':dt', $attendanceDate, SQLITE3_TEXT);
+            $ins->bindValue(':rb', $uid > 0 ? $uid : null, $uid > 0 ? SQLITE3_INTEGER : SQLITE3_NULL);
+            $ins->bindValue(':csin', $currentRow['signin_at'] ?? null, empty($currentRow['signin_at']) ? SQLITE3_NULL : SQLITE3_TEXT);
+            $ins->bindValue(':csout', $currentRow['signout_at'] ?? null, empty($currentRow['signout_at']) ? SQLITE3_NULL : SQLITE3_TEXT);
+            $ins->bindValue(':psin', $proposedSignin === '' ? null : $proposedSignin, $proposedSignin === '' ? SQLITE3_NULL : SQLITE3_TEXT);
+            $ins->bindValue(':psout', $proposedSignout === '' ? null : $proposedSignout, $proposedSignout === '' ? SQLITE3_NULL : SQLITE3_TEXT);
+            $ins->bindValue(':reason', $reason, SQLITE3_TEXT);
+            $ins->bindValue(':ca', appNowBusinessDateTime(), SQLITE3_TEXT);
+            $ins->bindValue(':ua', appNowBusinessDateTime(), SQLITE3_TEXT);
+            $ins->execute();
+            respond('success', 'Correction request submitted.');
+            break;
+
+        case 'loadCorrectionRequests':
+            $status = strtolower(trim((string)($_POST['status'] ?? 'pending')));
+            if (!in_array($status, ['pending', 'approved', 'rejected', 'all'], true)) $status = 'pending';
+            $statusSql = $status === 'all' ? '' : ' AND c.status = :status';
+            $rows = [];
+            $stmt = $db->prepare("SELECT c.correction_id,
+                                         c.user_id,
+                                         u.full_name,
+                                         u.email,
+                                         c.attendance_date,
+                                         c.current_signin_at,
+                                         c.current_signout_at,
+                                         c.proposed_signin_at,
+                                         c.proposed_signout_at,
+                                         c.reason,
+                                         c.status,
+                                         c.review_note,
+                                         c.created_at,
+                                         c.reviewed_at
+                                  FROM attendance_corrections c
+                                  JOIN users u ON u.user_id = c.user_id
+                                  WHERE c.cid = :cid {$statusSql}
+                                  ORDER BY CASE c.status WHEN 'pending' THEN 1 ELSE 2 END, c.created_at DESC
+                                  LIMIT 200");
+            $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            if ($status !== 'all') $stmt->bindValue(':status', $status, SQLITE3_TEXT);
+            $res = $stmt->execute();
+            while ($res && ($row = $res->fetchArray(SQLITE3_ASSOC))) {
+                $rows[] = [
+                    'correction_id' => intval($row['correction_id'] ?? 0),
+                    'user_id' => intval($row['user_id'] ?? 0),
+                    'full_name' => (string)($row['full_name'] ?? ''),
+                    'email' => (string)($row['email'] ?? ''),
+                    'attendance_date' => (string)($row['attendance_date'] ?? ''),
+                    'current_signin_at' => (string)($row['current_signin_at'] ?? ''),
+                    'current_signout_at' => (string)($row['current_signout_at'] ?? ''),
+                    'proposed_signin_at' => (string)($row['proposed_signin_at'] ?? ''),
+                    'proposed_signout_at' => (string)($row['proposed_signout_at'] ?? ''),
+                    'reason' => (string)($row['reason'] ?? ''),
+                    'status' => (string)($row['status'] ?? 'pending'),
+                    'review_note' => (string)($row['review_note'] ?? ''),
+                    'created_at' => (string)($row['created_at'] ?? ''),
+                    'reviewed_at' => (string)($row['reviewed_at'] ?? ''),
+                ];
+            }
+            respond('success', 'Corrections loaded', ['data' => $rows]);
+            break;
+
+        case 'reviewCorrection':
+            $correctionId = intval($_POST['correction_id'] ?? 0);
+            $decision = strtolower(trim((string)($_POST['decision'] ?? '')));
+            $reviewNote = trim((string)($_POST['review_note'] ?? ''));
+            if ($correctionId <= 0) respond('error', 'Correction is required.');
+            if (!in_array($decision, ['approve', 'reject'], true)) respond('error', 'Decision must be approve or reject.');
+
+            $stmt = $db->prepare("SELECT * FROM attendance_corrections WHERE correction_id = :id AND cid = :cid LIMIT 1");
+            $stmt->bindValue(':id', $correctionId, SQLITE3_INTEGER);
+            $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $corr = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+            if (!$corr) respond('error', 'Correction request not found.');
+            if (strtolower((string)($corr['status'] ?? 'pending')) !== 'pending') respond('error', 'Correction request already reviewed.');
+
+            $newStatus = $decision === 'approve' ? 'approved' : 'rejected';
+
+            if ($decision === 'approve') {
+                $employeeId = intval($corr['user_id'] ?? 0);
+                $attendanceDate = (string)($corr['attendance_date'] ?? '');
+                $proposedSignin = trim((string)($corr['proposed_signin_at'] ?? ''));
+                $proposedSignout = trim((string)($corr['proposed_signout_at'] ?? ''));
+
+                if ($proposedSignin === '') {
+                    $lateMeta = ['minutes_late' => 0, 'late_grade' => 'absent', 'fine_amount' => 0.0];
+                } else {
+                    $policy = attendanceGetPolicy($db, $cid);
+                    $shift = attendanceGetShift($db, $cid, $employeeId);
+                    $lateMeta = attendanceCalculateLateMetaWithShift($proposedSignin, $policy, $shift);
+                }
+
+                attendanceUpsertLog(
+                    $db,
+                    $cid,
+                    $employeeId,
+                    $attendanceDate,
+                    $proposedSignin === '' ? null : $proposedSignin,
+                    $proposedSignout === '' ? null : $proposedSignout,
+                    'correction_approved',
+                    $lateMeta,
+                    'Correction approved'
+                );
+            }
+
+            $up = $db->prepare("UPDATE attendance_corrections
+                                SET status = :status,
+                                    reviewed_by = :rb,
+                                    review_note = :rn,
+                                    reviewed_at = :ra,
+                                    updated_at = :ua
+                                WHERE correction_id = :id AND cid = :cid");
+            $up->bindValue(':status', $newStatus, SQLITE3_TEXT);
+            $up->bindValue(':rb', $uid > 0 ? $uid : null, $uid > 0 ? SQLITE3_INTEGER : SQLITE3_NULL);
+            $up->bindValue(':rn', $reviewNote, SQLITE3_TEXT);
+            $up->bindValue(':ra', appNowBusinessDateTime(), SQLITE3_TEXT);
+            $up->bindValue(':ua', appNowBusinessDateTime(), SQLITE3_TEXT);
+            $up->bindValue(':id', $correctionId, SQLITE3_INTEGER);
+            $up->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $up->execute();
+            respond('success', 'Correction request ' . $newStatus . '.');
+            break;
+
+        case 'loadEmployeeOverview':
+            $rangeMeta = attendanceBuildRangeFilter((string)($_POST['range'] ?? '30d'));
+
             $employees = [];
-            $usersStmt = $db->prepare("SELECT user_id, full_name, email, is_active
-                                       FROM users
-                                       WHERE cid = :cid
-                                       ORDER BY full_name ASC");
+            $usersStmt = $db->prepare("SELECT u.user_id, u.full_name, u.email, u.is_active,
+                                              COALESCE((
+                                                 SELECT r.role_name
+                                                 FROM user_roles ur
+                                                 JOIN roles r ON r.role_id = ur.role_id
+                                                 WHERE ur.user_id = u.user_id
+                                                 ORDER BY CASE lower(r.role_name)
+                                                     WHEN 'owner' THEN 1
+                                                     WHEN 'manager' THEN 2
+                                                     WHEN 'staff' THEN 3
+                                                     ELSE 4 END
+                                                 LIMIT 1
+                                              ), 'User') AS role_name,
+                                              COALESCE(sr.shift_start, '') AS shift_start,
+                                              COALESCE(sr.shift_end, '') AS shift_end,
+                                              COALESCE(sr.grace_minutes, 0) AS grace_minutes,
+                                              COALESCE(sr.is_active, 0) AS has_shift
+                                       FROM users u
+                                       LEFT JOIN employee_shift_rules sr ON sr.cid = u.cid AND sr.user_id = u.user_id
+                                       WHERE u.cid = :cid
+                                       ORDER BY u.full_name ASC");
             $usersStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
             $usersRes = $usersStmt->execute();
             while ($usersRes && ($u = $usersRes->fetchArray(SQLITE3_ASSOC))) {
+                $roleName = strtolower((string)($u['role_name'] ?? 'user'));
+                if ($roleName === 'owner') continue;
                 $eid = intval($u['user_id'] ?? 0);
-                $role = strtolower((string)($roleMap[$eid] ?? 'user'));
-                if ($role === 'owner') {
-                    continue;
-                }
                 $employees[$eid] = [
                     'user_id' => $eid,
                     'full_name' => (string)($u['full_name'] ?? ''),
                     'email' => (string)($u['email'] ?? ''),
-                    'role_name' => (string)($roleMap[$eid] ?? 'User'),
+                    'role_name' => (string)($u['role_name'] ?? 'User'),
                     'is_active' => intval($u['is_active'] ?? 0),
+                    'shift_start' => (string)($u['shift_start'] ?? ''),
+                    'shift_end' => (string)($u['shift_end'] ?? ''),
+                    'grace_minutes' => intval($u['grace_minutes'] ?? 0),
+                    'has_shift' => intval($u['has_shift'] ?? 0),
                     'attendance_days' => 0,
                     'on_time_days' => 0,
                     'late_days' => 0,
+                    'absent_days' => 0,
                     'signout_days' => 0,
                     'total_late_minutes' => 0,
                     'total_fine' => 0.0,
@@ -500,21 +746,10 @@ try {
                 ];
             }
 
-            if (count($employees) === 0) {
-                respond('success', 'No employees found', [
-                    'data' => [],
-                    'summary' => [
-                        'employees' => 0,
-                        'signed_in_today' => 0,
-                        'late_today' => 0,
-                        'total_fines_today' => 0,
-                    ]
-                ]);
-            }
-
             $statsStmt = $db->prepare("SELECT l.user_id,
                                               COUNT(l.attendance_id) AS attendance_days,
-                                              SUM(CASE WHEN l.minutes_late <= 0 THEN 1 ELSE 0 END) AS on_time_days,
+                                              SUM(CASE WHEN l.late_grade = 'absent' THEN 1 ELSE 0 END) AS absent_days,
+                                              SUM(CASE WHEN l.minutes_late <= 0 AND l.late_grade <> 'absent' THEN 1 ELSE 0 END) AS on_time_days,
                                               SUM(CASE WHEN l.minutes_late > 0 THEN 1 ELSE 0 END) AS late_days,
                                               SUM(CASE WHEN l.signout_at IS NOT NULL AND l.signout_at <> '' THEN 1 ELSE 0 END) AS signout_days,
                                               SUM(COALESCE(l.minutes_late, 0)) AS total_late_minutes,
@@ -525,68 +760,56 @@ try {
             $statsStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
             bindParams($statsStmt, $rangeMeta['params']);
             $statsRes = $statsStmt->execute();
-
             while ($statsRes && ($row = $statsRes->fetchArray(SQLITE3_ASSOC))) {
                 $employeeId = intval($row['user_id'] ?? 0);
-                if (!isset($employees[$employeeId])) {
-                    continue;
-                }
-
+                if (!isset($employees[$employeeId])) continue;
                 $attendanceDays = intval($row['attendance_days'] ?? 0);
-                $onTimeDays = intval($row['on_time_days'] ?? 0);
                 $lateDays = intval($row['late_days'] ?? 0);
-                $signoutDays = intval($row['signout_days'] ?? 0);
                 $lateMinutes = intval($row['total_late_minutes'] ?? 0);
-                $totalFine = floatval($row['total_fine'] ?? 0);
-
-                $performance = attendanceComputePerformanceMetrics($attendanceDays, $lateDays, $lateMinutes);
+                $perf = attendanceComputePerformanceMetrics($attendanceDays, $lateDays, $lateMinutes);
 
                 $employees[$employeeId]['attendance_days'] = $attendanceDays;
-                $employees[$employeeId]['on_time_days'] = $onTimeDays;
+                $employees[$employeeId]['on_time_days'] = intval($row['on_time_days'] ?? 0);
                 $employees[$employeeId]['late_days'] = $lateDays;
-                $employees[$employeeId]['signout_days'] = $signoutDays;
+                $employees[$employeeId]['absent_days'] = intval($row['absent_days'] ?? 0);
+                $employees[$employeeId]['signout_days'] = intval($row['signout_days'] ?? 0);
                 $employees[$employeeId]['total_late_minutes'] = $lateMinutes;
-                $employees[$employeeId]['total_fine'] = $totalFine;
-                $employees[$employeeId]['gpi'] = floatval($performance['gpi']);
-                $employees[$employeeId]['performance_tone'] = (string)$performance['performance_tone'];
-                $employees[$employeeId]['performance_label'] = (string)$performance['performance_label'];
+                $employees[$employeeId]['total_fine'] = floatval($row['total_fine'] ?? 0);
+                $employees[$employeeId]['gpi'] = floatval($perf['gpi']);
+                $employees[$employeeId]['performance_tone'] = (string)$perf['performance_tone'];
+                $employees[$employeeId]['performance_label'] = (string)$perf['performance_label'];
             }
 
             $summaryStmt = $db->prepare("SELECT
                                             COUNT(CASE WHEN l.signin_at IS NOT NULL AND l.signin_at <> '' THEN 1 END) AS signed_in_today,
                                             COUNT(CASE WHEN l.minutes_late > 0 THEN 1 END) AS late_today,
+                                            COUNT(CASE WHEN l.late_grade = 'absent' THEN 1 END) AS absent_today,
                                             COALESCE(SUM(COALESCE(l.fine_amount, 0)), 0) AS total_fines_today
                                          FROM employee_attendance_logs l
                                          WHERE l.cid = :cid
                                            AND l.attendance_date = :today_date");
             $summaryStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
             $summaryStmt->bindValue(':today_date', date('Y-m-d'), SQLITE3_TEXT);
-            $summaryRow = $summaryStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
+            $summary = $summaryStmt->execute()->fetchArray(SQLITE3_ASSOC) ?: [];
 
             respond('success', 'Attendance overview loaded', [
                 'data' => array_values($employees),
                 'summary' => [
                     'employees' => count($employees),
-                    'signed_in_today' => intval($summaryRow['signed_in_today'] ?? 0),
-                    'late_today' => intval($summaryRow['late_today'] ?? 0),
-                    'total_fines_today' => floatval($summaryRow['total_fines_today'] ?? 0),
+                    'signed_in_today' => intval($summary['signed_in_today'] ?? 0),
+                    'late_today' => intval($summary['late_today'] ?? 0),
+                    'absent_today' => intval($summary['absent_today'] ?? 0),
+                    'total_fines_today' => floatval($summary['total_fines_today'] ?? 0),
                 ]
             ]);
             break;
 
         case 'loadEmployeeProfile':
             $employeeId = intval($_POST['user_id'] ?? 0);
-            $range = strtolower(trim((string)($_POST['range'] ?? '30d')));
-            $rangeMeta = attendanceBuildRangeFilter($range);
+            if ($employeeId <= 0) respond('error', 'Employee is required.');
+            $rangeMeta = attendanceBuildRangeFilter((string)($_POST['range'] ?? '30d'));
 
-            if ($employeeId <= 0) {
-                respond('error', 'Employee is required.');
-            }
-
-            $profileStmt = $db->prepare("SELECT u.user_id,
-                                                u.full_name,
-                                                u.email,
-                                                u.is_active,
+            $profileStmt = $db->prepare("SELECT u.user_id, u.full_name, u.email, u.is_active,
                                                 COALESCE((
                                                     SELECT r.role_name
                                                     FROM user_roles ur
@@ -598,29 +821,25 @@ try {
                                                         WHEN 'staff' THEN 3
                                                         ELSE 4 END
                                                     LIMIT 1
-                                                                                                ), 'User') AS role_name
+                                                ), 'User') AS role_name,
+                                                COALESCE(sr.shift_start, '') AS shift_start,
+                                                COALESCE(sr.shift_end, '') AS shift_end,
+                                                COALESCE(sr.grace_minutes, 0) AS grace_minutes,
+                                                COALESCE(sr.is_active, 0) AS has_shift
                                          FROM users u
+                                         LEFT JOIN employee_shift_rules sr ON sr.cid = u.cid AND sr.user_id = u.user_id
                                          WHERE u.cid = :cid AND u.user_id = :uid
                                          LIMIT 1");
             $profileStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
             $profileStmt->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
             $profile = $profileStmt->execute()->fetchArray(SQLITE3_ASSOC);
-            if (!$profile || strtolower((string)($profile['role_name'] ?? '')) === 'owner') {
-                respond('error', 'Employee not found.');
-            }
+            if (!$profile || strtolower((string)($profile['role_name'] ?? '')) === 'owner') respond('error', 'Employee not found.');
 
-            $activityStmt = $db->prepare("SELECT attendance_date,
-                                                 signin_at,
-                                                 signout_at,
-                                                 signin_method,
-                                                 minutes_late,
-                                                 late_grade,
-                                                 fine_amount,
-                                                 notes
+            $activityStmt = $db->prepare("SELECT attendance_date, signin_at, signout_at, signin_method, minutes_late, late_grade, fine_amount, notes
                                           FROM employee_attendance_logs l
                                           WHERE l.cid = :cid AND l.user_id = :uid {$rangeMeta['filter']}
                                           ORDER BY l.attendance_date DESC
-                                          LIMIT 120");
+                                          LIMIT 180");
             $activityStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
             $activityStmt->bindValue(':uid', $employeeId, SQLITE3_INTEGER);
             bindParams($activityStmt, $rangeMeta['params']);
@@ -634,42 +853,43 @@ try {
             $lateDays = 0;
             $lateMinutes = 0;
             $onTimeDays = 0;
+            $absentDays = 0;
             $totalFine = 0.0;
             $signoutDays = 0;
 
             while ($activityRes && ($row = $activityRes->fetchArray(SQLITE3_ASSOC))) {
                 $minutesLate = intval($row['minutes_late'] ?? 0);
-                $dateLabel = (string)($row['attendance_date'] ?? '');
+                $grade = (string)($row['late_grade'] ?? 'on_time');
                 $attendanceDays++;
                 $lateMinutes += $minutesLate;
                 $totalFine += floatval($row['fine_amount'] ?? 0);
-                if ($minutesLate > 0) {
+                if ($grade === 'absent') {
+                    $absentDays++;
+                } elseif ($minutesLate > 0) {
                     $lateDays++;
                 } else {
                     $onTimeDays++;
                 }
-                if (!empty($row['signout_at'])) {
-                    $signoutDays++;
-                }
+                if (!empty($row['signout_at'])) $signoutDays++;
 
+                $dateLabel = (string)($row['attendance_date'] ?? '');
                 $activities[] = [
                     'attendance_date' => $dateLabel,
                     'signin_at' => (string)($row['signin_at'] ?? ''),
                     'signout_at' => (string)($row['signout_at'] ?? ''),
-                    'signin_method' => (string)($row['signin_method'] ?? 'pin'),
+                    'signin_method' => (string)($row['signin_method'] ?? 'account_password'),
                     'minutes_late' => $minutesLate,
-                    'late_grade' => (string)($row['late_grade'] ?? 'on_time'),
+                    'late_grade' => $grade,
                     'fine_amount' => floatval($row['fine_amount'] ?? 0),
                     'notes' => (string)($row['notes'] ?? ''),
-                    'status_color' => $minutesLate <= 0 ? 'green' : ($minutesLate <= 60 ? 'yellow' : 'red'),
+                    'status_color' => $grade === 'absent' ? 'red' : ($minutesLate <= 0 ? 'green' : ($minutesLate <= 60 ? 'yellow' : 'red')),
                 ];
-
                 $chartLabels[] = $dateLabel;
-                $chartOnTime[] = $minutesLate <= 0 ? 1 : 0;
-                $chartLate[] = $minutesLate > 0 ? 1 : 0;
+                $chartOnTime[] = ($grade !== 'absent' && $minutesLate <= 0) ? 1 : 0;
+                $chartLate[] = ($grade === 'absent' || $minutesLate > 0) ? 1 : 0;
             }
 
-            $performance = attendanceComputePerformanceMetrics($attendanceDays, $lateDays, $lateMinutes);
+            $perf = attendanceComputePerformanceMetrics($attendanceDays, $lateDays, $lateMinutes);
 
             respond('success', 'Employee profile loaded', [
                 'data' => [
@@ -680,17 +900,22 @@ try {
                         'role_name' => (string)($profile['role_name'] ?? 'User'),
                         'is_active' => intval($profile['is_active'] ?? 0),
                         'signin_auth' => 'Email + Password',
+                        'shift_start' => (string)($profile['shift_start'] ?? ''),
+                        'shift_end' => (string)($profile['shift_end'] ?? ''),
+                        'grace_minutes' => intval($profile['grace_minutes'] ?? 0),
+                        'has_shift' => intval($profile['has_shift'] ?? 0),
                     ],
                     'summary' => [
                         'attendance_days' => $attendanceDays,
                         'on_time_days' => $onTimeDays,
                         'late_days' => $lateDays,
+                        'absent_days' => $absentDays,
                         'signout_days' => $signoutDays,
                         'total_late_minutes' => $lateMinutes,
                         'total_fine' => round($totalFine, 2),
-                        'gpi' => floatval($performance['gpi']),
-                        'performance_tone' => (string)$performance['performance_tone'],
-                        'performance_label' => (string)$performance['performance_label'],
+                        'gpi' => floatval($perf['gpi']),
+                        'performance_tone' => (string)$perf['performance_tone'],
+                        'performance_label' => (string)$perf['performance_label'],
                     ],
                     'activities' => $activities,
                     'chart' => [

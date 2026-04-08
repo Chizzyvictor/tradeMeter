@@ -33,6 +33,9 @@ if (!$isManagerOrOwner) {
             <option value="30d" selected>Last 30 Days</option>
             <option value="all">All Time</option>
           </select>
+          <button class="btn btn-outline-info ml-2" id="attendanceExportCsvBtn">Export CSV</button>
+          <button class="btn btn-outline-dark ml-1" id="attendanceExportPdfBtn">Export PDF</button>
+          <button class="btn btn-outline-warning ml-1" id="runAutoAbsenceBtn">Auto-Absence</button>
           <button class="btn btn-primary ml-2" id="openAttendanceSignInModalBtn">Record Sign-In</button>
         </div>
       </div>
@@ -63,6 +66,14 @@ if (!$isManagerOrOwner) {
             <div class="card-body">
               <small class="text-muted">Late Today</small>
               <h3 id="attendanceStatLateToday">0</h3>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3 mb-3">
+          <div class="card shadow-sm attendance-stat-card attendance-stat-slate">
+            <div class="card-body">
+              <small class="text-muted">Absent Today</small>
+              <h3 id="attendanceStatAbsentToday">0</h3>
             </div>
           </div>
         </div>
@@ -105,6 +116,7 @@ if (!$isManagerOrOwner) {
                     <th>Total Fine</th>
                     <th>GPI</th>
                     <th>Performance</th>
+                    <th>Shift</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -129,6 +141,11 @@ if (!$isManagerOrOwner) {
               <div class="col-md-4 mb-2"><div class="border rounded p-2"><small>Email</small><div id="attendanceEmployeeEmail">-</div></div></div>
               <div class="col-md-4 mb-2"><div class="border rounded p-2"><small>Sign-In Auth</small><div id="attendanceEmployeeAuthState">-</div></div></div>
               <div class="col-md-4 mb-2"><div class="border rounded p-2"><small>GPI</small><div id="attendanceEmployeeGpi">-</div></div></div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-md-6 mb-2"><div class="border rounded p-2"><small>Shift Window</small><div id="attendanceEmployeeShiftWindow">-</div></div></div>
+              <div class="col-md-6 mb-2"><div class="border rounded p-2"><small>Grace Minutes</small><div id="attendanceEmployeeShiftGrace">0</div></div></div>
             </div>
 
             <div class="row mb-3">
@@ -163,12 +180,47 @@ if (!$isManagerOrOwner) {
           </div>
         </div>
       </div>
+
+      <div class="card shadow-sm mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Correction Workflow</strong>
+          <div>
+            <select id="attendanceCorrectionStatus" class="form-control form-control-sm d-inline-block w-auto mr-2">
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="all">All</option>
+            </select>
+            <button class="btn btn-sm btn-primary" id="openCorrectionRequestBtn">Request Correction</button>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-bordered table-sm mb-0" id="attendanceCorrectionsTable">
+              <thead class="thead-light">
+                <tr>
+                  <th>Employee</th>
+                  <th>Date</th>
+                  <th>Current</th>
+                  <th>Proposed</th>
+                  <th>Reason</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 <?php include "INC/footer.php"; ?>
 <script src="assets/vendor/js/chart.umd.min.js"></script>
+<script src="assets/vendor/js/jspdf.umd.min.js"></script>
+<script src="assets/vendor/js/jspdf.plugin.autotable.min.js"></script>
 <script src="scripts/employees_attendance.js?v=<?= asset_ver('scripts/employees_attendance.js') ?>"></script>
 
 </body>

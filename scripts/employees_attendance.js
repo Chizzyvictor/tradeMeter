@@ -5,6 +5,7 @@ class EmployeeAttendancePage {
     this.AuthApp = new Auth(this.app);
     this.employees = [];
     this.filteredEmployees = [];
+    this.corrections = [];
     this.currentEmployeeId = 0;
     this.chart = null;
     this.currentRole = 'user';
@@ -22,8 +23,10 @@ class EmployeeAttendancePage {
         window.location.href = 'index.php';
         return;
       }
+
       this.loadOverview();
       this.loadAttendancePolicyMeta();
+      this.loadCorrections();
     });
   }
 
@@ -35,13 +38,38 @@ class EmployeeAttendancePage {
       }
     });
 
+    $('#attendanceEmployeeSearch').on('input', (e) => {
+      this.searchTerm = String($(e.currentTarget).val() || '').trim().toLowerCase();
+      this.renderEmployees(this.employees);
+    });
+
+    $('#attendanceCorrectionStatus').on('change', () => {
+      this.loadCorrections();
+    });
+
     $('#openAttendanceSignInModalBtn').on('click', () => {
       $('#attendanceSignInModal').modal('show');
     });
 
-    $('#attendanceEmployeeSearch').on('input', (e) => {
-      this.searchTerm = String($(e.currentTarget).val() || '').trim().toLowerCase();
-      this.renderEmployees(this.employees);
+    $('#runAutoAbsenceBtn').on('click', () => {
+      this.runAutoAbsence();
+    });
+
+    $('#attendanceExportCsvBtn').on('click', () => {
+      this.exportCsv();
+    });
+
+    $('#attendanceExportPdfBtn').on('click', () => {
+      this.exportPdf();
+    });
+
+    $('#openCorrectionRequestBtn').on('click', () => {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      $('#attendanceCorrectionDate').val(`${yyyy}-${mm}-${dd}`);
+      $('#attendanceCorrectionModal').modal('show');
     });
 
     $('#attendanceSignInForm').on('submit', (e) => {
@@ -52,6 +80,16 @@ class EmployeeAttendancePage {
     $('#attendanceSignOutForm').on('submit', (e) => {
       e.preventDefault();
       this.signOutEmployee();
+    });
+
+    $('#attendanceShiftForm').on('submit', (e) => {
+      e.preventDefault();
+      this.saveShiftRule();
+    });
+
+    $('#attendanceCorrectionForm').on('submit', (e) => {
+      e.preventDefault();
+      this.requestCorrection();
     });
 
     $('#attendanceBackToListBtn').on('click', () => {
@@ -70,6 +108,32 @@ class EmployeeAttendancePage {
       if (!userId) return;
       $('#attendanceSignOutEmployee').val(String(userId));
       $('#attendanceSignOutModal').modal('show');
+    });
+
+    $(document).on('click', '.attendance-shift-btn', (e) => {
+      e.stopPropagation();
+      const $btn = $(e.currentTarget);
+      $('#attendanceShiftUserId').val(String(Number($btn.data('id')) || 0));
+      $('#attendanceShiftStart').val(String($btn.data('shiftStart') || '09:00'));
+      $('#attendanceShiftEnd').val(String($btn.data('shiftEnd') || '17:00'));
+      $('#attendanceShiftGrace').val(String(Number($btn.data('grace')) || 0));
+      $('#attendanceShiftActive').val(String(Number($btn.data('active')) === 1 ? 1 : 0));
+      $('#attendanceShiftModal').modal('show');
+    });
+
+    $(document).on('click', '.attendance-request-correction-btn', (e) => {
+      e.stopPropagation();
+      const userId = Number($(e.currentTarget).data('id')) || 0;
+      if (!userId) return;
+      $('#attendanceCorrectionEmployee').val(String(userId));
+      $('#attendanceCorrectionModal').modal('show');
+    });
+
+    $(document).on('click', '.attendance-correction-review-btn', (e) => {
+      const correctionId = Number($(e.currentTarget).data('id')) || 0;
+      const decision = String($(e.currentTarget).data('decision') || '').trim().toLowerCase();
+      if (!correctionId || !decision) return;
+      this.reviewCorrection(correctionId, decision);
     });
   }
 
@@ -102,10 +166,25 @@ class EmployeeAttendancePage {
     });
   }
 
+  loadCorrections() {
+    const status = String($('#attendanceCorrectionStatus').val() || 'pending');
+    this.app.ajaxHelper({
+      url: 'apiEmployeeAttendance.php',
+      action: 'loadCorrectionRequests',
+      data: { status },
+      silent: true,
+      onSuccess: (res) => {
+        this.corrections = Array.isArray(res.data) ? res.data : [];
+        this.renderCorrections(this.corrections);
+      }
+    });
+  }
+
   renderSummary(summary) {
     $('#attendanceStatEmployees').text(String(Number(summary.employees) || 0));
     $('#attendanceStatSignedInToday').text(String(Number(summary.signed_in_today) || 0));
     $('#attendanceStatLateToday').text(String(Number(summary.late_today) || 0));
+    $('#attendanceStatAbsentToday').text(String(Number(summary.absent_today) || 0));
     $('#attendanceStatFinesToday').text(`N${this.app.formatNumber(summary.total_fines_today || 0)}`);
   }
 
@@ -119,6 +198,7 @@ class EmployeeAttendancePage {
       return haystack.includes(this.searchTerm);
     });
     this.filteredEmployees = filteredRows;
+
     $('#attendanceSearchSummary').text(
       filteredRows.length === (rows || []).length
         ? `Showing all ${filteredRows.length} employees`
@@ -126,7 +206,7 @@ class EmployeeAttendancePage {
     );
 
     if (!filteredRows.length) {
-      $tbody.html('<tr><td colspan="9" class="text-center text-muted">No employees found</td></tr>');
+      $tbody.html('<tr><td colspan="10" class="text-center text-muted">No employees found</td></tr>');
       return;
     }
 
@@ -134,22 +214,61 @@ class EmployeeAttendancePage {
       const gpi = Number(row.gpi || 0);
       const tone = String(row.performance_tone || 'danger');
       const badgeClass = tone === 'success' ? 'badge-success' : (tone === 'warning' ? 'badge-warning text-dark' : 'badge-danger');
-      const onTime = Number(row.on_time_days || 0);
-      const late = Number(row.late_days || 0);
+      const shiftText = Number(row.has_shift || 0) === 1
+        ? `${row.shift_start || '-'}-${row.shift_end || '-'} (+${Number(row.grace_minutes || 0)}m)`
+        : 'Default';
 
       return `
         <tr class="attendance-employee-row" data-id="${row.user_id}" style="cursor:pointer;">
-          <td>${row.full_name || '-'}<br><small class="text-muted">${row.email || '-'}</small></td>
-          <td>${row.role_name || '-'}</td>
+          <td>${AppCore.escapeHtml(row.full_name || '-')}<br><small class="text-muted">${AppCore.escapeHtml(row.email || '-')}</small></td>
+          <td>${AppCore.escapeHtml(row.role_name || '-')}</td>
           <td>${Number(row.attendance_days || 0)}</td>
-          <td><span class="badge badge-success">${onTime}</span></td>
-          <td><span class="badge badge-warning text-dark">${late}</span></td>
+          <td><span class="badge badge-success">${Number(row.on_time_days || 0)}</span></td>
+          <td><span class="badge badge-warning text-dark">${Number(row.late_days || 0)}</span></td>
           <td>N${this.app.formatNumber(row.total_fine || 0)}</td>
           <td><strong>${this.app.formatNumber(gpi)}</strong></td>
-          <td><span class="badge ${badgeClass}">${row.performance_label || 'Needs attention'}</span></td>
+          <td><span class="badge ${badgeClass}">${AppCore.escapeHtml(row.performance_label || 'Needs attention')}</span></td>
+          <td>${AppCore.escapeHtml(shiftText)}</td>
           <td>
             <button class="btn btn-sm btn-outline-dark attendance-signout-btn" data-id="${row.user_id}">Sign-Out</button>
+            <button class="btn btn-sm btn-outline-info attendance-shift-btn" data-id="${row.user_id}" data-shift-start="${row.shift_start || '09:00'}" data-shift-end="${row.shift_end || '17:00'}" data-grace="${Number(row.grace_minutes || 0)}" data-active="${Number(row.has_shift || 0)}">Shift</button>
+            <button class="btn btn-sm btn-outline-warning attendance-request-correction-btn" data-id="${row.user_id}">Correction</button>
           </td>
+        </tr>
+      `;
+    }).join('');
+
+    $tbody.html(html);
+  }
+
+  renderCorrections(rows) {
+    const $tbody = $('#attendanceCorrectionsTable tbody');
+    if (!$tbody.length) return;
+
+    if (!rows.length) {
+      $tbody.html('<tr><td colspan="7" class="text-center text-muted">No correction requests</td></tr>');
+      return;
+    }
+
+    const html = rows.map((row) => {
+      const status = String(row.status || 'pending');
+      const badgeClass = status === 'approved' ? 'badge-success' : (status === 'rejected' ? 'badge-danger' : 'badge-warning text-dark');
+      const currentText = `${row.current_signin_at || '-'} / ${row.current_signout_at || '-'}`;
+      const proposedText = `${row.proposed_signin_at || '-'} / ${row.proposed_signout_at || '-'}`;
+      const reviewButtons = status === 'pending'
+        ? `<button class="btn btn-sm btn-success attendance-correction-review-btn" data-id="${row.correction_id}" data-decision="approve">Approve</button>
+           <button class="btn btn-sm btn-danger attendance-correction-review-btn" data-id="${row.correction_id}" data-decision="reject">Reject</button>`
+        : '-';
+
+      return `
+        <tr>
+          <td>${AppCore.escapeHtml(row.full_name || '-')}</td>
+          <td>${AppCore.escapeHtml(row.attendance_date || '-')}</td>
+          <td>${AppCore.escapeHtml(currentText)}</td>
+          <td>${AppCore.escapeHtml(proposedText)}</td>
+          <td>${AppCore.escapeHtml(row.reason || '-')}</td>
+          <td><span class="badge ${badgeClass}">${AppCore.escapeHtml(status)}</span></td>
+          <td>${reviewButtons}</td>
         </tr>
       `;
     }).join('');
@@ -160,10 +279,11 @@ class EmployeeAttendancePage {
   loadEmployeeOptionsForModals() {
     const options = ['<option value="">Select employee</option>'];
     this.employees.forEach((e) => {
-      options.push(`<option value="${e.user_id}">${e.full_name} (${e.role_name})</option>`);
+      options.push(`<option value="${e.user_id}">${AppCore.escapeHtml(e.full_name)} (${AppCore.escapeHtml(e.role_name)})</option>`);
     });
 
     $('#attendanceSignOutEmployee').html(options.join(''));
+    $('#attendanceCorrectionEmployee').html(options.join(''));
   }
 
   signInEmployee() {
@@ -226,6 +346,182 @@ class EmployeeAttendancePage {
     });
   }
 
+  saveShiftRule() {
+    const user_id = Number($('#attendanceShiftUserId').val()) || 0;
+    const shift_start = String($('#attendanceShiftStart').val() || '').trim();
+    const shift_end = String($('#attendanceShiftEnd').val() || '').trim();
+    const grace_minutes = Number($('#attendanceShiftGrace').val() || 0);
+    const is_active = Number($('#attendanceShiftActive').val() || 1);
+    const $btn = $('#attendanceShiftSubmitBtn');
+
+    if (!user_id || !shift_start || !shift_end) {
+      this.app.showAlert('Shift details are required', 'error');
+      return;
+    }
+
+    $btn.prop('disabled', true);
+    this.app.ajaxHelper({
+      url: 'apiEmployeeAttendance.php',
+      action: 'saveShiftRule',
+      data: { user_id, shift_start, shift_end, grace_minutes, is_active },
+      onSuccess: () => {
+        AppCore.safeHideModal('#attendanceShiftModal');
+        this.loadOverview();
+        if (this.currentEmployeeId === user_id) {
+          this.loadEmployeeProfile(user_id);
+        }
+      },
+      onComplete: () => {
+        $btn.prop('disabled', false);
+      }
+    });
+  }
+
+  toDbDateTime(datetimeLocalValue) {
+    const raw = String(datetimeLocalValue || '').trim();
+    if (!raw) return '';
+    return raw.replace('T', ' ') + ':00';
+  }
+
+  requestCorrection() {
+    const user_id = Number($('#attendanceCorrectionEmployee').val()) || 0;
+    const attendance_date = String($('#attendanceCorrectionDate').val() || '').trim();
+    const proposed_signin_at = this.toDbDateTime($('#attendanceCorrectionSignIn').val());
+    const proposed_signout_at = this.toDbDateTime($('#attendanceCorrectionSignOut').val());
+    const reason = String($('#attendanceCorrectionReason').val() || '').trim();
+    const $btn = $('#attendanceCorrectionSubmitBtn');
+
+    if (!user_id || !attendance_date || !reason) {
+      this.app.showAlert('Employee, date and reason are required', 'error');
+      return;
+    }
+
+    $btn.prop('disabled', true);
+
+    this.app.ajaxHelper({
+      url: 'apiEmployeeAttendance.php',
+      action: 'requestCorrection',
+      data: { user_id, attendance_date, proposed_signin_at, proposed_signout_at, reason },
+      onSuccess: () => {
+        $('#attendanceCorrectionForm')[0].reset();
+        AppCore.safeHideModal('#attendanceCorrectionModal');
+        this.loadCorrections();
+      },
+      onComplete: () => {
+        $btn.prop('disabled', false);
+      }
+    });
+  }
+
+  reviewCorrection(correctionId, decision) {
+    const review_note = window.prompt(`Optional ${decision} note:`, '') || '';
+
+    this.app.ajaxHelper({
+      url: 'apiEmployeeAttendance.php',
+      action: 'reviewCorrection',
+      data: { correction_id: correctionId, decision, review_note },
+      onSuccess: () => {
+        this.loadCorrections();
+        this.loadOverview();
+        if (this.currentEmployeeId > 0) {
+          this.loadEmployeeProfile(this.currentEmployeeId);
+        }
+      }
+    });
+  }
+
+  runAutoAbsence() {
+    const date = window.prompt('Enter date for auto-absence (YYYY-MM-DD):', new Date().toISOString().slice(0, 10));
+    if (!date) return;
+
+    this.app.ajaxHelper({
+      url: 'apiEmployeeAttendance.php',
+      action: 'runAutoAbsence',
+      data: { date },
+      onSuccess: (res) => {
+        const inserted = Number(res?.data?.inserted || 0);
+        this.app.showAlert(`Auto-absence complete: ${inserted} record(s) created.`, 'success');
+        this.loadOverview();
+        this.loadCorrections();
+        if (this.currentEmployeeId > 0) {
+          this.loadEmployeeProfile(this.currentEmployeeId);
+        }
+      }
+    });
+  }
+
+  exportCsv() {
+    const rows = this.filteredEmployees || [];
+    if (!rows.length) {
+      this.app.showAlert('No rows to export', 'error');
+      return;
+    }
+
+    const headers = ['Name', 'Email', 'Role', 'Attendance Days', 'On Time', 'Late', 'Absent', 'Total Fine', 'GPI', 'Performance', 'Shift'];
+    const body = rows.map((row) => [
+      row.full_name || '',
+      row.email || '',
+      row.role_name || '',
+      Number(row.attendance_days || 0),
+      Number(row.on_time_days || 0),
+      Number(row.late_days || 0),
+      Number(row.absent_days || 0),
+      Number(row.total_fine || 0),
+      Number(row.gpi || 0),
+      row.performance_label || '',
+      Number(row.has_shift || 0) === 1 ? `${row.shift_start || ''}-${row.shift_end || ''} (+${Number(row.grace_minutes || 0)}m)` : 'Default'
+    ]);
+
+    const csv = [headers, ...body].map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `attendance-overview-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  exportPdf() {
+    const rows = this.filteredEmployees || [];
+    if (!rows.length) {
+      this.app.showAlert('No rows to export', 'error');
+      return;
+    }
+
+    if (!(window.jspdf && window.jspdf.jsPDF)) {
+      this.app.showAlert('PDF library unavailable', 'error');
+      return;
+    }
+
+    const doc = new window.jspdf.jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(12);
+    doc.text('Employee Attendance Overview', 14, 14);
+
+    const tableRows = rows.map((row) => [
+      row.full_name || '-',
+      row.role_name || '-',
+      Number(row.attendance_days || 0),
+      Number(row.on_time_days || 0),
+      Number(row.late_days || 0),
+      Number(row.absent_days || 0),
+      `N${this.app.formatNumber(row.total_fine || 0)}`,
+      this.app.formatNumber(row.gpi || 0),
+      row.performance_label || '-'
+    ]);
+
+    doc.autoTable({
+      startY: 20,
+      head: [['Employee', 'Role', 'Attendance', 'On Time', 'Late', 'Absent', 'Fine', 'GPI', 'Performance']],
+      body: tableRows,
+      styles: { fontSize: 8 }
+    });
+
+    doc.save(`attendance-overview-${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
+
   loadEmployeeProfile(userId) {
     const range = String($('#attendanceRange').val() || '30d');
 
@@ -242,11 +538,16 @@ class EmployeeAttendancePage {
         this.currentEmployeeId = Number(profile.user_id || userId) || userId;
         this.switchTab('details');
 
-        $('#attendanceEmployeeTitle').text(profile.full_name || 'Employee');
+        $('#attendanceEmployeeTitle').text(profile.full_name || 'Employee Details');
         $('#attendanceEmployeeRoleBadge').text(profile.role_name || 'Role');
         $('#attendanceEmployeeEmail').text(profile.email || '-');
         $('#attendanceEmployeeAuthState').text(profile.signin_auth || 'Email + Password');
-        $('#attendanceEmployeeGpi').html(`<span class="badge badge-${summary.performance_tone === 'success' ? 'success' : (summary.performance_tone === 'warning' ? 'warning text-dark' : 'danger')}">${this.app.formatNumber(summary.gpi || 0)}</span>`);
+        $('#attendanceEmployeeShiftWindow').text(Number(profile.has_shift || 0) === 1 ? `${profile.shift_start || '-'}-${profile.shift_end || '-'}` : 'Default policy');
+        $('#attendanceEmployeeShiftGrace').text(String(Number(profile.grace_minutes || 0)));
+
+        const tone = String(summary.performance_tone || 'danger');
+        const badgeClass = tone === 'success' ? 'badge-success' : (tone === 'warning' ? 'badge-warning text-dark' : 'badge-danger');
+        $('#attendanceEmployeeGpi').html(`<span class="badge ${badgeClass}">${this.app.formatNumber(summary.gpi || 0)}</span>`);
         $('#attendanceEmployeeAttendanceDays').text(String(Number(summary.attendance_days || 0)));
         $('#attendanceEmployeeOnTimeDays').text(String(Number(summary.on_time_days || 0)));
         $('#attendanceEmployeeLateDays').text(String(Number(summary.late_days || 0)));
@@ -269,17 +570,26 @@ class EmployeeAttendancePage {
 
     const html = rows.map((row) => {
       const minutesLate = Number(row.minutes_late || 0);
-      const statusColorClass = row.status_color === 'green'
-        ? 'badge-success'
-        : (row.status_color === 'yellow' ? 'badge-warning text-dark' : 'badge-danger');
-      const statusLabel = minutesLate <= 0 ? 'On time' : (minutesLate <= 60 ? 'Late' : 'Very late');
+      const grade = String(row.late_grade || 'on_time');
+      let statusLabel = 'On time';
+      let statusClass = 'badge-success';
+      if (grade === 'absent') {
+        statusLabel = 'Absent';
+        statusClass = 'badge-danger';
+      } else if (minutesLate > 60) {
+        statusLabel = 'Very late';
+        statusClass = 'badge-danger';
+      } else if (minutesLate > 0) {
+        statusLabel = 'Late';
+        statusClass = 'badge-warning text-dark';
+      }
 
       return `
         <tr>
           <td>${row.attendance_date || '-'}</td>
           <td>${row.signin_at ? this.app.formatDateSafe(row.signin_at, '-') : '-'}</td>
           <td>${row.signout_at ? this.app.formatDateSafe(row.signout_at, '-') : '-'}</td>
-          <td><span class="badge ${statusColorClass}">${statusLabel}</span></td>
+          <td><span class="badge ${statusClass}">${statusLabel}</span></td>
           <td>${minutesLate}</td>
           <td>N${this.app.formatNumber(row.fine_amount || 0)}</td>
         </tr>
@@ -312,7 +622,7 @@ class EmployeeAttendancePage {
             backgroundColor: 'rgba(34, 197, 94, 0.75)'
           },
           {
-            label: 'Late',
+            label: 'Late / Absent',
             data: late,
             backgroundColor: 'rgba(245, 158, 11, 0.75)'
           }

@@ -2185,6 +2185,11 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     color: #fff;
 }
 
+.attendance-stat-slate {
+    background: linear-gradient(135deg, #1f2937 0%, #4b5563 100%);
+    color: #fff;
+}
+
 #attendanceDetailsTab .card,
 #attendanceListTab .card {
     border-radius: 16px;
@@ -2192,6 +2197,8 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 
 #attendanceActivitiesTable td,
 #attendanceActivitiesTable th,
+#attendanceCorrectionsTable td,
+#attendanceCorrectionsTable th,
 #attendanceEmployeesTable td,
 #attendanceEmployeesTable th {
     vertical-align: middle;
