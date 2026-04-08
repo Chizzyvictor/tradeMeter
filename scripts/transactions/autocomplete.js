@@ -134,21 +134,23 @@ TransactionManager.prototype.getUnitLabel = function (unit) {
 
 TransactionManager.prototype.getSelectableUnitsForProduct = function (productUnit) {
     const normalizedUnit = this.normalizeUnitValue(productUnit);
-    if (normalizedUnit === 'size') {
+    if (normalizedUnit === 'size' || normalizedUnit === 'sheet') {
         return ['size', 'sheet'];
     }
-    if (normalizedUnit === 'yard') {
+    if (normalizedUnit === 'yard' || normalizedUnit === 'roll') {
         return ['yard', 'roll'];
     }
     return normalizedUnit ? [normalizedUnit] : [];
 };
 
 TransactionManager.prototype.isSheetBaseUnit = function (baseUnit) {
-    return this.normalizeUnitValue(baseUnit) === 'size';
+    const normalized = this.normalizeUnitValue(baseUnit);
+    return normalized === 'size' || normalized === 'sheet';
 };
 
 TransactionManager.prototype.isRollBaseUnit = function (baseUnit) {
-    return this.normalizeUnitValue(baseUnit) === 'yard';
+    const normalized = this.normalizeUnitValue(baseUnit);
+    return normalized === 'yard' || normalized === 'roll';
 };
 
 TransactionManager.prototype.isFractionalUnit = function (selectedUnit, baseUnit) {

@@ -13,11 +13,13 @@ function normalizeUnitKey($value): string {
 }
 
 function isSheetBaseUnit($baseUnit): bool {
-    return normalizeUnitKey($baseUnit) === 'size';
+    $normalized = normalizeUnitKey($baseUnit);
+    return $normalized === 'size' || $normalized === 'sheet';
 }
 
 function isRollBaseUnit($baseUnit): bool {
-    return normalizeUnitKey($baseUnit) === 'yard';
+    $normalized = normalizeUnitKey($baseUnit);
+    return $normalized === 'yard' || $normalized === 'roll';
 }
 
 function isFractionalSaleUnit($selectedUnit, $baseUnit): bool {
