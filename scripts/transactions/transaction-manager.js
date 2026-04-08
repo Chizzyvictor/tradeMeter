@@ -145,6 +145,14 @@ class TransactionManager {
             $('#productSuggestions').empty().hide();
         });
 
+        $('#productUnitSelect').on('change', function () {
+            self.refreshFractionRatePreview();
+        });
+
+        $('#fractionLength, #fractionWidth, #fractionYards').on('input', function () {
+            self.refreshFractionRatePreview();
+        });
+
         $('#addItemsForm').on('submit', function (e) {
             e.preventDefault();
             self.addItemFromModal();
@@ -262,6 +270,10 @@ class TransactionManager {
         $('#purchaseProduct_id').val('');
         $('#productUnitSelect').html('');
         $('#productSuggestions').empty().hide();
+        $('#sheetFractionFields, #rollFractionFields').addClass('d-none');
+        $('#qty').prop('readonly', false).val(1);
+        $('#rate').prop('readonly', false).val('');
+        $('#fractionLength, #fractionWidth, #fractionYards').val('');
     }
 
     canSubmitTransaction() {
@@ -282,7 +294,11 @@ class TransactionManager {
             const stockQty = this.getItemStockQty(item);
 
             if (qty <= 0 || rate <= 0) return false;
-            if (type === 'sell' && !this.validateStockForSell(item.product_id, stockQty, index)) return false;
+            if (type === 'sell' && !this.validateStockForSell(item.product_id, stockQty, index, {
+                selectedUnit: item.unit,
+                baseUnit: item.base_unit,
+                fractionQty: Number(item.fraction_qty || 0)
+            })) return false;
             return true;
         });
     }

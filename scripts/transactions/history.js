@@ -184,11 +184,13 @@ TransactionManager.prototype.viewTransactionDetails = function (purchaseId) {
             } else {
                 items.forEach(item => {
                     const lineTotal = parseFloat(item.total) || ((parseFloat(item.qty) || 0) * (parseFloat(item.costPrice) || 0));
+                    const productLabel = String(item.display_label || item.product_name || '-');
+                    const lineUnit = String(item.sale_unit || item.product_unit || '-');
                     $itemsTbody.append(`
                         <tr>
-                            <td>${item.product_name || '-'}</td>
+                            <td>${productLabel}</td>
                             <td>${item.qty || 0}</td>
-                            <td>${item.product_unit || '-'}</td>
+                            <td>${lineUnit}</td>
                             <td>${this.app.formatCurrency(parseFloat(item.costPrice) || 0)}</td>
                             <td>${this.app.formatCurrency(lineTotal)}</td>
                         </tr>

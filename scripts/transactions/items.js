@@ -1,6 +1,6 @@
 TransactionManager.prototype.addItemFromModal = function () {
     let productId = Number($('#purchaseProduct_id').val() || 0);
-    const qty = Number($('#qty').val()) || 0;
+    const rawQty = Number($('#qty').val()) || 0;
     const rate = parseFloat($('#rate').val()) || 0;
 
     let product = this.products.find(p => Number(p.product_id) === productId);
@@ -22,16 +22,31 @@ TransactionManager.prototype.addItemFromModal = function () {
         return;
     }
 
-    if (qty <= 0) {
+    const selectedUnit = this.normalizeUnitValue($('#productUnitSelect').val() || product.product_unit || '');
+    const baseUnit = this.normalizeUnitValue(product.product_unit);
+    const isFractionalSell = this.transactionType === 'sell' && this.isFractionalUnit(selectedUnit, baseUnit);
+
+    let qty = rawQty;
+    let fractionLength = 0;
+    let fractionWidth = 0;
+    let fractionQty = 0;
+
+    if (isFractionalSell) {
+        const fractionData = this.calculateFractionRequest(baseUnit);
+        fractionLength = parseFloat(fractionData.length) || 0;
+        fractionWidth = parseFloat(fractionData.width) || 0;
+        fractionQty = parseFloat(fractionData.fractionQty) || 0;
+        qty = 1;
+        if (fractionQty <= 0) {
+            this.app.showAlert('Enter a valid fractional measurement', 'error');
+            return;
+        }
+    } else if (qty <= 0) {
         this.app.showAlert('Quantity must be greater than 0', 'error');
         return;
     }
 
-    const selectedUnit = this.normalizeUnitValue($('#productUnitSelect').val() || product.product_unit || '');
-    const baseUnit = this.normalizeUnitValue(product.product_unit);
-    const stockQty = this.transactionType === 'sell'
-        ? this.convertSellQtyToStockQty(qty, selectedUnit, baseUnit)
-        : qty;
+    const stockQty = qty;
 
     if (stockQty <= 0) {
         this.app.showAlert('Quantity must be greater than 0', 'error');
@@ -43,7 +58,11 @@ TransactionManager.prototype.addItemFromModal = function () {
         return;
     }
 
-    if (!this.validateStockForSell(productId, stockQty)) {
+    if (!this.validateStockForSell(productId, stockQty, null, {
+        selectedUnit,
+        baseUnit,
+        fractionQty
+    })) {
         const stock = this.getSellStockSnapshot(productId, stockQty);
         this.debug('addItemFromModal: stock validation failed', {
             productId,
@@ -63,6 +82,15 @@ TransactionManager.prototype.addItemFromModal = function () {
         qty,
         stock_qty: stockQty,
         rate,
+        is_fractional: isFractionalSell ? 1 : 0,
+        fraction_length: fractionLength,
+        fraction_width: fractionWidth,
+        fraction_qty: fractionQty,
+        display_label: this.buildItemDisplayLabel(product.product_name, baseUnit, selectedUnit, {
+            length: fractionLength,
+            width: fractionWidth,
+            yards: fractionQty
+        }),
         description: '',
         amount: qty * rate
     };
@@ -74,10 +102,19 @@ TransactionManager.prototype.addItemFromModal = function () {
 };
 
 TransactionManager.prototype.addItemToTransaction = function (item) {
+    if (Number(item.is_fractional) === 1) {
+        this.transactionItems.push(item);
+        this.renderTransactionItems();
+        return;
+    }
+
     const existingIndex = this.transactionItems.findIndex(i =>
         Number(i.product_id) === Number(item.product_id) &&
         this.normalizeUnitValue(i.base_unit) === this.normalizeUnitValue(item.base_unit) &&
         this.normalizeUnitValue(i.unit) === this.normalizeUnitValue(item.unit) &&
+        Number(i.fraction_length || 0) === Number(item.fraction_length || 0) &&
+        Number(i.fraction_width || 0) === Number(item.fraction_width || 0) &&
+        Number(i.fraction_qty || 0) === Number(item.fraction_qty || 0) &&
         Number(i.rate) === Number(item.rate)
     );
 
@@ -86,7 +123,11 @@ TransactionManager.prototype.addItemToTransaction = function (item) {
         const nextQty = (parseFloat(existing.qty) || 0) + (parseFloat(item.qty) || 0);
         const nextStockQty = this.getItemStockQty(existing) + this.getItemStockQty(item);
 
-        if (!this.validateStockForSell(item.product_id, nextStockQty, existingIndex)) {
+        if (!this.validateStockForSell(item.product_id, nextStockQty, existingIndex, {
+            selectedUnit: item.unit,
+            baseUnit: item.base_unit,
+            fractionQty: Number(item.fraction_qty || 0)
+        })) {
             const stock = this.getSellStockSnapshot(item.product_id, nextStockQty, existingIndex);
             this.app.showAlert(`Insufficient stock. Available: ${stock.available}, In cart: ${stock.inCart}, Requested: ${stock.requested}`, 'error');
             return;
@@ -105,6 +146,10 @@ TransactionManager.prototype.addItemToTransaction = function (item) {
 TransactionManager.prototype.updateItemQty = function (index, qty) {
     if (!Number.isInteger(index) || index < 0 || index >= this.transactionItems.length) return;
 
+    if (Number(this.transactionItems[index].is_fractional) === 1) {
+        return;
+    }
+
     if (qty <= 0) {
         this.app.showAlert('Quantity must be greater than 0', 'error');
         this.renderTransactionItems();
@@ -115,7 +160,11 @@ TransactionManager.prototype.updateItemQty = function (index, qty) {
     const nextStockQty = this.transactionType === 'sell'
         ? this.convertSellQtyToStockQty(qty, item.unit, item.base_unit)
         : qty;
-    if (!this.validateStockForSell(item.product_id, nextStockQty, index)) {
+    if (!this.validateStockForSell(item.product_id, nextStockQty, index, {
+        selectedUnit: item.unit,
+        baseUnit: item.base_unit,
+        fractionQty: Number(item.fraction_qty || 0)
+    })) {
         const stock = this.getSellStockSnapshot(item.product_id, nextStockQty, index);
         this.app.showAlert(`Quantity exceeds stock. Available: ${stock.available}, In cart: ${stock.inCart}, Requested: ${stock.requested}`, 'error');
         this.renderTransactionItems();
@@ -130,6 +179,7 @@ TransactionManager.prototype.updateItemQty = function (index, qty) {
 
 TransactionManager.prototype.updateItemRate = function (index, rate) {
     if (!Number.isInteger(index) || index < 0 || index >= this.transactionItems.length) return;
+    if (Number(this.transactionItems[index].is_fractional) === 1) return;
     if (rate <= 0) {
         this.app.showAlert('Rate must be greater than 0', 'error');
         this.renderTransactionItems();
@@ -174,14 +224,18 @@ TransactionManager.prototype.renderTransactionItems = function () {
         item.amount = amount;
         total += amount;
 
-        const description = item.description ? `${item.product_name} - ${item.description}` : item.product_name;
+        const baseDescription = String(item.display_label || item.product_name || '-');
+        const description = item.description ? `${baseDescription} - ${item.description}` : baseDescription;
+        const qtyReadOnly = Number(item.is_fractional) === 1 ? 'readonly' : '';
+        const qtyMin = Number(item.is_fractional) === 1 ? '1' : '1';
+        const rateReadOnly = Number(item.is_fractional) === 1 ? 'readonly' : '';
 
         tableRows.push(`
             <tr data-index="${index}">
-                <td><input type="number" class="form-control qtyInput" value="${item.qty}" min="1"></td>
+                <td><input type="number" class="form-control qtyInput" value="${item.qty}" min="${qtyMin}" ${qtyReadOnly}></td>
                 <td>${item.unit || '-'}</td>
                 <td>${description || '-'}</td>
-                <td><input type="number" class="form-control rateInput" value="${item.rate}" min="0" step="0.01"></td>
+                <td><input type="number" class="form-control rateInput" value="${item.rate}" min="0" step="0.01" ${rateReadOnly}></td>
                 <td class="itemAmount">${this.app.formatCurrency(amount)}</td>
                 <td><button type="button" class="btn btn-danger btn-sm removeItemBtn">Remove</button></td>
             </tr>
@@ -195,8 +249,8 @@ TransactionManager.prototype.renderTransactionItems = function () {
                         <span class="badge badge-light border">${item.unit || '-'}</span>
                     </div>
                     <div class="transactions-mobile-meta text-muted mb-2">
-                        <span>Qty: <input type="number" class="form-control form-control-sm qtyInput d-inline-block" style="width:90px;" value="${item.qty}" min="1"></span>
-                        <span>Rate: <input type="number" class="form-control form-control-sm rateInput d-inline-block" style="width:110px;" value="${item.rate}" min="0" step="0.01"></span>
+                        <span>Qty: <input type="number" class="form-control form-control-sm qtyInput d-inline-block" style="width:90px;" value="${item.qty}" min="${qtyMin}" ${qtyReadOnly}></span>
+                        <span>Rate: <input type="number" class="form-control form-control-sm rateInput d-inline-block" style="width:110px;" value="${item.rate}" min="0" step="0.01" ${rateReadOnly}></span>
                         <span>Amount: ${this.app.formatCurrency(amount)}</span>
                     </div>
                     <button type="button" class="btn btn-danger btn-sm removeItemBtn">Remove</button>
@@ -223,11 +277,14 @@ TransactionManager.prototype.updateProductPrices = function () {
         const nextStockQty = this.transactionType === 'sell'
             ? this.convertSellQtyToStockQty(nextQty, item.unit, item.base_unit)
             : nextQty;
+        const appliedRate = Number(item.is_fractional) === 1
+            ? this.computeFractionRate(item.base_unit, nextRate, Number(item.fraction_qty || 0))
+            : nextRate;
         return {
             ...item,
             stock_qty: nextStockQty,
-            rate: nextRate,
-            amount: nextQty * nextRate
+            rate: appliedRate,
+            amount: nextQty * appliedRate
         };
     });
 

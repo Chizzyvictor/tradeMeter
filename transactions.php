@@ -373,7 +373,27 @@ include "INC/navbar.php";
 
           <div class="form-group">
             <label>Qty</label>
-            <input type="number" id="qty" class="form-control" value="1">
+            <input type="number" id="qty" class="form-control" value="1" min="1" step="1">
+          </div>
+
+          <div class="fraction-fields d-none" id="sheetFractionFields">
+            <div class="form-row">
+              <div class="form-group col-6">
+                <label>Length (ft)</label>
+                <input type="number" id="fractionLength" class="form-control" min="0" step="0.01" placeholder="e.g 4">
+              </div>
+              <div class="form-group col-6">
+                <label>Width (ft)</label>
+                <input type="number" id="fractionWidth" class="form-control" min="0" step="0.01" placeholder="e.g 8">
+              </div>
+            </div>
+          </div>
+
+          <div class="fraction-fields d-none" id="rollFractionFields">
+            <div class="form-group">
+              <label>Yards</label>
+              <input type="number" id="fractionYards" class="form-control" min="0" step="0.01" placeholder="e.g 12">
+            </div>
           </div>
 
           <div class="form-group">

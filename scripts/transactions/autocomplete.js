@@ -143,12 +143,137 @@ TransactionManager.prototype.getSelectableUnitsForProduct = function (productUni
     return normalizedUnit ? [normalizedUnit] : [];
 };
 
+TransactionManager.prototype.isSheetBaseUnit = function (baseUnit) {
+    return this.normalizeUnitValue(baseUnit) === 'size';
+};
+
+TransactionManager.prototype.isRollBaseUnit = function (baseUnit) {
+    return this.normalizeUnitValue(baseUnit) === 'yard';
+};
+
+TransactionManager.prototype.isFractionalUnit = function (selectedUnit, baseUnit) {
+    const selected = this.normalizeUnitValue(selectedUnit);
+    if (this.isSheetBaseUnit(baseUnit)) return selected === 'size';
+    if (this.isRollBaseUnit(baseUnit)) return selected === 'yard';
+    return false;
+};
+
+TransactionManager.prototype.isFullUnit = function (selectedUnit, baseUnit) {
+    const selected = this.normalizeUnitValue(selectedUnit);
+    if (this.isSheetBaseUnit(baseUnit)) return selected === 'sheet';
+    if (this.isRollBaseUnit(baseUnit)) return selected === 'roll';
+    return true;
+};
+
+TransactionManager.prototype.getFractionCapacity = function (baseUnit) {
+    if (this.isSheetBaseUnit(baseUnit)) return 32;
+    if (this.isRollBaseUnit(baseUnit)) return 270;
+    return 0;
+};
+
+TransactionManager.prototype.toggleFractionFields = function (baseUnit, selectedUnit) {
+    const isFraction = this.isFractionalUnit(selectedUnit, baseUnit);
+    const showSheetFields = isFraction && this.isSheetBaseUnit(baseUnit);
+    const showRollFields = isFraction && this.isRollBaseUnit(baseUnit);
+
+    $('#sheetFractionFields').toggleClass('d-none', !showSheetFields);
+    $('#rollFractionFields').toggleClass('d-none', !showRollFields);
+
+    const isSpecial = this.isSheetBaseUnit(baseUnit) || this.isRollBaseUnit(baseUnit);
+    if (isFraction && isSpecial) {
+        $('#qty').val(1).prop('readonly', true);
+        $('#rate').prop('readonly', true);
+    } else {
+        $('#qty').prop('readonly', false);
+        $('#rate').prop('readonly', false);
+    }
+};
+
+TransactionManager.prototype.calculateFractionRequest = function (baseUnit) {
+    if (this.isSheetBaseUnit(baseUnit)) {
+        const length = parseFloat($('#fractionLength').val()) || 0;
+        const width = parseFloat($('#fractionWidth').val()) || 0;
+        return {
+            fractionQty: length * width,
+            length,
+            width,
+            yards: 0
+        };
+    }
+
+    if (this.isRollBaseUnit(baseUnit)) {
+        const yards = parseFloat($('#fractionYards').val()) || 0;
+        return {
+            fractionQty: yards,
+            length: 0,
+            width: 0,
+            yards
+        };
+    }
+
+    return {
+        fractionQty: 0,
+        length: 0,
+        width: 0,
+        yards: 0
+    };
+};
+
+TransactionManager.prototype.computeFractionRate = function (baseUnit, fullUnitPrice, fractionQty) {
+    const capacity = this.getFractionCapacity(baseUnit);
+    if (capacity <= 0) return 0;
+    return ((parseFloat(fullUnitPrice) || 0) / capacity) * (parseFloat(fractionQty) || 0);
+};
+
+TransactionManager.prototype.buildItemDisplayLabel = function (productName, baseUnit, selectedUnit, fractionData) {
+    const safeProductName = String(productName || 'Product');
+    if (this.isFractionalUnit(selectedUnit, baseUnit)) {
+        if (this.isSheetBaseUnit(baseUnit)) {
+            const length = parseFloat(fractionData?.length) || 0;
+            const width = parseFloat(fractionData?.width) || 0;
+            return `${length} x ${width} size of ${safeProductName}`;
+        }
+        if (this.isRollBaseUnit(baseUnit)) {
+            const yards = parseFloat(fractionData?.yards) || 0;
+            return `${yards} yards of ${safeProductName}`;
+        }
+    }
+    return safeProductName;
+};
+
+TransactionManager.prototype.refreshFractionRatePreview = function () {
+    if (this.transactionType !== 'sell') return;
+    const productId = Number($('#purchaseProduct_id').val() || 0);
+    if (!productId) return;
+
+    const product = this.products.find(p => Number(p.product_id) === productId);
+    if (!product) return;
+
+    const selectedUnit = this.normalizeUnitValue($('#productUnitSelect').val() || product.product_unit || '');
+    const baseUnit = this.normalizeUnitValue(product.product_unit);
+
+    this.toggleFractionFields(baseUnit, selectedUnit);
+
+    if (!this.isFractionalUnit(selectedUnit, baseUnit)) {
+        $('#rate').val(this.getProductRateByType(product));
+        return;
+    }
+
+    const fractionData = this.calculateFractionRequest(baseUnit);
+    const fractionQty = parseFloat(fractionData.fractionQty) || 0;
+    const nextRate = this.computeFractionRate(baseUnit, this.getProductRateByType(product), fractionQty);
+    $('#rate').val(nextRate > 0 ? nextRate.toFixed(2) : '');
+};
+
 TransactionManager.prototype.convertSellQtyToStockQty = function (qty, selectedUnit, productBaseUnit = '') {
     const parsedQty = parseFloat(qty) || 0;
     if (parsedQty <= 0) return 0;
 
     const normalizedUnit = this.normalizeUnitValue(selectedUnit);
     const normalizedBaseUnit = this.normalizeUnitValue(productBaseUnit);
+    if (this.isSheetBaseUnit(normalizedBaseUnit) || this.isRollBaseUnit(normalizedBaseUnit)) {
+        return parsedQty;
+    }
     if (normalizedBaseUnit === 'size') {
         if (normalizedUnit === 'sheet') return parsedQty * 32;
         return parsedQty;
@@ -200,8 +325,17 @@ TransactionManager.prototype.getSellStockSnapshot = function (productId, nextQty
     };
 };
 
-TransactionManager.prototype.validateStockForSell = function (productId, nextQty, excludeIndex = null) {
+TransactionManager.prototype.validateStockForSell = function (productId, nextQty, excludeIndex = null, options = {}) {
     if (this.transactionType !== 'sell') return true;
+
+    const selectedUnit = this.normalizeUnitValue(options.selectedUnit || '');
+    const baseUnit = this.normalizeUnitValue(options.baseUnit || '');
+    const isSpecialBase = this.isSheetBaseUnit(baseUnit) || this.isRollBaseUnit(baseUnit);
+
+    // Complex fraction carry-over is validated on the server to avoid client-side drift.
+    if (isSpecialBase && this.isFractionalUnit(selectedUnit, baseUnit)) {
+        return true;
+    }
 
     const snapshot = this.getSellStockSnapshot(productId, nextQty, excludeIndex);
     const epsilon = 0.000001;
@@ -230,4 +364,9 @@ TransactionManager.prototype.applySelectedProductToModal = function (product) {
     $('#productUnitSelect').html(unitOptionsHtml);
     $('#rate').val(rate);
     $('#qty').val(1);
+    $('#fractionLength').val('');
+    $('#fractionWidth').val('');
+    $('#fractionYards').val('');
+    this.toggleFractionFields(normalizedProductUnit, $('#productUnitSelect').val());
+    this.refreshFractionRatePreview();
 };

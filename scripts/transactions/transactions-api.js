@@ -41,7 +41,11 @@ TransactionManager.prototype.validateTransactionForm = function () {
             issues.push(`invalid qty/rate for product ${item.product_id}`);
         }
 
-        if (this.transactionType === 'sell' && !this.validateStockForSell(item.product_id, stockQty, index)) {
+        if (this.transactionType === 'sell' && !this.validateStockForSell(item.product_id, stockQty, index, {
+            selectedUnit: item.unit,
+            baseUnit: item.base_unit,
+            fractionQty: Number(item.fraction_qty || 0)
+        })) {
             ok = false;
             issues.push(`insufficient stock for product ${item.product_id}`);
         }
@@ -73,8 +77,15 @@ TransactionManager.prototype.validateTransactionForm = function () {
 TransactionManager.prototype.buildApiItemsPayload = function () {
     return this.transactionItems.map(item => ({
         product_id: Number(item.product_id),
-        qty: Number(this.getItemStockQty(item)),
-        costPrice: Number(item.rate)
+        qty: Number(item.qty),
+        costPrice: Number(item.rate),
+        sale_unit: String(item.unit || ''),
+        base_unit: String(item.base_unit || ''),
+        is_fractional: Number(item.is_fractional || 0),
+        fraction_length: Number(item.fraction_length || 0),
+        fraction_width: Number(item.fraction_width || 0),
+        fraction_qty: Number(item.fraction_qty || 0),
+        display_label: String(item.display_label || item.product_name || '')
     }));
 };
 

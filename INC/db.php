@@ -326,6 +326,7 @@ function appEnsureCoreBusinessSchema(AppDbConnection $db): void {
             product_id INTEGER NOT NULL,
             cid INTEGER NOT NULL,
             quantity INTEGER NOT NULL DEFAULT 0,
+            fraction_qty REAL NOT NULL DEFAULT 0,
             last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
             FOREIGN KEY (cid) REFERENCES company(cid) ON DELETE CASCADE,
@@ -393,6 +394,11 @@ function appEnsureCoreBusinessSchema(AppDbConnection $db): void {
             product_id INTEGER NOT NULL,
             qty INTEGER NOT NULL,
             costPrice REAL NOT NULL,
+            sale_unit TEXT,
+            fraction_length REAL,
+            fraction_width REAL,
+            fraction_qty REAL,
+            display_label TEXT,
             total REAL GENERATED ALWAYS AS (qty * costPrice) STORED,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (sale_id) REFERENCES sales(sale_id) ON DELETE CASCADE,
@@ -760,10 +766,43 @@ function appRunLegacyPurchaseMigration(AppDbConnection $db): void {
                WHERE LOWER(COALESCE(p_old.transaction_type,'buy')) IN ('sell','sale')");
 }
 
+function appEnsureInventoryFractionColumns(AppDbConnection $db): void {
+    $inventoryColumns = [];
+    $invRes = $db->query("PRAGMA table_info(inventory)");
+    while ($invRes && ($row = $invRes->fetchArray(SQLITE3_ASSOC))) {
+        $inventoryColumns[] = strtolower((string)($row['name'] ?? ''));
+    }
+
+    if (!in_array('fraction_qty', $inventoryColumns, true)) {
+        $db->exec("ALTER TABLE inventory ADD COLUMN fraction_qty REAL NOT NULL DEFAULT 0");
+    }
+
+    $salesItemColumns = [];
+    $salesRes = $db->query("PRAGMA table_info(sales_items)");
+    while ($salesRes && ($row = $salesRes->fetchArray(SQLITE3_ASSOC))) {
+        $salesItemColumns[] = strtolower((string)($row['name'] ?? ''));
+    }
+
+    $newColumns = [
+        'sale_unit' => 'TEXT',
+        'fraction_length' => 'REAL',
+        'fraction_width' => 'REAL',
+        'fraction_qty' => 'REAL',
+        'display_label' => 'TEXT',
+    ];
+
+    foreach ($newColumns as $column => $definition) {
+        if (!in_array($column, $salesItemColumns, true)) {
+            $db->exec("ALTER TABLE sales_items ADD COLUMN {$column} {$definition}");
+        }
+    }
+}
+
 function appInitializeTradeMeterSchema(AppDbConnection $db): void {
     appEnsureCoreBusinessSchema($db);
     appEnsureRbacSchema($db);
     appRunLegacyPurchaseMigration($db);
+    appEnsureInventoryFractionColumns($db);
     appEnsureCoreBusinessIndexes($db);
     appNormalizeExistingBusinessDateTimes($db);
     appEnsureSqliteBusinessDatetimeTriggers($db);
