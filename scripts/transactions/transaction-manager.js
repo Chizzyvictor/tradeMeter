@@ -279,9 +279,10 @@ class TransactionManager {
         return this.transactionItems.every((item, index) => {
             const qty = parseFloat(item.qty) || 0;
             const rate = parseFloat(item.rate) || 0;
+            const stockQty = this.getItemStockQty(item);
 
             if (qty <= 0 || rate <= 0) return false;
-            if (type === 'sell' && !this.validateStockForSell(item.product_id, qty, index)) return false;
+            if (type === 'sell' && !this.validateStockForSell(item.product_id, stockQty, index)) return false;
             return true;
         });
     }

@@ -27,16 +27,28 @@ TransactionManager.prototype.addItemFromModal = function () {
         return;
     }
 
+    const selectedUnit = this.normalizeUnitValue($('#productUnitSelect').val() || product.product_unit || '');
+    const baseUnit = this.normalizeUnitValue(product.product_unit);
+    const stockQty = this.transactionType === 'sell'
+        ? this.convertSellQtyToStockQty(qty, selectedUnit, baseUnit)
+        : qty;
+
+    if (stockQty <= 0) {
+        this.app.showAlert('Quantity must be greater than 0', 'error');
+        return;
+    }
+
     if (rate <= 0) {
         this.app.showAlert('Rate must be greater than 0', 'error');
         return;
     }
 
-    if (!this.validateStockForSell(productId, qty)) {
-        const stock = this.getSellStockSnapshot(productId, qty);
+    if (!this.validateStockForSell(productId, stockQty)) {
+        const stock = this.getSellStockSnapshot(productId, stockQty);
         this.debug('addItemFromModal: stock validation failed', {
             productId,
             qty,
+            stockQty,
             available: this.getAvailableStock(productId)
         });
         this.app.showAlert(`Insufficient stock. Available: ${stock.available}, In cart: ${stock.inCart}, Requested: ${stock.requested}`, 'error');
@@ -46,8 +58,10 @@ TransactionManager.prototype.addItemFromModal = function () {
     const item = {
         product_id: productId,
         product_name: String(product.product_name || ''),
-        unit: String($('#productUnitSelect').val() || product.product_unit || ''),
+        unit: selectedUnit,
+        base_unit: baseUnit,
         qty,
+        stock_qty: stockQty,
         rate,
         description: '',
         amount: qty * rate
@@ -60,19 +74,26 @@ TransactionManager.prototype.addItemFromModal = function () {
 };
 
 TransactionManager.prototype.addItemToTransaction = function (item) {
-    const existingIndex = this.transactionItems.findIndex(i => Number(i.product_id) === Number(item.product_id));
+    const existingIndex = this.transactionItems.findIndex(i =>
+        Number(i.product_id) === Number(item.product_id) &&
+        this.normalizeUnitValue(i.base_unit) === this.normalizeUnitValue(item.base_unit) &&
+        this.normalizeUnitValue(i.unit) === this.normalizeUnitValue(item.unit) &&
+        Number(i.rate) === Number(item.rate)
+    );
 
     if (existingIndex !== -1) {
         const existing = this.transactionItems[existingIndex];
         const nextQty = (parseFloat(existing.qty) || 0) + (parseFloat(item.qty) || 0);
+        const nextStockQty = this.getItemStockQty(existing) + this.getItemStockQty(item);
 
-        if (!this.validateStockForSell(item.product_id, nextQty, existingIndex)) {
-            const stock = this.getSellStockSnapshot(item.product_id, nextQty, existingIndex);
+        if (!this.validateStockForSell(item.product_id, nextStockQty, existingIndex)) {
+            const stock = this.getSellStockSnapshot(item.product_id, nextStockQty, existingIndex);
             this.app.showAlert(`Insufficient stock. Available: ${stock.available}, In cart: ${stock.inCart}, Requested: ${stock.requested}`, 'error');
             return;
         }
 
         existing.qty = nextQty;
+        existing.stock_qty = nextStockQty;
         existing.amount = existing.qty * existing.rate;
     } else {
         this.transactionItems.push(item);
@@ -91,14 +112,18 @@ TransactionManager.prototype.updateItemQty = function (index, qty) {
     }
 
     const item = this.transactionItems[index];
-    if (!this.validateStockForSell(item.product_id, qty, index)) {
-        const stock = this.getSellStockSnapshot(item.product_id, qty, index);
+    const nextStockQty = this.transactionType === 'sell'
+        ? this.convertSellQtyToStockQty(qty, item.unit, item.base_unit)
+        : qty;
+    if (!this.validateStockForSell(item.product_id, nextStockQty, index)) {
+        const stock = this.getSellStockSnapshot(item.product_id, nextStockQty, index);
         this.app.showAlert(`Quantity exceeds stock. Available: ${stock.available}, In cart: ${stock.inCart}, Requested: ${stock.requested}`, 'error');
         this.renderTransactionItems();
         return;
     }
 
     this.transactionItems[index].qty = qty;
+    this.transactionItems[index].stock_qty = nextStockQty;
     this.transactionItems[index].amount = this.transactionItems[index].qty * this.transactionItems[index].rate;
     this.renderTransactionItems();
 };
@@ -195,8 +220,12 @@ TransactionManager.prototype.updateProductPrices = function () {
 
         const nextRate = this.getProductRateByType(product);
         const nextQty = parseFloat(item.qty) || 0;
+        const nextStockQty = this.transactionType === 'sell'
+            ? this.convertSellQtyToStockQty(nextQty, item.unit, item.base_unit)
+            : nextQty;
         return {
             ...item,
+            stock_qty: nextStockQty,
             rate: nextRate,
             amount: nextQty * nextRate
         };
