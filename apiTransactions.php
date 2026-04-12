@@ -110,7 +110,7 @@ switch ($action) {
                 respond("error", "Invalid item in purchase list");
             }
 
-            $pStmt = $db->prepare("SELECT product_id, product_name, product_unit, selling_price
+            $pStmt = $db->prepare("SELECT product_id, product_name, product_unit, cost_price, selling_price
                                    FROM products
                                    WHERE product_id = :pid AND cid = :cid AND COALESCE(is_active, 1) = 1
                                    LIMIT 1");
@@ -122,7 +122,7 @@ switch ($action) {
             }
 
             $baseUnit = normalizeUnitKey($item['base_unit'] ?? ($productRow['product_unit'] ?? ''));
-            $saleUnit = normalizeUnitKey($item['sale_unit'] ?? $baseUnit);
+            $saleUnit = normalizeUnitKey($item['sale_unit'] ?? ($item['purchase_unit'] ?? $baseUnit));
             $fractionLength = floatval($item['fraction_length'] ?? 0);
             $fractionWidth = floatval($item['fraction_width'] ?? 0);
             $fractionQtyInput = floatval($item['fraction_qty'] ?? 0);
@@ -135,8 +135,14 @@ switch ($action) {
             $ledgerQtyOut = 0;
             $fractionQtyForDb = null;
             $fractionQtyAfter = null;
+            $updateFractionQty = false;
 
-            if ($transactionType === 'sell') {
+            $isSpecialBaseUnit = isSheetBaseUnit($baseUnit) || isRollBaseUnit($baseUnit);
+            $isFractionTransactionUnit = $isSpecialBaseUnit && isFractionalSaleUnit($saleUnit, $baseUnit);
+            $availableQty = 0;
+            $availableFractionQty = 0.0;
+
+            if ($transactionType === 'sell' || $isFractionTransactionUnit) {
                 $inventoryStmt = $db->prepare("SELECT quantity, COALESCE(fraction_qty, 0) AS fraction_qty
                                                FROM inventory
                                                WHERE product_id = :product_id AND cid = :cid
@@ -144,31 +150,29 @@ switch ($action) {
                 $inventoryStmt->bindValue(':product_id', $productId, SQLITE3_INTEGER);
                 $inventoryStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
                 $invRow = $inventoryStmt->execute()->fetchArray(SQLITE3_ASSOC);
-
                 $availableQty = intval($invRow['quantity'] ?? 0);
                 $availableFractionQty = floatval($invRow['fraction_qty'] ?? 0);
+            }
 
-                $isSpecialBaseUnit = isSheetBaseUnit($baseUnit) || isRollBaseUnit($baseUnit);
-                $isFractionSale = $isSpecialBaseUnit && isFractionalSaleUnit($saleUnit, $baseUnit);
+            if ($isFractionTransactionUnit) {
+                $fractionCapacity = getFractionCapacity($baseUnit);
+                if ($fractionCapacity <= 0) {
+                    respond("error", "Invalid fraction conversion rule");
+                }
 
-                if ($isFractionSale) {
-                    $fractionCapacity = getFractionCapacity($baseUnit);
-                    if ($fractionCapacity <= 0) {
-                        respond("error", "Invalid fraction conversion rule");
-                    }
+                $requestedFraction = $fractionQtyInput;
+                if ($requestedFraction <= 0 && isSheetBaseUnit($baseUnit)) {
+                    $requestedFraction = $fractionLength * $fractionWidth;
+                }
+                if ($requestedFraction <= 0 && isRollBaseUnit($baseUnit)) {
+                    $requestedFraction = $qty;
+                }
 
-                    $requestedFraction = $fractionQtyInput;
-                    if ($requestedFraction <= 0 && isSheetBaseUnit($baseUnit)) {
-                        $requestedFraction = $fractionLength * $fractionWidth;
-                    }
-                    if ($requestedFraction <= 0 && isRollBaseUnit($baseUnit)) {
-                        $requestedFraction = $qty;
-                    }
+                if ($requestedFraction <= 0) {
+                    respond("error", "Invalid fractional quantity");
+                }
 
-                    if ($requestedFraction <= 0) {
-                        respond("error", "Invalid fractional sale quantity");
-                    }
-
+                if ($transactionType === 'sell') {
                     $consumeFromFraction = min($availableFractionQty, $requestedFraction);
                     $remainingFraction = max(0, $requestedFraction - $consumeFromFraction);
                     $openNewUnits = $remainingFraction > 0
@@ -181,21 +185,31 @@ switch ($action) {
 
                     $leftoverFromNewUnits = max(0, ($openNewUnits * $fractionCapacity) - $remainingFraction);
                     $fractionQtyAfter = max(0, ($availableFractionQty - $consumeFromFraction) + $leftoverFromNewUnits);
-
                     $inventoryDeltaQty = -1 * $openNewUnits;
                     $ledgerQtyOut = $openNewUnits;
-                    $fractionQtyForDb = $requestedFraction;
-                    $dbQty = 1;
                     $lineRate = (floatval($productRow['selling_price'] ?? 0) / $fractionCapacity) * $requestedFraction;
-
-                    if ($displayLabel === '') {
-                        if (isSheetBaseUnit($baseUnit)) {
-                            $displayLabel = $fractionLength . ' x ' . $fractionWidth . ' size of ' . ($productRow['product_name'] ?? 'Product');
-                        } else {
-                            $displayLabel = $requestedFraction . ' yards of ' . ($productRow['product_name'] ?? 'Product');
-                        }
-                    }
                 } else {
+                    $totalFraction = $availableFractionQty + $requestedFraction;
+                    $carryIntoFullUnits = intval(floor(($totalFraction / $fractionCapacity) + 0.0000001));
+                    $fractionQtyAfter = max(0, $totalFraction - ($carryIntoFullUnits * $fractionCapacity));
+                    $inventoryDeltaQty = $carryIntoFullUnits;
+                    $ledgerQtyIn = $carryIntoFullUnits;
+                    $lineRate = (floatval($productRow['cost_price'] ?? 0) / $fractionCapacity) * $requestedFraction;
+                }
+
+                $fractionQtyForDb = $requestedFraction;
+                $dbQty = 1;
+                $updateFractionQty = true;
+
+                if ($displayLabel === '') {
+                    if (isSheetBaseUnit($baseUnit)) {
+                        $displayLabel = $fractionLength . ' x ' . $fractionWidth . ' size of ' . ($productRow['product_name'] ?? 'Product');
+                    } else {
+                        $displayLabel = $requestedFraction . ' yards of ' . ($productRow['product_name'] ?? 'Product');
+                    }
+                }
+            } else {
+                if ($transactionType === 'sell') {
                     $requiredQty = intval(round($qty));
                     if ($requiredQty <= 0) {
                         respond("error", "Invalid item quantity");
@@ -206,17 +220,16 @@ switch ($action) {
 
                     $inventoryDeltaQty = -1 * $requiredQty;
                     $ledgerQtyOut = $requiredQty;
-                    $fractionQtyAfter = $availableFractionQty;
+                    $dbQty = $requiredQty;
+                } else {
+                    $requiredQty = intval(round($qty));
+                    if ($requiredQty <= 0) {
+                        respond("error", "Invalid item quantity");
+                    }
+                    $inventoryDeltaQty = $requiredQty;
+                    $ledgerQtyIn = $requiredQty;
                     $dbQty = $requiredQty;
                 }
-            } else {
-                $requiredQty = intval(round($qty));
-                if ($requiredQty <= 0) {
-                    respond("error", "Invalid item quantity");
-                }
-                $inventoryDeltaQty = $requiredQty;
-                $ledgerQtyIn = $requiredQty;
-                $dbQty = $requiredQty;
             }
 
             $lineTotal = $dbQty * $lineRate;
@@ -226,6 +239,7 @@ switch ($action) {
                 'qty' => $dbQty,
                 'unitPrice' => $lineRate,
                 'sale_unit' => $saleUnit,
+                'purchase_unit' => $saleUnit,
                 'fraction_length' => $fractionLength,
                 'fraction_width' => $fractionWidth,
                 'fraction_qty' => $fractionQtyForDb,
@@ -233,7 +247,8 @@ switch ($action) {
                 'inventory_delta_qty' => $inventoryDeltaQty,
                 'ledger_qty_in' => $ledgerQtyIn,
                 'ledger_qty_out' => $ledgerQtyOut,
-                'fraction_qty_after' => $fractionQtyAfter
+                'fraction_qty_after' => $fractionQtyAfter,
+                'update_fraction_qty' => $updateFractionQty ? 1 : 0
             ];
         }
 
@@ -300,8 +315,27 @@ switch ($action) {
                                                 :display_label
                                            )");
                 } else {
-                    $iStmt = $db->prepare("INSERT INTO purchases_items (purchase_id, product_id, qty, costPrice)
-                                           VALUES (:transaction_id, :product_id, :qty, :costPrice)");
+                    $iStmt = $db->prepare("INSERT INTO purchases_items (
+                                                purchase_id,
+                                                product_id,
+                                                qty,
+                                                costPrice,
+                                                purchase_unit,
+                                                fraction_length,
+                                                fraction_width,
+                                                fraction_qty,
+                                                display_label
+                                           ) VALUES (
+                                                :transaction_id,
+                                                :product_id,
+                                                :qty,
+                                                :costPrice,
+                                                :purchase_unit,
+                                                :fraction_length,
+                                                :fraction_width,
+                                                :fraction_qty,
+                                                :display_label
+                                           )");
                 }
                 $iStmt->bindValue(':transaction_id', $baseTransactionId, SQLITE3_INTEGER);
                 $iStmt->bindValue(':product_id', $item['product_id'], SQLITE3_INTEGER);
@@ -317,16 +351,27 @@ switch ($action) {
                         $iStmt->bindValue(':fraction_qty', $item['fraction_qty'], SQLITE3_FLOAT);
                     }
                     $iStmt->bindValue(':display_label', $item['display_label'], SQLITE3_TEXT);
+                } else {
+                    $iStmt->bindValue(':purchase_unit', $item['purchase_unit'], SQLITE3_TEXT);
+                    $iStmt->bindValue(':fraction_length', $item['fraction_length'], SQLITE3_FLOAT);
+                    $iStmt->bindValue(':fraction_width', $item['fraction_width'], SQLITE3_FLOAT);
+                    if ($item['fraction_qty'] === null) {
+                        $iStmt->bindValue(':fraction_qty', null, SQLITE3_NULL);
+                    } else {
+                        $iStmt->bindValue(':fraction_qty', $item['fraction_qty'], SQLITE3_FLOAT);
+                    }
+                    $iStmt->bindValue(':display_label', $item['display_label'], SQLITE3_TEXT);
                 }
                 $iStmt->execute();
 
                 $inventoryTimestamp = appNowBusinessDateTime();
-                if ($transactionType === 'sell' && $item['fraction_qty_after'] !== null) {
-                    $stockStmt = $db->prepare("UPDATE inventory
-                                               SET quantity = quantity + :qty_delta,
-                                                   fraction_qty = :fraction_qty,
-                                                   last_updated = :last_updated
-                                               WHERE product_id = :product_id AND cid = :cid");
+                if (intval($item['update_fraction_qty'] ?? 0) === 1) {
+                    $stockStmt = $db->prepare("INSERT INTO inventory (product_id, cid, quantity, fraction_qty, last_updated)
+                                               VALUES (:product_id, :cid, :qty_delta, :fraction_qty, :last_updated)
+                                               ON CONFLICT(product_id, cid) DO UPDATE SET
+                                               quantity = inventory.quantity + excluded.quantity,
+                                               fraction_qty = excluded.fraction_qty,
+                                               last_updated = excluded.last_updated");
                     $stockStmt->bindValue(':product_id', $item['product_id'], SQLITE3_INTEGER);
                     $stockStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
                     $stockStmt->bindValue(':qty_delta', $item['inventory_delta_qty'], SQLITE3_INTEGER);
@@ -494,6 +539,7 @@ switch ($action) {
                                    ORDER BY si.item_id ASC");
         } else {
             $iStmt = $db->prepare("SELECT pi.item_id, pi.product_id, pi.qty, pi.costPrice, pi.total,
+                                          pi.purchase_unit, pi.fraction_length, pi.fraction_width, pi.fraction_qty, pi.display_label,
                                           pr.product_name, pr.product_unit
                                    FROM purchases_items pi
                                    LEFT JOIN products pr ON pr.product_id = pi.product_id

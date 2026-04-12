@@ -244,7 +244,6 @@ TransactionManager.prototype.buildItemDisplayLabel = function (productName, base
 };
 
 TransactionManager.prototype.refreshFractionRatePreview = function () {
-    if (this.transactionType !== 'sell') return;
     const productId = Number($('#purchaseProduct_id').val() || 0);
     if (!productId) return;
 
@@ -271,26 +270,22 @@ TransactionManager.prototype.convertSellQtyToStockQty = function (qty, selectedU
     const parsedQty = parseFloat(qty) || 0;
     if (parsedQty <= 0) return 0;
 
-    const normalizedUnit = this.normalizeUnitValue(selectedUnit);
     const normalizedBaseUnit = this.normalizeUnitValue(productBaseUnit);
+    const normalizedUnit = this.normalizeUnitValue(selectedUnit);
     if (this.isSheetBaseUnit(normalizedBaseUnit) || this.isRollBaseUnit(normalizedBaseUnit)) {
+        // Special units are validated on server with fraction-aware logic.
+        // Client stock checks should only reserve explicit full units added to cart.
         return parsedQty;
     }
-    if (normalizedBaseUnit === 'size') {
-        if (normalizedUnit === 'sheet') return parsedQty * 32;
-        return parsedQty;
-    }
-    if (normalizedBaseUnit === 'yard') {
-        if (normalizedUnit === 'roll') return parsedQty * 270;
-        return parsedQty;
-    }
+    if (!normalizedUnit) return parsedQty;
     return parsedQty;
 };
 
 TransactionManager.prototype.getItemStockQty = function (item) {
-    const explicitStockQty = parseFloat(item?.stock_qty);
-    if (Number.isFinite(explicitStockQty) && explicitStockQty > 0) {
-        return explicitStockQty;
+    if (item && Object.prototype.hasOwnProperty.call(item, 'stock_qty')) {
+        const explicitStockQty = parseFloat(item.stock_qty);
+        if (!Number.isFinite(explicitStockQty)) return 0;
+        return Math.max(0, explicitStockQty);
     }
 
     const qty = parseFloat(item?.qty) || 0;

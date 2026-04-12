@@ -80,6 +80,7 @@ TransactionManager.prototype.buildApiItemsPayload = function () {
         qty: Number(item.qty),
         costPrice: Number(item.rate),
         sale_unit: String(item.unit || ''),
+        purchase_unit: String(item.unit || ''),
         base_unit: String(item.base_unit || ''),
         is_fractional: Number(item.is_fractional || 0),
         fraction_length: Number(item.fraction_length || 0),

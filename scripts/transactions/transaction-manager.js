@@ -74,6 +74,7 @@ class TransactionManager {
         $('#transactionType').on('change', function () {
             self.transactionType = String($(this).val() || 'sell').toLowerCase();
             self.updateProductPrices();
+            self.refreshFractionRatePreview();
             self.updateProcessButtonState();
         });
 

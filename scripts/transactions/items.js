@@ -24,14 +24,14 @@ TransactionManager.prototype.addItemFromModal = function () {
 
     const selectedUnit = this.normalizeUnitValue($('#productUnitSelect').val() || product.product_unit || '');
     const baseUnit = this.normalizeUnitValue(product.product_unit);
-    const isFractionalSell = this.transactionType === 'sell' && this.isFractionalUnit(selectedUnit, baseUnit);
+    const isFractionalUnitSelection = this.isFractionalUnit(selectedUnit, baseUnit);
 
     let qty = rawQty;
     let fractionLength = 0;
     let fractionWidth = 0;
     let fractionQty = 0;
 
-    if (isFractionalSell) {
+    if (isFractionalUnitSelection) {
         const fractionData = this.calculateFractionRequest(baseUnit);
         fractionLength = parseFloat(fractionData.length) || 0;
         fractionWidth = parseFloat(fractionData.width) || 0;
@@ -46,9 +46,10 @@ TransactionManager.prototype.addItemFromModal = function () {
         return;
     }
 
-    const stockQty = qty;
+    const stockQty = (this.transactionType === 'sell' && isFractionalUnitSelection) ? 0 : qty;
 
-    if (stockQty <= 0) {
+    const isFractionalSell = this.transactionType === 'sell' && isFractionalUnitSelection;
+    if (stockQty <= 0 && !isFractionalSell) {
         this.app.showAlert('Quantity must be greater than 0', 'error');
         return;
     }
@@ -82,7 +83,7 @@ TransactionManager.prototype.addItemFromModal = function () {
         qty,
         stock_qty: stockQty,
         rate,
-        is_fractional: isFractionalSell ? 1 : 0,
+        is_fractional: isFractionalUnitSelection ? 1 : 0,
         fraction_length: fractionLength,
         fraction_width: fractionWidth,
         fraction_qty: fractionQty,
@@ -274,9 +275,11 @@ TransactionManager.prototype.updateProductPrices = function () {
 
         const nextRate = this.getProductRateByType(product);
         const nextQty = parseFloat(item.qty) || 0;
-        const nextStockQty = this.transactionType === 'sell'
+        const nextStockQty = (this.transactionType === 'sell' && Number(item.is_fractional) === 1)
+            ? 0
+            : (this.transactionType === 'sell'
             ? this.convertSellQtyToStockQty(nextQty, item.unit, item.base_unit)
-            : nextQty;
+            : nextQty);
         const appliedRate = Number(item.is_fractional) === 1
             ? this.computeFractionRate(item.base_unit, nextRate, Number(item.fraction_qty || 0))
             : nextRate;

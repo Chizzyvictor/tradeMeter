@@ -368,6 +368,11 @@ function appEnsureCoreBusinessSchema(AppDbConnection $db): void {
             product_id INTEGER NOT NULL,
             qty INTEGER NOT NULL,
             costPrice REAL NOT NULL,
+            purchase_unit TEXT,
+            fraction_length REAL,
+            fraction_width REAL,
+            fraction_qty REAL,
+            display_label TEXT,
             total REAL GENERATED ALWAYS AS (qty * costPrice) STORED,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (purchase_id) REFERENCES purchases(purchase_id) ON DELETE CASCADE,
@@ -794,6 +799,26 @@ function appEnsureInventoryFractionColumns(AppDbConnection $db): void {
     foreach ($newColumns as $column => $definition) {
         if (!in_array($column, $salesItemColumns, true)) {
             $db->exec("ALTER TABLE sales_items ADD COLUMN {$column} {$definition}");
+        }
+    }
+
+    $purchaseItemColumns = [];
+    $purchaseRes = $db->query("PRAGMA table_info(purchases_items)");
+    while ($purchaseRes && ($row = $purchaseRes->fetchArray(SQLITE3_ASSOC))) {
+        $purchaseItemColumns[] = strtolower((string)($row['name'] ?? ''));
+    }
+
+    $newPurchaseColumns = [
+        'purchase_unit' => 'TEXT',
+        'fraction_length' => 'REAL',
+        'fraction_width' => 'REAL',
+        'fraction_qty' => 'REAL',
+        'display_label' => 'TEXT',
+    ];
+
+    foreach ($newPurchaseColumns as $column => $definition) {
+        if (!in_array($column, $purchaseItemColumns, true)) {
+            $db->exec("ALTER TABLE purchases_items ADD COLUMN {$column} {$definition}");
         }
     }
 }
