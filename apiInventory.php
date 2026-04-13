@@ -174,6 +174,7 @@ p.reorder_level,
 p.is_active,
 pc.category_name,
 i.quantity,
+COALESCE(i.fraction_qty, 0) AS fraction_qty,
 COALESCE(SUM(sl.qty_out), 0) as total_sold,
 MIN(sl.created_at) as first_sale_date,
 MAX(sl.created_at) as last_sale_date
@@ -199,7 +200,8 @@ p.selling_price,
 p.reorder_level,
 p.is_active,
 pc.category_name,
-i.quantity
+i.quantity,
+i.fraction_qty
 ORDER BY p.product_name";
 
 $stmt=$db->prepare($sql);
@@ -233,6 +235,7 @@ p.product_name,
 p.reorder_level,
 p.is_active,
 COALESCE(i.quantity, 0) as quantity,
+COALESCE(i.fraction_qty, 0) as fraction_qty,
 COALESCE(SUM(sl.qty_out), 0) as total_sold,
 MIN(sl.created_at) as first_sale_date,
 MAX(sl.created_at) as last_sale_date
@@ -245,7 +248,8 @@ p.product_id,
 p.product_name,
 p.reorder_level,
 p.is_active,
-i.quantity
+i.quantity,
+i.fraction_qty
 ORDER BY p.product_name
 ");
 $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
@@ -414,7 +418,8 @@ p.reorder_level,
 p.is_active,
 p.category_id,
 pc.category_name,
-i.quantity
+COALESCE(i.quantity, 0) AS quantity,
+COALESCE(i.fraction_qty, 0) AS fraction_qty
 FROM products p
 LEFT JOIN product_categories pc ON pc.category_id=p.category_id
 LEFT JOIN inventory i ON i.product_id=p.product_id AND i.cid=p.cid
@@ -627,7 +632,8 @@ p.product_name,
 p.product_image,
 p.product_unit,
 p.reorder_level,
-i.quantity
+COALESCE(i.quantity, 0) AS quantity,
+COALESCE(i.fraction_qty, 0) AS fraction_qty
 FROM products p
 LEFT JOIN inventory i
 ON i.product_id=p.product_id AND i.cid=p.cid

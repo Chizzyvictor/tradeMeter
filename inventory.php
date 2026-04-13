@@ -239,6 +239,7 @@ include "INC/navbar.php";
                         <th>Unit</th>
                         <th>Reorder Level</th>
                         <th>Quantity</th>
+                      <th>Fraction Balance</th>
                         <th>Stock Prediction</th>
                         <th>Status</th>
                         <th>Actions</th>
@@ -272,6 +273,7 @@ include "INC/navbar.php";
                 <p><strong>Unit:</strong> <span id="productUnit"></span></p>
                 <p><strong>Reorder Level:</strong> <span id="productReorderLevel"></span></p>
                 <p><strong>Quantity:</strong> <span id="productQuantity"></span></p>
+                <p><strong>Fraction Balance:</strong> <span id="productFractionQty"></span></p>
                 <p><strong>Status:</strong> <span id="productStatus"></span></p>
                 <p><strong>Cost Price:</strong> <span id="productCostPrice"></span></p>
                 <p><strong>Selling Price:</strong> <span id="productSellingPrice"></span></p>

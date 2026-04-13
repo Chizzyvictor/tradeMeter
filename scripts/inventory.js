@@ -306,6 +306,44 @@ class Inventory {
     return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
   }
 
+  isSheetFamily(unit) {
+    const normalized = this.normalizeAutocompleteText(unit);
+    return normalized === "size" || normalized === "sheet";
+  }
+
+  isRollFamily(unit) {
+    const normalized = this.normalizeAutocompleteText(unit);
+    return normalized === "yard" || normalized === "roll";
+  }
+
+  formatFractionValue(value) {
+    const num = this.app.toNumber(value, 0);
+    return Number.isInteger(num) ? String(num) : String(num.toFixed(2));
+  }
+
+  formatStockDisplay(product) {
+    const unit = String(product?.product_unit || "");
+    const quantity = this.app.toNumber(product?.quantity, 0);
+    const fractionQty = this.app.toNumber(product?.fraction_qty, 0);
+
+    if (this.isSheetFamily(unit)) {
+      return `${quantity} sheet(s) + ${this.formatFractionValue(fractionQty)} sq ft`;
+    }
+    if (this.isRollFamily(unit)) {
+      return `${quantity} roll(s) + ${this.formatFractionValue(fractionQty)} yard(s)`;
+    }
+
+    return String(quantity);
+  }
+
+  formatFractionBalanceDisplay(product) {
+    const unit = String(product?.product_unit || "");
+    const fractionQty = this.app.toNumber(product?.fraction_qty, 0);
+    if (this.isSheetFamily(unit)) return `${this.formatFractionValue(fractionQty)} sq ft`;
+    if (this.isRollFamily(unit)) return `${this.formatFractionValue(fractionQty)} yard(s)`;
+    return "-";
+  }
+
   findPartnerByName(rows, name) {
     const query = this.normalizeAutocompleteText(name);
     if (!query) return null;
@@ -737,11 +775,19 @@ class Inventory {
         } else {
           const html = items.map((item) => {
             const lineTotal = parseFloat(item.total) || ((parseFloat(item.qty) || 0) * (parseFloat(item.costPrice) || 0));
+            const displayName = String(item.display_label || item.product_name || "-");
+            const displayUnit = String(item.sale_unit || item.purchase_unit || item.product_unit || "-");
+            const normalizedUnit = this.normalizeAutocompleteText(displayUnit);
+            const isFractionLine = normalizedUnit === "size" || normalizedUnit === "yard";
+            const fractionQtyValue = this.app.toNumber(item.fraction_qty, 0);
+            const displayQty = (isFractionLine && fractionQtyValue > 0)
+              ? this.formatFractionValue(fractionQtyValue)
+              : (item.qty || 0);
             return `
               <tr>
-                <td>${item.product_name || "-"}</td>
-                <td>${item.qty || 0}</td>
-                <td>${item.product_unit || "-"}</td>
+                <td>${displayName}</td>
+                <td>${displayQty}</td>
+                <td>${displayUnit}</td>
                 <td>${this.app.formatCurrency(parseFloat(item.costPrice) || 0)}</td>
                 <td>${this.app.formatCurrency(lineTotal)}</td>
               </tr>
@@ -819,7 +865,7 @@ class Inventory {
     this.$productsCards.empty();
 
     if (!rows.length) {
-      this.$productsTable.html("<tr><td colspan='9' class='text-center text-muted'>No products found</td></tr>");
+      this.$productsTable.html("<tr><td colspan='10' class='text-center text-muted'>No products found</td></tr>");
       this.$productsCards.html("<div class='text-center text-muted py-3'>No products found</div>");
       return;
     }
@@ -830,6 +876,8 @@ class Inventory {
       const name = p.product_name || "-";
       const category = p.category_name || "Uncategorized";
       const unit = p.product_unit || "pcs";
+      const stockDisplay = this.formatStockDisplay(p);
+      const fractionDisplay = this.formatFractionBalanceDisplay(p);
 
       return `
         <tr>
@@ -838,7 +886,8 @@ class Inventory {
           <td>${category}</td>
           <td>${unit}</td>
           <td>${metrics.reorder}</td>
-          <td>${metrics.qty}</td>
+          <td>${stockDisplay}</td>
+          <td>${fractionDisplay}</td>
           <td>${metrics.days > 0 ? `${metrics.days} days` : "-"}</td>
           <td><span class="badge badge-${metrics.badge}">${metrics.statusText}</span></td>
           <td>
@@ -854,6 +903,8 @@ class Inventory {
       const name = p.product_name || "-";
       const category = p.category_name || "Uncategorized";
       const unit = p.product_unit || "pcs";
+      const stockDisplay = this.formatStockDisplay(p);
+      const fractionDisplay = this.formatFractionBalanceDisplay(p);
 
       return `
         <div class="card shadow-sm inventory-product-card mb-3">
@@ -870,7 +921,8 @@ class Inventory {
             <div class="inventory-product-meta text-muted mb-2">
               <span>Unit: ${unit}</span>
               <span>Reorder: ${metrics.reorder}</span>
-              <span>Qty: ${metrics.qty}</span>
+              <span>Qty: ${stockDisplay}</span>
+              <span>Fraction: ${fractionDisplay}</span>
               <span>Prediction: ${metrics.days > 0 ? `${metrics.days} days` : "-"}</span>
             </div>
 
@@ -912,7 +964,8 @@ class Inventory {
     $("#productCategory").text(product.category_name || "Uncategorized");
     $("#productUnit").text(product.product_unit || "pcs");
     $("#productReorderLevel").text(this.app.toNumber(product.reorder_level, 0));
-    $("#productQuantity").text(this.app.toNumber(product.quantity, 0));
+    $("#productQuantity").text(this.formatStockDisplay(product));
+    $("#productFractionQty").text(this.formatFractionBalanceDisplay(product));
     $("#productStatus").text(Number(product.is_active ?? 1) === 1 ? "Active" : "Inactive");
     $("#productCostPrice").text(this.app.formatCurrency(product.cost_price || 0));
     $("#productSellingPrice").text(this.app.formatCurrency(product.selling_price || 0));
@@ -1101,7 +1154,7 @@ class Inventory {
       return `
         <tr>
           <td>${p.product_name || "-"}</td>
-          <td>${qty}</td>
+          <td>${this.formatStockDisplay(p)}</td>
           <td>${daysLeft > 0 ? daysLeft : "-"}</td>
           <td><strong>${suggestedQty}</strong></td>
         </tr>
@@ -1119,7 +1172,7 @@ class Inventory {
             <div class="d-flex justify-content-between align-items-start mb-2">
               <div>
                 <h6 class="mb-0">${p.product_name || "-"}</h6>
-                <small class="text-muted">Current Stock: ${qty}</small>
+                <small class="text-muted">Current Stock: ${this.formatStockDisplay(p)}</small>
               </div>
               <span class="badge badge-warning">${suggestedQty}</span>
             </div>
