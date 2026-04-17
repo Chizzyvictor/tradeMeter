@@ -7,6 +7,30 @@ if (!empty($_SESSION['isLogedin'])) {
     exit;
 }
 
+$rememberedCompanyIdentifier = '';
+$rememberedUserEmail = '';
+$rememberMeChecked = false;
+
+if (!empty($_COOKIE['remember_login_hint'])) {
+    $decodedHint = json_decode(rawurldecode((string)$_COOKIE['remember_login_hint']), true);
+    if (is_array($decodedHint)) {
+        $companyCandidate = trim((string)($decodedHint['company'] ?? ''));
+        $emailCandidate = strtolower(trim((string)($decodedHint['email'] ?? '')));
+
+        if ($companyCandidate !== '' && strlen($companyCandidate) <= 100) {
+            $rememberedCompanyIdentifier = $companyCandidate;
+        }
+
+        if ($emailCandidate !== '' && filter_var($emailCandidate, FILTER_VALIDATE_EMAIL)) {
+            $rememberedUserEmail = $emailCandidate;
+        }
+
+        if ($rememberedCompanyIdentifier !== '' && $rememberedUserEmail !== '') {
+            $rememberMeChecked = true;
+        }
+    }
+}
+
 include "INC/header.php";
 ?>
 
@@ -27,6 +51,7 @@ include "INC/header.php";
                            id="companyEmail"
                            placeholder="acme@company.com or Acme Ltd"
                            class="form-control"
+                           value="<?= htmlspecialchars($rememberedCompanyIdentifier, ENT_QUOTES, 'UTF-8') ?>"
                            required>
                     <small id="companyIdentifierValid" class="form-text invalid-feedback text-danger" style="display:none;">
                         Enter a valid company email or company name
@@ -40,6 +65,7 @@ include "INC/header.php";
                            name="email"
                            id="email"
                            class="form-control"
+                           value="<?= htmlspecialchars($rememberedUserEmail, ENT_QUOTES, 'UTF-8') ?>"
                            required>
                     <small id="emailvalid" class="form-text invalid-feedback text-danger" style="display:none;">
                         Your email must be a valid email
@@ -68,7 +94,7 @@ include "INC/header.php";
 
                 <!-- Remember Me -->
                 <div class="form-check mt-2">
-                    <input type="checkbox" class="form-check-input" id="rememberMe" value="1">
+                    <input type="checkbox" class="form-check-input" id="rememberMe" value="1" <?= $rememberMeChecked ? 'checked' : '' ?>>
                     <label class="form-check-label text-muted small" for="rememberMe">Remember me for 30 days</label>
                 </div>
             </form>

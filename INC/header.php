@@ -46,7 +46,7 @@ if (!function_exists('asset_ver')) {
 </button>
 
 <div class="header">
-  <div class="h_left"><img id="cLogo" src="" class="logo image"></div>
+  <div class="h_left"><img id="cLogo" src="Images/companyDP/logo.jpg" class="logo image" alt="Company logo" onerror="this.onerror=null;this.src='Images/companyDP/logo.jpg';"></div>
   <div class="h_right">TradeMeter</div>
 </div>
 

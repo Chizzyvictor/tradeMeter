@@ -34,6 +34,33 @@ function buildRememberCookieOptions(int $expiresAt): array {
     ];
 }
 
+function buildRememberLoginHintCookieOptions(int $expiresAt): array {
+    return [
+        'expires' => $expiresAt,
+        'path' => '/',
+        'secure' => isHttpsRequest(),
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ];
+}
+
+function setRememberLoginHintCookie(string $companyIdentifier, string $userEmail, int $expiresAt): void {
+    $payload = json_encode([
+        'company' => trim($companyIdentifier),
+        'email' => strtolower(trim($userEmail))
+    ], JSON_UNESCAPED_SLASHES);
+
+    if ($payload === false) {
+        return;
+    }
+
+    setcookie('remember_login_hint', rawurlencode($payload), buildRememberLoginHintCookieOptions($expiresAt));
+}
+
+function clearRememberLoginHintCookie(): void {
+    setcookie('remember_login_hint', '', buildRememberLoginHintCookieOptions(time() - 3600));
+}
+
 function buildBaseUrl(): string {
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host = trim((string)($_SERVER['HTTP_HOST'] ?? 'localhost'));
@@ -516,7 +543,8 @@ switch ($action) {
 
     // ---------------- LOGIN ----------------
     case 'login':
-        $companyIdentifier = strtolower(safe_input($_POST["companyEmail"] ?? $_POST["company"] ?? ""));
+        $companyIdentifierRaw = safe_input($_POST["companyEmail"] ?? $_POST["company"] ?? "");
+        $companyIdentifier = strtolower($companyIdentifierRaw);
         $userEmail = strtolower(safe_input($_POST["email"] ?? ""));
         $pass = (string)($_POST["pass"] ?? $_POST["password"] ?? "");
         $clientIp = getClientIpAddress();
@@ -625,10 +653,25 @@ switch ($action) {
             $insStmt->execute();
 
             setcookie('remember_token', $rawToken, buildRememberCookieOptions($expiresAt));
+            $rememberCompanyIdentifier = htmlspecialchars_decode($companyIdentifierRaw, ENT_QUOTES);
+            setRememberLoginHintCookie($rememberCompanyIdentifier, $userEmail, $expiresAt);
             logRememberEvent($db, 'token_issued', $userId, $companyId, [
                 'expires_at' => $expiresAt,
                 'source' => 'password_login'
             ]);
+        } else {
+            // User explicitly logged in without "remember me": clear persisted remembered credentials.
+            $delStmt = $db->prepare("DELETE FROM remember_tokens WHERE user_id = :uid");
+            if ($delStmt) {
+                $delStmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+                $delStmt->execute();
+            }
+
+            if (!empty($_COOKIE['remember_token'])) {
+                setcookie('remember_token', '', buildRememberCookieOptions(time() - 3600));
+            }
+
+            clearRememberLoginHintCookie();
         }
 
         respond("success", "Login successful", [
