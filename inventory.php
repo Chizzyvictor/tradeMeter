@@ -280,10 +280,10 @@ include "INC/navbar.php";
             </div>
         </div><hr>
         <div class="mt-4 inventory-detail-actions">
-            <button class="btn btn-secondary" id="backToProductsBtn">Back to Products</button>
-            <button class="btn btn-primary" id="editProductBtn">Edit Product</button>
-            <button class="btn btn-danger" id="deleteProductBtn">Delete Product</button>
-            <button class="btn btn-success" id="restockProductBtn">Restock Product</button>
+            <button class="btn btn-outline-secondary" id="backToProductsBtn">Back to Products</button>
+            <button class="btn btn-outline-primary" id="editProductBtn">Edit Product</button>
+            <button class="btn btn-outline-danger" id="deleteProductBtn">Delete Product</button>
+            <button class="btn btn-outline-success" id="restockProductBtn">Restock Product</button>
             <button class="btn btn-outline-info" id="toggleProductDetailViewBtn">View Stock Movement</button>
         </div><hr>
         <div id="productTransactionsContainer" class="mt-4" >
