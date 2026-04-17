@@ -736,6 +736,10 @@ class Inventory {
       this.renderProductDetails(res.product || {});
       this.renderProductTransactions(res.transactions || []);
       this.renderProductStockMovement(res.stockMovement || []);
+      // Reset toggle: show transactions, hide stock movement
+      $("#productTransactionsContainer").show();
+      $("#productStockMovementContainer").hide();
+      $("#toggleProductDetailViewBtn").text("View Stock Movement");
       this.showSection("productDetailsTab");
     });
   }
@@ -1315,6 +1319,22 @@ $(document).ready(function () {
 
   $("#backToProductsBtn").on("click", function () {
     InventoryApp.showSection("InventoryProducts");
+  });
+
+  $("#toggleProductDetailViewBtn").on("click", function () {
+    const $btn = $(this);
+    const $transactions = $("#productTransactionsContainer");
+    const $stockMovement = $("#productStockMovementContainer");
+    const showingTransactions = $transactions.is(":visible");
+    if (showingTransactions) {
+      $transactions.hide();
+      $stockMovement.show();
+      $btn.text("View Transactions");
+    } else {
+      $stockMovement.hide();
+      $transactions.show();
+      $btn.text("View Stock Movement");
+    }
   });
 
   $("#backToCategoriesBtn").on("click", function () {

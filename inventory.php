@@ -284,6 +284,7 @@ include "INC/navbar.php";
             <button class="btn btn-primary" id="editProductBtn">Edit Product</button>
             <button class="btn btn-danger" id="deleteProductBtn">Delete Product</button>
             <button class="btn btn-success" id="restockProductBtn">Restock Product</button>
+            <button class="btn btn-outline-info" id="toggleProductDetailViewBtn">View Stock Movement</button>
         </div><hr>
         <div id="productTransactionsContainer" class="mt-4" >
             <h4 class="mb-3">Product Transactions</h4>
