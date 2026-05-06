@@ -238,6 +238,47 @@ Use `POST` requests with an `action` parameter to call backend handlers.
 - Login rate limiting
 - Session fixation mitigation (`session_regenerate_id`)
 - Device/session tracking and revocation
+
+---
+
+## API Response Contract (Web + Mobile)
+
+All API actions should return a shared JSON envelope:
+
+- `ok` (boolean): `true` for success, `false` for errors.
+- `status` (string): `success` or `error`.
+- `text` (string): legacy user-facing message.
+- `message` (string): same message alias for mobile/modern clients.
+- `data` (mixed): normalized payload (object/array/value or `null`).
+- `meta` (object): metadata (for example references/debug context).
+
+Compatibility notes:
+
+- Legacy top-level fields are still allowed (for example `csrf_token`, `permissions`, KPI keys) so older web handlers continue to work.
+- Client-side success checks should use `ok` first, then fallback to `status === "success"`.
+
+---
+
+## Release Smoke Test
+
+Use the built-in PowerShell script to verify the shared contract and critical auth/dashboard flow before release:
+
+1. Set environment variables:
+  - `TM_BASE_URL` (for example `https://trademeter-app.herokuapp.com`)
+  - `TM_COMPANY` (company email or company name)
+  - `TM_USER_EMAIL`
+  - `TM_USER_PASS`
+2. Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tasks/release_smoke.ps1
+```
+
+What it validates:
+
+- login returns the shared envelope and required fields: `csrf_token`, `user_id`, `company`, `permissions`
+- dashboard (`loadDashboard`) returns the shared envelope and core KPI fields
+- logout returns the shared envelope
 - Remember-token hashing + rotation + audit
 - Login activity logging
 - CSRF token session usage
