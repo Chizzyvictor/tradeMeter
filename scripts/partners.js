@@ -74,7 +74,7 @@ class Partners {
       action: action,
 
       onSuccess: res => {
-        if (!res || res.status !== "success") return;
+        if (!this.app.isResponseSuccess(res)) return;
 
         this.state.partners = (res.data || []).map(p => this.normalizePartner(p));
 
@@ -170,7 +170,7 @@ class Partners {
 
       onSuccess: res => {
 
-        if (!res || res.status !== "success") return;
+        if (!this.app.isResponseSuccess(res)) return;
 
         const data = res || {};
 

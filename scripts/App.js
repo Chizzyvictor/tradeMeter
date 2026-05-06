@@ -115,6 +115,19 @@ class AppCore {
     return String(normalized?.reference || fallback || "");
   }
 
+  isResponseSuccess(payload) {
+    if (!payload || typeof payload !== "object") {
+      return false;
+    }
+
+    const normalized = this.normalizeResponseKeys(payload);
+    if (typeof normalized?.ok === "boolean") {
+      return normalized.ok;
+    }
+
+    return String(normalized?.status || "").toLowerCase() === "success";
+  }
+
   // Core utilities: AJAX, alerts, helpers, CSRF, etc.
 	ajaxHelper({
 		url = "",
@@ -155,7 +168,7 @@ class AppCore {
 			dataType: "json",
 			success: (res) => {
         const normalizedRes = this.normalizeResponseKeys(res || {});
-        const ok = normalizedRes?.status === "success";
+  const ok = this.isResponseSuccess(normalizedRes);
 
         if (!silent) {
           this.showAlert(
@@ -854,7 +867,7 @@ class Dashboard {
         action: "loadDashboard",
         data: { range: selectedRange },
         onSuccess: res => {
-        if (!res || res.status !== "success") return;
+        if (!this.app.isResponseSuccess(res)) return;
 
     $("#dashboardRangeLabel").text(`Showing: ${this.rangeLabel(selectedRange)}`);
     this.lastUpdatedAt = new Date();

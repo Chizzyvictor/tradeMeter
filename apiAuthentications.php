@@ -8,8 +8,36 @@ header('Content-Type: application/json; charset=utf-8');
 // -------------------------
 // Helper Functions
 // -------------------------
+function buildApiPayload($status, $text = "", $extra = []): array {
+    $normalizedStatus = strtolower((string)$status) === 'success' ? 'success' : 'error';
+    $isSuccess = $normalizedStatus === 'success';
+    $safeExtra = is_array($extra) ? $extra : [];
+    $meta = [];
+
+    if (isset($safeExtra['meta']) && is_array($safeExtra['meta'])) {
+        $meta = $safeExtra['meta'];
+        unset($safeExtra['meta']);
+    }
+
+    if (array_key_exists('data', $safeExtra)) {
+        $data = $safeExtra['data'];
+        unset($safeExtra['data']);
+    } else {
+        $data = !empty($safeExtra) ? $safeExtra : null;
+    }
+
+    return array_merge([
+        'ok' => $isSuccess,
+        'status' => $normalizedStatus,
+        'text' => (string)$text,
+        'message' => (string)$text,
+        'data' => $data,
+        'meta' => $meta,
+    ], $safeExtra);
+}
+
 function respond($status, $text = "", $extra = []) {
-    echo json_encode(array_merge(["status" => $status, "text" => $text], $extra));
+    echo json_encode(buildApiPayload($status, $text, $extra));
     exit;
 }
 
@@ -676,7 +704,11 @@ switch ($action) {
 
         respond("success", "Login successful", [
             "user" => (string)($user['full_name'] ?? ''),
-            "roles" => $roles
+            "user_id" => $userId,
+            "company" => (string)($company['cName'] ?? ''),
+            "roles" => $roles,
+            "permissions" => $permissions,
+            "csrf_token" => (string)($_SESSION['csrf_token'] ?? '')
         ]);
         break;
 

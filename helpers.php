@@ -8,8 +8,36 @@ header('Content-Type: application/json; charset=utf-8');
 // -------------------------
 // Helper Functions
 // -------------------------
+function buildApiPayload($status, $text = "", $extra = []): array {
+    $normalizedStatus = strtolower((string)$status) === 'success' ? 'success' : 'error';
+    $isSuccess = $normalizedStatus === 'success';
+    $safeExtra = is_array($extra) ? $extra : [];
+    $meta = [];
+
+    if (isset($safeExtra['meta']) && is_array($safeExtra['meta'])) {
+        $meta = $safeExtra['meta'];
+        unset($safeExtra['meta']);
+    }
+
+    if (array_key_exists('data', $safeExtra)) {
+        $data = $safeExtra['data'];
+        unset($safeExtra['data']);
+    } else {
+        $data = !empty($safeExtra) ? $safeExtra : null;
+    }
+
+    return array_merge([
+        'ok' => $isSuccess,
+        'status' => $normalizedStatus,
+        'text' => (string)$text,
+        'message' => (string)$text,
+        'data' => $data,
+        'meta' => $meta,
+    ], $safeExtra);
+}
+
 function respond($status, $text = "", $extra = []) {
-    echo json_encode(array_merge(["status" => $status, "text" => $text], $extra));
+    echo json_encode(buildApiPayload($status, $text, $extra));
     exit;
 }
 
@@ -20,15 +48,17 @@ function appDebugEnabled(): bool {
 
 function respondUnhandledApiError(string $message, array $context = []): void {
     $reference = 'tm_' . date('Ymd_His') . '_' . substr(bin2hex(random_bytes(6)), 0, 8);
-    $payload = [
-        'status' => 'error',
-        'text' => 'Unexpected server error. Ref: ' . $reference,
+    $publicMessage = 'Unexpected server error. Ref: ' . $reference;
+    $payload = buildApiPayload('error', $publicMessage, [
+        'meta' => ['reference' => $reference],
         'reference' => $reference,
-    ];
+    ]);
 
     if (appDebugEnabled()) {
+        $payload['meta']['debug'] = $message;
         $payload['debug'] = $message;
         if (!empty($context)) {
+            $payload['meta']['context'] = $context;
             $payload['context'] = $context;
         }
     }

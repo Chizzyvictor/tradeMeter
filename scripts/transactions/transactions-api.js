@@ -121,7 +121,7 @@ TransactionManager.prototype.saveTransaction = function () {
         data: requestData,
         onSuccess: (res) => {
             this.debug('saveTransaction: API success callback', res);
-            if (res.status === 'success') {
+            if (this.app.isResponseSuccess(res)) {
                 this.app.showAlert('Transaction saved successfully', 'success');
                 this.loadProducts();
                 this.loadPartners();

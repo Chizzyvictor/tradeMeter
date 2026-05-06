@@ -249,7 +249,7 @@ TransactionManager.prototype.payPurchase = function () {
             amount
         },
         onSuccess: (res) => {
-            if (res.status === 'success') {
+            if (this.app.isResponseSuccess(res)) {
                 $payAmountErr.text('');
                 const updatedPaid = parseFloat(res.amountPaid) || 0;
                 const target = this.historyRows.find(r => Number(r.purchase_id) === purchaseId);

@@ -112,7 +112,7 @@ $(document).ready(function () {
         renderTable();
       },
       onComplete: function (response) {
-        if (response && response.status !== 'success') {
+        if (response && !app.isResponseSuccess(response)) {
           $('#companiesTable tbody').html(`<tr><td colspan="3" class="text-center text-danger">${response.text || 'Failed to load companies!'}</td></tr>`);
         }
       },
