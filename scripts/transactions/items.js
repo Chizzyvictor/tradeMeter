@@ -93,7 +93,7 @@ TransactionManager.prototype.addItemFromModal = function () {
             yards: fractionQty
         }),
         description: '',
-        amount: qty * rate
+        amount: isFractionalUnitSelection ? fractionQty * rate : qty * rate
     };
 
     this.addItemToTransaction(item);
@@ -136,7 +136,7 @@ TransactionManager.prototype.addItemToTransaction = function (item) {
 
         existing.qty = nextQty;
         existing.stock_qty = nextStockQty;
-        existing.amount = existing.qty * existing.rate;
+        existing.amount = this.getItemLineTotal(existing);
     } else {
         this.transactionItems.push(item);
     }
@@ -174,20 +174,19 @@ TransactionManager.prototype.updateItemQty = function (index, qty) {
 
     this.transactionItems[index].qty = qty;
     this.transactionItems[index].stock_qty = nextStockQty;
-    this.transactionItems[index].amount = this.transactionItems[index].qty * this.transactionItems[index].rate;
+    this.transactionItems[index].amount = this.getItemLineTotal(this.transactionItems[index]);
     this.renderTransactionItems();
 };
 
 TransactionManager.prototype.updateItemRate = function (index, rate) {
     if (!Number.isInteger(index) || index < 0 || index >= this.transactionItems.length) return;
-    if (Number(this.transactionItems[index].is_fractional) === 1) return;
     if (rate <= 0) {
         this.app.showAlert('Rate must be greater than 0', 'error');
         this.renderTransactionItems();
         return;
     }
     this.transactionItems[index].rate = rate;
-    this.transactionItems[index].amount = this.transactionItems[index].qty * this.transactionItems[index].rate;
+    this.transactionItems[index].amount = this.getItemLineTotal(this.transactionItems[index]);
     this.renderTransactionItems();
 };
 
@@ -221,7 +220,7 @@ TransactionManager.prototype.renderTransactionItems = function () {
     const cardRows = [];
 
     this.transactionItems.forEach((item, index) => {
-        const amount = (parseFloat(item.qty) || 0) * (parseFloat(item.rate) || 0);
+        const amount = this.getItemLineTotal(item);
         item.amount = amount;
         total += amount;
 
@@ -229,14 +228,16 @@ TransactionManager.prototype.renderTransactionItems = function () {
         const description = item.description ? `${baseDescription} - ${item.description}` : baseDescription;
         const qtyReadOnly = Number(item.is_fractional) === 1 ? 'readonly' : '';
         const qtyMin = Number(item.is_fractional) === 1 ? '1' : '1';
-        const rateReadOnly = Number(item.is_fractional) === 1 ? 'readonly' : '';
+        const rateLabel = Number(item.is_fractional) === 1
+            ? (this.isSheetBaseUnit(item.base_unit) ? 'Rate/size' : 'Rate/yard')
+            : 'Rate';
 
         tableRows.push(`
             <tr data-index="${index}">
                 <td><input type="number" class="form-control qtyInput" value="${item.qty}" min="${qtyMin}" ${qtyReadOnly}></td>
                 <td>${item.unit || '-'}</td>
                 <td>${description || '-'}</td>
-                <td><input type="number" class="form-control rateInput" value="${item.rate}" min="0" step="0.01" ${rateReadOnly}></td>
+                <td><input type="number" class="form-control rateInput" value="${item.rate}" min="0" step="0.01" aria-label="${rateLabel}"></td>
                 <td class="itemAmount">${this.app.formatCurrency(amount)}</td>
                 <td><button type="button" class="btn btn-danger btn-sm removeItemBtn">Remove</button></td>
             </tr>
@@ -251,7 +252,7 @@ TransactionManager.prototype.renderTransactionItems = function () {
                     </div>
                     <div class="transactions-mobile-meta text-muted mb-2">
                         <span>Qty: <input type="number" class="form-control form-control-sm qtyInput d-inline-block" style="width:90px;" value="${item.qty}" min="${qtyMin}" ${qtyReadOnly}></span>
-                        <span>Rate: <input type="number" class="form-control form-control-sm rateInput d-inline-block" style="width:110px;" value="${item.rate}" min="0" step="0.01" ${rateReadOnly}></span>
+                        <span>${rateLabel}: <input type="number" class="form-control form-control-sm rateInput d-inline-block" style="width:110px;" value="${item.rate}" min="0" step="0.01"></span>
                         <span>Amount: ${this.app.formatCurrency(amount)}</span>
                     </div>
                     <button type="button" class="btn btn-danger btn-sm removeItemBtn">Remove</button>
@@ -281,13 +282,15 @@ TransactionManager.prototype.updateProductPrices = function () {
             ? this.convertSellQtyToStockQty(nextQty, item.unit, item.base_unit)
             : nextQty);
         const appliedRate = Number(item.is_fractional) === 1
-            ? this.computeFractionRate(item.base_unit, nextRate, Number(item.fraction_qty || 0))
+            ? this.computeFractionUnitRate(item.base_unit, nextRate)
             : nextRate;
         return {
             ...item,
             stock_qty: nextStockQty,
             rate: appliedRate,
-            amount: nextQty * appliedRate
+            amount: Number(item.is_fractional) === 1
+                ? (Number(item.fraction_qty || 0) * appliedRate)
+                : (nextQty * appliedRate)
         };
     });
 

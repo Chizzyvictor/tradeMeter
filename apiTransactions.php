@@ -126,6 +126,8 @@ switch ($action) {
             $fractionLength = floatval($item['fraction_length'] ?? 0);
             $fractionWidth = floatval($item['fraction_width'] ?? 0);
             $fractionQtyInput = floatval($item['fraction_qty'] ?? 0);
+            $submittedLineAmount = floatval($item['costPrice'] ?? 0);
+            $submittedFractionUnitRate = floatval($item['rate_per_fraction'] ?? ($item['unitRate'] ?? 0));
             $displayLabel = trim((string)($item['display_label'] ?? ''));
 
             $dbQty = intval(round($qty));
@@ -187,14 +189,29 @@ switch ($action) {
                     $fractionQtyAfter = max(0, ($availableFractionQty - $consumeFromFraction) + $leftoverFromNewUnits);
                     $inventoryDeltaQty = -1 * $openNewUnits;
                     $ledgerQtyOut = $openNewUnits;
-                    $lineRate = (floatval($productRow['selling_price'] ?? 0) / $fractionCapacity) * $requestedFraction;
                 } else {
                     $totalFraction = $availableFractionQty + $requestedFraction;
                     $carryIntoFullUnits = intval(floor(($totalFraction / $fractionCapacity) + 0.0000001));
                     $fractionQtyAfter = max(0, $totalFraction - ($carryIntoFullUnits * $fractionCapacity));
                     $inventoryDeltaQty = $carryIntoFullUnits;
                     $ledgerQtyIn = $carryIntoFullUnits;
-                    $lineRate = (floatval($productRow['cost_price'] ?? 0) / $fractionCapacity) * $requestedFraction;
+                }
+
+                // For fractional units, prefer client-submitted pricing so dynamic user-entered
+                // rates are preserved. Fallback to legacy formula when not supplied.
+                if ($submittedFractionUnitRate > 0) {
+                    $lineRate = $submittedFractionUnitRate * $requestedFraction;
+                } elseif ($submittedLineAmount > 0) {
+                    $lineRate = $submittedLineAmount;
+                } else {
+                    $basePrice = $transactionType === 'sell'
+                        ? floatval($productRow['selling_price'] ?? 0)
+                        : floatval($productRow['cost_price'] ?? 0);
+                    $lineRate = ($basePrice / $fractionCapacity) * $requestedFraction;
+                }
+
+                if ($lineRate <= 0) {
+                    respond("error", "Invalid fractional rate");
                 }
 
                 $fractionQtyForDb = $requestedFraction;

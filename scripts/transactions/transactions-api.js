@@ -78,7 +78,9 @@ TransactionManager.prototype.buildApiItemsPayload = function () {
     return this.transactionItems.map(item => ({
         product_id: Number(item.product_id),
         qty: Number(item.qty),
-        costPrice: Number(item.rate),
+        costPrice: Number(this.getItemLineTotal(item)),
+        rate_per_fraction: Number(item.is_fractional || 0) === 1 ? Number(item.rate) : 0,
+        unitRate: Number(item.is_fractional || 0) === 1 ? Number(item.rate) : 0,
         sale_unit: String(item.unit || ''),
         purchase_unit: String(item.unit || ''),
         base_unit: String(item.base_unit || ''),

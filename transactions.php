@@ -397,13 +397,14 @@ include "INC/navbar.php";
           </div>
 
           <div class="form-group">
-            <label>Rate</label>
+            <label id="rateLabel" for="rate">Rate</label>
             <div class="input-group">
               <div class="input-group-prepend">
                 <span class="input-group-text">₦</span>
               </div>
               <input type="number" id="rate" class="form-control">
             </div>
+            <small id="rateHint" class="form-text text-muted d-none"></small>
           </div>
 
         </div>

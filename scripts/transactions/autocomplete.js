@@ -184,11 +184,12 @@ TransactionManager.prototype.toggleFractionFields = function (baseUnit, selected
     const isSpecial = this.isSheetBaseUnit(baseUnit) || this.isRollBaseUnit(baseUnit);
     if (isFraction && isSpecial) {
         $('#qty').val(1).prop('readonly', true);
-        $('#rate').prop('readonly', true);
     } else {
         $('#qty').prop('readonly', false);
-        $('#rate').prop('readonly', false);
     }
+
+    $('#rate').prop('readonly', false);
+    this.updateRateFieldCopy(baseUnit, selectedUnit);
 };
 
 TransactionManager.prototype.calculateFractionRequest = function (baseUnit) {
@@ -227,6 +228,35 @@ TransactionManager.prototype.computeFractionRate = function (baseUnit, fullUnitP
     return ((parseFloat(fullUnitPrice) || 0) / capacity) * (parseFloat(fractionQty) || 0);
 };
 
+TransactionManager.prototype.computeFractionUnitRate = function (baseUnit, fullUnitPrice) {
+    const capacity = this.getFractionCapacity(baseUnit);
+    if (capacity <= 0) return 0;
+    return (parseFloat(fullUnitPrice) || 0) / capacity;
+};
+
+TransactionManager.prototype.updateRateFieldCopy = function (baseUnit, selectedUnit) {
+    const $label = $('#rateLabel');
+    const $hint = $('#rateHint');
+
+    if (!this.isFractionalUnit(selectedUnit, baseUnit)) {
+        $label.text('Rate');
+        $hint.addClass('d-none').text('');
+        return;
+    }
+
+    const unitLabel = this.isSheetBaseUnit(baseUnit) ? 'size' : 'yard';
+    $label.text(`Rate per ${unitLabel}`);
+    $hint.removeClass('d-none').text(`Enter the selling or cost rate for each ${unitLabel}.`);
+};
+
+TransactionManager.prototype.getItemLineTotal = function (item) {
+    const rate = parseFloat(item?.rate) || 0;
+    if (Number(item?.is_fractional) === 1) {
+        return rate * (parseFloat(item?.fraction_qty) || 0);
+    }
+    return (parseFloat(item?.qty) || 0) * rate;
+};
+
 TransactionManager.prototype.buildItemDisplayLabel = function (productName, baseUnit, selectedUnit, fractionData) {
     const safeProductName = String(productName || 'Product');
     if (this.isFractionalUnit(selectedUnit, baseUnit)) {
@@ -256,14 +286,21 @@ TransactionManager.prototype.refreshFractionRatePreview = function () {
     this.toggleFractionFields(baseUnit, selectedUnit);
 
     if (!this.isFractionalUnit(selectedUnit, baseUnit)) {
-        $('#rate').val(this.getProductRateByType(product));
+        const nextRate = this.getProductRateByType(product);
+        $('#rate').val(nextRate);
+        $('#rate').data('auto-rate', nextRate);
         return;
     }
 
-    const fractionData = this.calculateFractionRequest(baseUnit);
-    const fractionQty = parseFloat(fractionData.fractionQty) || 0;
-    const nextRate = this.computeFractionRate(baseUnit, this.getProductRateByType(product), fractionQty);
-    $('#rate').val(nextRate > 0 ? nextRate.toFixed(2) : '');
+    const nextRate = this.computeFractionUnitRate(baseUnit, this.getProductRateByType(product));
+    const existingRate = parseFloat($('#rate').val()) || 0;
+    const lastAutoRate = parseFloat($('#rate').data('auto-rate')) || 0;
+    const shouldRefresh = existingRate <= 0 || Math.abs(existingRate - lastAutoRate) < 0.000001;
+
+    if (shouldRefresh) {
+        $('#rate').val(nextRate > 0 ? nextRate.toFixed(2) : '');
+    }
+    $('#rate').data('auto-rate', nextRate);
 };
 
 TransactionManager.prototype.convertSellQtyToStockQty = function (qty, selectedUnit, productBaseUnit = '') {
@@ -360,6 +397,7 @@ TransactionManager.prototype.applySelectedProductToModal = function (product) {
     $('#purchaseProductInput').val(product.product_name || '');
     $('#productUnitSelect').html(unitOptionsHtml);
     $('#rate').val(rate);
+    $('#rate').data('auto-rate', rate);
     $('#qty').val(1);
     $('#fractionLength').val('');
     $('#fractionWidth').val('');
