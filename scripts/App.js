@@ -205,7 +205,9 @@ class AppCore {
           }
         }
 
-        this.showAlert(msg, "error");
+        if (!silent) {
+          this.showAlert(msg, "error");
+        }
         console.error("AJAX Error:", status, error, xhr.responseText);
 				if (typeof onError === "function") onError(msg);
 			},
