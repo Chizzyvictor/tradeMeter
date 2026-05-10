@@ -30,7 +30,11 @@ function schedulerBackupRetentionDays(): int {
 }
 
 function schedulerBackupPrefix(int $cid): string {
-    return 'tm-backup-cid' . $cid . '-auto-';
+    return 'tm-backup-cid' . $cid . '-';
+}
+
+function schedulerAutoBackupPrefix(int $cid): string {
+    return schedulerBackupPrefix($cid) . 'auto-';
 }
 
 function schedulerEnsureBackupAuditTable(AppDbConnection $db): void {
@@ -79,52 +83,147 @@ function schedulerAudit(AppDbConnection $db, int $cid, string $eventType, string
     $stmt->execute();
 }
 
-function schedulerSnapshotSqlite(string $sourcePath, string $targetPath): bool {
-    if (!is_file($sourcePath)) {
-        return false;
+function schedulerTenantDirectTables(): array {
+    return [
+        'company',
+        'roles',
+        'users',
+        'partner',
+        'product_categories',
+        'products',
+        'inventory',
+        'purchases',
+        'sales',
+        'stock_ledger',
+        'partner_ledger',
+        'attendance_policies',
+        'employee_shift_rules',
+        'employee_attendance_logs',
+        'attendance_corrections',
+        'remember_tokens',
+        'remember_token_audit',
+        'user_sessions',
+        'login_logs',
+    ];
+}
+
+function schedulerTenantSubTables(): array {
+    return [
+        [
+            'table' => 'sales_items',
+            'parent' => 'sales',
+            'parent_pk' => 'sale_id',
+            'child_fk' => 'sale_id',
+        ],
+        [
+            'table' => 'purchases_items',
+            'parent' => 'purchases',
+            'parent_pk' => 'purchase_id',
+            'child_fk' => 'purchase_id',
+        ],
+        [
+            'table' => 'user_roles',
+            'parent' => 'users',
+            'parent_pk' => 'user_id',
+            'child_fk' => 'user_id',
+        ],
+        [
+            'table' => 'role_permissions',
+            'parent' => 'roles',
+            'parent_pk' => 'role_id',
+            'child_fk' => 'role_id',
+        ],
+    ];
+}
+
+function schedulerExportTenantBackupData(AppDbConnection $db, int $cid): array {
+    $payload = [
+        'metadata' => [
+            'format' => 'tm-tenant-backup-v1',
+            'cid' => $cid,
+            'timestamp' => time(),
+            'driver' => $db->driver(),
+            'source' => 'scheduler',
+        ],
+        'tables' => [],
+    ];
+
+    foreach (schedulerTenantDirectTables() as $table) {
+        try {
+            $stmt = $db->prepare('SELECT * FROM ' . $table . ' WHERE cid = :cid');
+            if (!$stmt) {
+                continue;
+            }
+
+            $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $res = $stmt->execute();
+
+            $rows = [];
+            while ($row = $res ? $res->fetchArray(SQLITE3_ASSOC) : false) {
+                $rows[] = $row;
+            }
+
+            $payload['tables'][$table] = $rows;
+        } catch (Throwable $e) {
+            continue;
+        }
     }
+
+    foreach (schedulerTenantSubTables() as $cfg) {
+        $table = (string)$cfg['table'];
+        $parent = (string)$cfg['parent'];
+        $parentPk = (string)$cfg['parent_pk'];
+        $childFk = (string)$cfg['child_fk'];
+
+        try {
+            $sql = 'SELECT st.* FROM ' . $table . ' st INNER JOIN ' . $parent . ' pt ON st.' . $childFk . ' = pt.' . $parentPk . ' WHERE pt.cid = :cid';
+            $stmt = $db->prepare($sql);
+            if (!$stmt) {
+                continue;
+            }
+
+            $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+            $res = $stmt->execute();
+
+            $rows = [];
+            while ($row = $res ? $res->fetchArray(SQLITE3_ASSOC) : false) {
+                $rows[] = $row;
+            }
+
+            $payload['tables'][$table] = $rows;
+        } catch (Throwable $e) {
+            continue;
+        }
+    }
+
+    return $payload;
+}
+
+function schedulerCreateTenantBackupFile(AppDbConnection $db, int $cid): ?string {
+    $filename = schedulerAutoBackupPrefix($cid) . date('Ymd') . '.json';
+    $targetPath = rtrim(schedulerBackupDir(), '/\\') . DIRECTORY_SEPARATOR . $filename;
 
     if (is_file($targetPath)) {
-        @unlink($targetPath);
+        return $targetPath;
     }
 
-    $sourceDb = null;
-    $targetDb = null;
-
-    try {
-        $sourceDb = new SQLite3($sourcePath);
-        $targetDb = new SQLite3($targetPath);
-        $sourceDb->enableExceptions(true);
-        $targetDb->enableExceptions(true);
-        $sourceDb->busyTimeout(5000);
-        $targetDb->busyTimeout(5000);
-
-        $ok = $sourceDb->backup($targetDb);
-        $sourceDb->close();
-        $targetDb->close();
-
-        if (!$ok || !is_file($targetPath)) {
-            @unlink($targetPath);
-            return false;
-        }
-
-        return true;
-    } catch (Throwable $e) {
-        if ($sourceDb instanceof SQLite3) {
-            @$sourceDb->close();
-        }
-        if ($targetDb instanceof SQLite3) {
-            @$targetDb->close();
-        }
-        @unlink($targetPath);
-        return false;
+    $payload = schedulerExportTenantBackupData($db, $cid);
+    $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    if (!is_string($json)) {
+        return null;
     }
+
+    if (@file_put_contents($targetPath, $json, LOCK_EX) === false) {
+        return null;
+    }
+
+    return $targetPath;
 }
 
 function schedulerApplyRetentionForCid(int $cid): void {
     $dir = schedulerBackupDir();
-    $prefix = schedulerBackupPrefix($cid);
-    $matches = glob(rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $prefix . '*.sqlite');
+    $prefix = schedulerAutoBackupPrefix($cid);
+    $matches = glob(rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $prefix . '*.json');
     $files = is_array($matches) ? $matches : [];
 
     usort($files, function (string $a, string $b): int {
@@ -144,46 +243,57 @@ function schedulerApplyRetentionForCid(int $cid): void {
 }
 
 $db = appDbConnectCompat();
-
-if ($db->driver() !== 'sqlite') {
-    echo "Skipping scheduler backup: non-SQLite deployment detected.\n";
-    exit(0);
-}
-
 schedulerEnsureBackupAuditTable($db);
 
-$companyCount = intval($db->querySingle('SELECT COUNT(*) FROM company'));
-if ($companyCount !== 1) {
-    echo "Skipping scheduler backup: expected single-company DB, found {$companyCount}.\n";
-    schedulerAudit($db, 0, 'auto_backup_skipped', '', 0, ['reason' => 'multi_company', 'count' => $companyCount]);
-    exit(0);
+$companyStmt = $db->prepare('SELECT cid FROM company ORDER BY cid ASC');
+if (!$companyStmt) {
+    echo "Skipping scheduler backup: failed to query companies.\n";
+    schedulerAudit($db, 0, 'auto_backup_skipped', '', 0, ['reason' => 'query_failed']);
+    exit(1);
 }
 
-$cid = intval($db->querySingle('SELECT cid FROM company ORDER BY cid ASC LIMIT 1'));
-if ($cid <= 0) {
+$companyRes = $companyStmt->execute();
+$cids = [];
+while ($row = $companyRes ? $companyRes->fetchArray(SQLITE3_ASSOC) : false) {
+    $cid = intval($row['cid'] ?? 0);
+    if ($cid > 0) {
+        $cids[] = $cid;
+    }
+}
+
+if (empty($cids)) {
     echo "Skipping scheduler backup: no company record found.\n";
     schedulerAudit($db, 0, 'auto_backup_skipped', '', 0, ['reason' => 'no_company']);
     exit(0);
 }
 
-$todayName = schedulerBackupPrefix($cid) . date('Ymd') . '.sqlite';
-$targetPath = rtrim(schedulerBackupDir(), '/\\') . DIRECTORY_SEPARATOR . $todayName;
+$createdCount = 0;
+$failedCount = 0;
+$skippedCount = 0;
 
-if (!is_file($targetPath)) {
-    $ok = schedulerSnapshotSqlite(appSqlitePath(), $targetPath);
-    if (!$ok) {
-        echo "Failed to create scheduler backup.\n";
-        schedulerAudit($db, $cid, 'auto_backup_failed', $todayName, 0);
-        exit(1);
+foreach ($cids as $cid) {
+    $todayName = schedulerAutoBackupPrefix($cid) . date('Ymd') . '.json';
+    $targetPath = rtrim(schedulerBackupDir(), '/\\') . DIRECTORY_SEPARATOR . $todayName;
+
+    if (is_file($targetPath)) {
+        $skippedCount++;
+        echo "Scheduler backup already exists for CID {$cid}: {$todayName}\n";
+    } else {
+        $createdPath = schedulerCreateTenantBackupFile($db, $cid);
+        if ($createdPath === null || !is_file($createdPath)) {
+            $failedCount++;
+            echo "Failed to create scheduler backup for CID {$cid}.\n";
+            schedulerAudit($db, $cid, 'auto_backup_failed', $todayName, 0);
+        } else {
+            $createdCount++;
+            $size = intval(filesize($createdPath) ?: 0);
+            schedulerAudit($db, $cid, 'auto_backup_created', basename($createdPath), $size);
+            echo "Created scheduler backup for CID {$cid}: " . basename($createdPath) . "\n";
+        }
     }
 
-    $size = intval(filesize($targetPath) ?: 0);
-    schedulerAudit($db, $cid, 'auto_backup_created', $todayName, $size);
-    echo "Created scheduler backup: {$todayName}\n";
-} else {
-    echo "Scheduler backup already exists for today: {$todayName}\n";
+    schedulerApplyRetentionForCid($cid);
 }
 
-schedulerApplyRetentionForCid($cid);
-echo "Retention applied (keep " . schedulerBackupRetentionDays() . " days).\n";
+echo "Scheduler completed. Created: {$createdCount}, Skipped: {$skippedCount}, Failed: {$failedCount}. Retention keep-days: " . schedulerBackupRetentionDays() . "\n";
 exit(0);

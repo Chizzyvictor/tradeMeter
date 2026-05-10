@@ -4,6 +4,7 @@ assets/mysqlitedb.db
 TradeMeter.apk
 *.log
 storage/backups/*.sqlite
+storage/backups/*.json
 storage/backups/*.enc
 storage/backups/*.tmp
 !storage/backups/.gitkeep

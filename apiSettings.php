@@ -176,23 +176,11 @@ function settingsAuditBackupEvent(AppDbConnection $db, int $cid, ?int $userId, s
     $stmt->execute();
 }
 
-function settingsEnsureSqliteForBackup(AppDbConnection $db): void {
-    if ($db->driver() !== 'sqlite') {
-        respond('error', 'Backup and restore are currently available only on SQLite deployments.');
-    }
-}
-
 function settingsRequireBackupAccess(AppDbConnection $db, int $cid): void {
     requirePermission($db, 'manage_users');
-    settingsEnsureSqliteForBackup($db);
 
     if (!currentUserHasRole($db, 'Owner')) {
         respond('error', 'Only Owner can use database backup and restore operations.');
-    }
-
-    $companyCount = intval($db->querySingle('SELECT COUNT(*) FROM company'));
-    if ($companyCount > 1) {
-        respond('error', 'Backup operations are disabled for shared multi-company databases. Use instance-level backups.');
     }
 
     if ($cid <= 0) {
@@ -202,16 +190,6 @@ function settingsRequireBackupAccess(AppDbConnection $db, int $cid): void {
 
 function settingsBackupCapability(AppDbConnection $db, int $cid): array {
     $driver = strtolower($db->driver());
-    if ($driver !== 'sqlite') {
-        return [
-            'supported' => false,
-            'driver' => $driver,
-            'message' => 'This deployment is using PostgreSQL. Use platform-level backups (for example: Heroku PG Backups).',
-            'scheduler_hint' => settingsBackupSchedulerHint(),
-            'retention_days' => settingsBackupRetentionDays(),
-        ];
-    }
-
     if (!currentUserHasRole($db, 'Owner')) {
         return [
             'supported' => false,
@@ -222,12 +200,11 @@ function settingsBackupCapability(AppDbConnection $db, int $cid): array {
         ];
     }
 
-    $companyCount = intval($db->querySingle('SELECT COUNT(*) FROM company'));
-    if ($companyCount > 1) {
+    if ($cid <= 0) {
         return [
             'supported' => false,
             'driver' => $driver,
-            'message' => 'In-app backups are disabled for shared multi-company SQLite databases. Use instance-level backups.',
+            'message' => 'Invalid company context for backup operation.',
             'scheduler_hint' => settingsBackupSchedulerHint(),
             'retention_days' => settingsBackupRetentionDays(),
         ];
@@ -236,11 +213,417 @@ function settingsBackupCapability(AppDbConnection $db, int $cid): array {
     return [
         'supported' => true,
         'driver' => $driver,
-        'message' => 'In-app backup and restore are enabled.',
+        'message' => 'Tenant backup and restore are enabled using JSON export/import.',
         'scheduler_hint' => settingsBackupSchedulerHint(),
         'retention_days' => settingsBackupRetentionDays(),
         'storage_path' => settingsBackupDir(),
     ];
+}
+
+function settingsTenantDirectTables(): array {
+    return [
+        'company',
+        'roles',
+        'users',
+        'partner',
+        'product_categories',
+        'products',
+        'inventory',
+        'purchases',
+        'sales',
+        'stock_ledger',
+        'partner_ledger',
+        'attendance_policies',
+        'employee_shift_rules',
+        'employee_attendance_logs',
+        'attendance_corrections',
+        'remember_tokens',
+        'remember_token_audit',
+        'user_sessions',
+        'login_logs',
+    ];
+}
+
+function settingsTenantSubTables(): array {
+    return [
+        [
+            'table' => 'sales_items',
+            'parent' => 'sales',
+            'parent_pk' => 'sale_id',
+            'child_fk' => 'sale_id',
+        ],
+        [
+            'table' => 'purchases_items',
+            'parent' => 'purchases',
+            'parent_pk' => 'purchase_id',
+            'child_fk' => 'purchase_id',
+        ],
+        [
+            'table' => 'user_roles',
+            'parent' => 'users',
+            'parent_pk' => 'user_id',
+            'child_fk' => 'user_id',
+        ],
+        [
+            'table' => 'role_permissions',
+            'parent' => 'roles',
+            'parent_pk' => 'role_id',
+            'child_fk' => 'role_id',
+        ],
+    ];
+}
+
+function settingsTableColumns(AppDbConnection $db, string $table): array {
+    $safeTable = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    if ($safeTable === '') {
+        return [];
+    }
+
+    $res = $db->query('PRAGMA table_info(' . $safeTable . ')');
+    if (!$res) {
+        return [];
+    }
+
+    $columns = [];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $name = trim((string)($row['name'] ?? ''));
+        if ($name !== '') {
+            $columns[] = $name;
+        }
+    }
+
+    return $columns;
+}
+
+function settingsTableExists(AppDbConnection $db, string $table): bool {
+    return count(settingsTableColumns($db, $table)) > 0;
+}
+
+function settingsTableHasColumn(AppDbConnection $db, string $table, string $column): bool {
+    $columns = settingsTableColumns($db, $table);
+    return in_array($column, $columns, true);
+}
+
+function settingsBuildBackupFilename(int $cid, bool $auto = false): string {
+    if ($auto) {
+        return settingsAutoBackupPrefix($cid) . date('Ymd') . '.json';
+    }
+
+    return settingsBackupPrefix($cid) . date('Ymd_His') . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.json';
+}
+
+function settingsExportTenantBackupData(AppDbConnection $db, int $cid): array {
+    $backupData = [
+        'metadata' => [
+            'format' => 'tm-tenant-backup-v1',
+            'cid' => $cid,
+            'timestamp' => time(),
+            'driver' => $db->driver(),
+        ],
+        'tables' => [],
+    ];
+
+    foreach (settingsTenantDirectTables() as $table) {
+        if (!settingsTableExists($db, $table) || !settingsTableHasColumn($db, $table, 'cid')) {
+            continue;
+        }
+
+        $stmt = $db->prepare('SELECT * FROM ' . $table . ' WHERE cid = :cid');
+        if (!$stmt) {
+            continue;
+        }
+        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $res = $stmt->execute();
+
+        $rows = [];
+        while ($row = $res ? $res->fetchArray(SQLITE3_ASSOC) : false) {
+            $rows[] = $row;
+        }
+
+        $backupData['tables'][$table] = $rows;
+    }
+
+    foreach (settingsTenantSubTables() as $cfg) {
+        $table = (string)$cfg['table'];
+        $parent = (string)$cfg['parent'];
+        $parentPk = (string)$cfg['parent_pk'];
+        $childFk = (string)$cfg['child_fk'];
+
+        if (!settingsTableExists($db, $table) || !settingsTableExists($db, $parent)) {
+            continue;
+        }
+        if (!settingsTableHasColumn($db, $parent, 'cid')) {
+            continue;
+        }
+
+        $sql = 'SELECT st.* FROM ' . $table . ' st INNER JOIN ' . $parent . ' pt ON st.' . $childFk . ' = pt.' . $parentPk . ' WHERE pt.cid = :cid';
+        $stmt = $db->prepare($sql);
+        if (!$stmt) {
+            continue;
+        }
+        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $res = $stmt->execute();
+
+        $rows = [];
+        while ($row = $res ? $res->fetchArray(SQLITE3_ASSOC) : false) {
+            $rows[] = $row;
+        }
+
+        $backupData['tables'][$table] = $rows;
+    }
+
+    return $backupData;
+}
+
+function settingsEncodeBackupPayload(array $payload): ?string {
+    $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    return is_string($json) ? $json : null;
+}
+
+function settingsCreateBackupFile(AppDbConnection $db, int $cid, bool $auto = false): ?string {
+    $payload = settingsExportTenantBackupData($db, $cid);
+    $json = settingsEncodeBackupPayload($payload);
+    if (!is_string($json)) {
+        return null;
+    }
+
+    $dir = settingsBackupDir();
+    $filename = settingsBuildBackupFilename($cid, $auto);
+    $targetPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
+
+    if (@file_put_contents($targetPath, $json, LOCK_EX) === false) {
+        return null;
+    }
+
+    return $targetPath;
+}
+
+function settingsReadBackupFilePayload(int $cid, string $filename): ?string {
+    $safeName = basename(trim($filename));
+    if ($safeName === '') {
+        return null;
+    }
+
+    $prefix = settingsBackupPrefix($cid);
+    if (strpos($safeName, $prefix) !== 0 || preg_match('/\.json$/i', $safeName) !== 1) {
+        return null;
+    }
+
+    $path = rtrim(settingsBackupDir(), '/\\') . DIRECTORY_SEPARATOR . $safeName;
+    if (!is_file($path)) {
+        return null;
+    }
+
+    $content = @file_get_contents($path);
+    return is_string($content) ? $content : null;
+}
+
+function settingsParseBackupPayload(string $json, int $cid, ?string &$error = null): ?array {
+    $payload = json_decode($json, true);
+    if (!is_array($payload)) {
+        $error = 'Invalid backup JSON payload';
+        return null;
+    }
+
+    $meta = $payload['metadata'] ?? null;
+    $tables = $payload['tables'] ?? null;
+    if (!is_array($meta) || !is_array($tables)) {
+        $error = 'Backup payload is missing metadata or tables';
+        return null;
+    }
+
+    $payloadCid = intval($meta['cid'] ?? 0);
+    if ($payloadCid <= 0 || $payloadCid !== $cid) {
+        $error = 'Backup payload does not match current company context';
+        return null;
+    }
+
+    return $payload;
+}
+
+function settingsBindDynamicValue(AppDbStatement $stmt, string $param, $value): void {
+    if ($value === null) {
+        $stmt->bindValue($param, null, SQLITE3_NULL);
+        return;
+    }
+
+    if (is_bool($value)) {
+        $stmt->bindValue($param, $value ? 1 : 0, SQLITE3_INTEGER);
+        return;
+    }
+
+    if (is_int($value)) {
+        $stmt->bindValue($param, $value, SQLITE3_INTEGER);
+        return;
+    }
+
+    if (is_float($value)) {
+        $stmt->bindValue($param, $value, SQLITE3_FLOAT);
+        return;
+    }
+
+    if (is_array($value) || is_object($value)) {
+        $stmt->bindValue($param, json_encode($value, JSON_UNESCAPED_SLASHES), SQLITE3_TEXT);
+        return;
+    }
+
+    $stmt->bindValue($param, (string)$value, SQLITE3_TEXT);
+}
+
+function settingsInsertTableRows(AppDbConnection $db, string $table, array $rows, int $cid, bool $forceCid): void {
+    $columns = settingsTableColumns($db, $table);
+    if (empty($columns)) {
+        return;
+    }
+
+    $columnSet = array_fill_keys($columns, true);
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $filtered = [];
+        foreach ($row as $key => $value) {
+            $col = (string)$key;
+            if (!isset($columnSet[$col])) {
+                continue;
+            }
+
+            // Skip computed/generated columns.
+            if ($col === 'total') {
+                continue;
+            }
+
+            $filtered[$col] = $value;
+        }
+
+        if ($forceCid && isset($columnSet['cid'])) {
+            $filtered['cid'] = $cid;
+        }
+
+        if (empty($filtered)) {
+            continue;
+        }
+
+        $insertCols = array_keys($filtered);
+        $placeholders = [];
+        foreach ($insertCols as $idx => $_) {
+            $placeholders[] = ':p' . $idx;
+        }
+
+        $sql = 'INSERT INTO ' . $table . ' (' . implode(', ', $insertCols) . ') VALUES (' . implode(', ', $placeholders) . ')';
+        $stmt = $db->prepare($sql);
+        if (!$stmt) {
+            throw new RuntimeException('Failed to prepare insert for table: ' . $table);
+        }
+
+        foreach ($insertCols as $idx => $col) {
+            settingsBindDynamicValue($stmt, ':p' . $idx, $filtered[$col]);
+        }
+
+        if (!$stmt->execute()) {
+            throw new RuntimeException('Failed to insert row into table: ' . $table);
+        }
+    }
+}
+
+function settingsDeleteTenantRows(AppDbConnection $db, int $cid): void {
+    foreach (settingsTenantSubTables() as $cfg) {
+        $table = (string)$cfg['table'];
+        $parent = (string)$cfg['parent'];
+        $parentPk = (string)$cfg['parent_pk'];
+        $childFk = (string)$cfg['child_fk'];
+
+        if (!settingsTableExists($db, $table) || !settingsTableExists($db, $parent)) {
+            continue;
+        }
+
+        $sql = 'DELETE FROM ' . $table . ' WHERE ' . $childFk . ' IN (SELECT ' . $parentPk . ' FROM ' . $parent . ' WHERE cid = :cid)';
+        $stmt = $db->prepare($sql);
+        if (!$stmt) {
+            throw new RuntimeException('Failed to prepare delete for table: ' . $table);
+        }
+        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        if (!$stmt->execute()) {
+            throw new RuntimeException('Failed to delete tenant rows for table: ' . $table);
+        }
+    }
+
+    $tables = array_reverse(settingsTenantDirectTables());
+    foreach ($tables as $table) {
+        if (!settingsTableExists($db, $table) || !settingsTableHasColumn($db, $table, 'cid')) {
+            continue;
+        }
+
+        $stmt = $db->prepare('DELETE FROM ' . $table . ' WHERE cid = :cid');
+        if (!$stmt) {
+            throw new RuntimeException('Failed to prepare delete for table: ' . $table);
+        }
+        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        if (!$stmt->execute()) {
+            throw new RuntimeException('Failed to delete tenant rows for table: ' . $table);
+        }
+    }
+}
+
+function settingsRestoreTenantBackup(AppDbConnection $db, int $cid, array $payload, ?string &$error = null): bool {
+    $tables = $payload['tables'] ?? [];
+    if (!is_array($tables)) {
+        $error = 'Invalid backup payload tables section';
+        return false;
+    }
+
+    $isSqlite = strtolower($db->driver()) === 'sqlite';
+
+    try {
+        if ($isSqlite) {
+            $db->exec('PRAGMA foreign_keys = OFF');
+        }
+
+        $db->exec('BEGIN');
+        settingsDeleteTenantRows($db, $cid);
+
+        foreach (settingsTenantDirectTables() as $table) {
+            if (!isset($tables[$table]) || !is_array($tables[$table])) {
+                continue;
+            }
+
+            settingsInsertTableRows($db, $table, $tables[$table], $cid, true);
+        }
+
+        foreach (settingsTenantSubTables() as $cfg) {
+            $table = (string)$cfg['table'];
+            if (!isset($tables[$table]) || !is_array($tables[$table])) {
+                continue;
+            }
+
+            settingsInsertTableRows($db, $table, $tables[$table], $cid, false);
+        }
+
+        $db->exec('COMMIT');
+        if ($isSqlite) {
+            $db->exec('PRAGMA foreign_keys = ON');
+        }
+
+        return true;
+    } catch (Throwable $e) {
+        try {
+            $db->exec('ROLLBACK');
+        } catch (Throwable $_rollbackError) {
+            // Ignore rollback errors.
+        }
+
+        if ($isSqlite) {
+            try {
+                $db->exec('PRAGMA foreign_keys = ON');
+            } catch (Throwable $_fkError) {
+                // Ignore pragma errors.
+            }
+        }
+
+        $error = $e->getMessage();
+        return false;
+    }
 }
 
 function settingsBackupMeta(string $path): array {
@@ -315,101 +698,10 @@ function settingsDecryptEncryptedBackupPayload(string $payload, string $passphra
     return is_string($plain) ? $plain : null;
 }
 
-function settingsOpenRawSqlite(string $path): SQLite3 {
-    $sqlite = new SQLite3($path);
-    $sqlite->enableExceptions(true);
-    $sqlite->busyTimeout(5000);
-    return $sqlite;
-}
-
-function settingsSnapshotSqliteDatabase(string $sourcePath, string $targetPath): bool {
-    if (!is_file($sourcePath)) {
-        return false;
-    }
-
-    if (is_file($targetPath)) {
-        @unlink($targetPath);
-    }
-
-    $sourceDb = null;
-    $targetDb = null;
-
-    try {
-        $sourceDb = settingsOpenRawSqlite($sourcePath);
-        $targetDb = settingsOpenRawSqlite($targetPath);
-        $ok = $sourceDb->backup($targetDb);
-        $sourceDb->close();
-        $targetDb->close();
-
-        if (!$ok || !is_file($targetPath)) {
-            @unlink($targetPath);
-            return false;
-        }
-
-        return true;
-    } catch (Throwable $e) {
-        if ($sourceDb instanceof SQLite3) {
-            @$sourceDb->close();
-        }
-        if ($targetDb instanceof SQLite3) {
-            @$targetDb->close();
-        }
-        @unlink($targetPath);
-        return false;
-    }
-}
-
-function settingsRestoreSqliteDatabaseFromFile(string $backupPath, string $targetPath): bool {
-    if (!is_file($backupPath)) {
-        return false;
-    }
-
-    $backupDb = null;
-    $targetDb = null;
-
-    try {
-        $backupDb = settingsOpenRawSqlite($backupPath);
-        $targetDb = settingsOpenRawSqlite($targetPath);
-        $ok = $backupDb->backup($targetDb);
-        $backupDb->close();
-        $targetDb->close();
-        return (bool)$ok;
-    } catch (Throwable $e) {
-        if ($backupDb instanceof SQLite3) {
-            @$backupDb->close();
-        }
-        if ($targetDb instanceof SQLite3) {
-            @$targetDb->close();
-        }
-        return false;
-    }
-}
-
-function settingsCreateBackupFile(int $cid, bool $auto = false): ?string {
-    $sourcePath = appSqlitePath();
-    if (!is_file($sourcePath)) {
-        return null;
-    }
-
-    $dir = settingsBackupDir();
-    if ($auto) {
-        $filename = settingsAutoBackupPrefix($cid) . date('Ymd') . '.sqlite';
-    } else {
-        $filename = settingsBackupPrefix($cid) . date('Ymd_His') . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.sqlite';
-    }
-
-    $targetPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
-    if (!settingsSnapshotSqliteDatabase($sourcePath, $targetPath)) {
-        return null;
-    }
-
-    return $targetPath;
-}
-
 function settingsApplyAutoBackupRetention(int $cid): void {
     $dir = settingsBackupDir();
     $autoPrefix = settingsAutoBackupPrefix($cid);
-    $matches = glob(rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $autoPrefix . '*.sqlite');
+    $matches = glob(rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $autoPrefix . '*.json');
     $files = is_array($matches) ? $matches : [];
 
     usort($files, function (string $a, string $b): int {
@@ -429,14 +721,10 @@ function settingsApplyAutoBackupRetention(int $cid): void {
 }
 
 function settingsRunDailyAutoBackup(AppDbConnection $db, int $cid): void {
-    if ($db->driver() !== 'sqlite') {
-        return;
-    }
-
     $dir = settingsBackupDir();
-    $todayPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . settingsAutoBackupPrefix($cid) . date('Ymd') . '.sqlite';
+    $todayPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . settingsAutoBackupPrefix($cid) . date('Ymd') . '.json';
     if (!is_file($todayPath)) {
-        $created = settingsCreateBackupFile($cid, true);
+        $created = settingsCreateBackupFile($db, $cid, true);
         if ($created !== null && is_file($created)) {
             settingsAuditBackupEvent(
                 $db,
@@ -1056,7 +1344,7 @@ switch ($action) {
     case 'createBackup':
         settingsRequireBackupAccess($db, $cid);
 
-        $targetPath = settingsCreateBackupFile($cid, false);
+        $targetPath = settingsCreateBackupFile($db, $cid, false);
         if ($targetPath === null) {
             respond('error', 'Failed to create backup file');
         }
@@ -1085,7 +1373,7 @@ switch ($action) {
 
         $dir = settingsBackupDir();
         $prefix = settingsBackupPrefix($cid);
-        $matches = glob(rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $prefix . '*.sqlite');
+        $matches = glob(rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $prefix . '*.json');
         $files = is_array($matches) ? $matches : [];
 
         usort($files, function (string $a, string $b): int {
@@ -1134,19 +1422,17 @@ switch ($action) {
         settingsRequireBackupAccess($db, $cid);
 
         $filename = basename(trim((string)($_POST['filename'] ?? '')));
-        if ($filename === '') {
-            respond('error', 'Backup filename is required');
-        }
+        $json = $filename !== '' ? settingsReadBackupFilePayload($cid, $filename) : null;
+        if (!is_string($json)) {
+            $payload = settingsExportTenantBackupData($db, $cid);
+            $json = settingsEncodeBackupPayload($payload);
+            if (!is_string($json)) {
+                respond('error', 'Failed to generate backup payload');
+            }
 
-        $prefix = settingsBackupPrefix($cid);
-        if (strpos($filename, $prefix) !== 0 || preg_match('/\.sqlite$/', $filename) !== 1) {
-            respond('error', 'Invalid backup filename');
-        }
-
-        $dir = settingsBackupDir();
-        $backupPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
-        if (!is_file($backupPath)) {
-            respond('error', 'Backup file not found');
+            if ($filename === '') {
+                $filename = settingsBuildBackupFilename($cid, false);
+            }
         }
 
         $uid = intval($_SESSION['user_id'] ?? 0);
@@ -1156,14 +1442,14 @@ switch ($action) {
             $uid > 0 ? $uid : null,
             'backup_downloaded',
             $filename,
-            intval(filesize($backupPath) ?: 0)
+            strlen($json)
         );
 
-        header('Content-Type: application/octet-stream');
+        header('Content-Type: application/json');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Content-Length: ' . intval(filesize($backupPath) ?: 0));
+        header('Content-Length: ' . strlen($json));
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-        readfile($backupPath);
+        echo $json;
         exit;
 
     case 'downloadEncryptedBackup':
@@ -1179,18 +1465,11 @@ switch ($action) {
             respond('error', 'Passphrase must be at least 8 characters');
         }
 
-        $prefix = settingsBackupPrefix($cid);
-        if (strpos($filename, $prefix) !== 0 || preg_match('/\.sqlite$/', $filename) !== 1) {
-            respond('error', 'Invalid backup filename');
+        $plain = settingsReadBackupFilePayload($cid, $filename);
+        if (!is_string($plain)) {
+            $payloadData = settingsExportTenantBackupData($db, $cid);
+            $plain = settingsEncodeBackupPayload($payloadData);
         }
-
-        $dir = settingsBackupDir();
-        $backupPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
-        if (!is_file($backupPath)) {
-            respond('error', 'Backup file not found');
-        }
-
-        $plain = @file_get_contents($backupPath);
         if (!is_string($plain)) {
             respond('error', 'Failed to read backup file');
         }
@@ -1210,7 +1489,10 @@ switch ($action) {
             strlen($payload)
         );
 
-        $downloadName = preg_replace('/\.sqlite$/', '.sqlite.enc', $filename);
+        $downloadName = preg_replace('/\.json$/i', '.json.enc', $filename);
+        if (!is_string($downloadName) || $downloadName === '') {
+            $downloadName = settingsBuildBackupFilename($cid, false) . '.enc';
+        }
         header('Content-Type: application/octet-stream');
         header('Content-Disposition: attachment; filename="' . $downloadName . '"');
         header('Content-Length: ' . strlen($payload));
@@ -1232,7 +1514,7 @@ switch ($action) {
         }
 
         $originalName = basename((string)($file['name'] ?? ''));
-        if ($originalName === '' || preg_match('/\.sqlite\.enc$/i', $originalName) !== 1) {
+        if ($originalName === '' || preg_match('/\.json\.enc$/i', $originalName) !== 1) {
             respond('error', 'Invalid encrypted backup file name');
         }
 
@@ -1251,36 +1533,27 @@ switch ($action) {
             respond('error', 'Failed to decrypt backup. Check your passphrase and file.');
         }
 
-        if (strncmp($plain, 'SQLite format 3', 15) !== 0) {
-            respond('error', 'Decrypted content is not a valid SQLite backup');
+        $parseError = null;
+        $parsed = settingsParseBackupPayload($plain, $cid, $parseError);
+        if (!is_array($parsed)) {
+            respond('error', $parseError ?: 'Invalid decrypted backup payload');
         }
 
-        $sourcePath = appSqlitePath();
-        $tempRestorePath = rtrim(settingsBackupDir(), '/\\') . DIRECTORY_SEPARATOR . 'restore-' . uniqid('', true) . '.sqlite';
-        if (@file_put_contents($tempRestorePath, $plain, LOCK_EX) === false) {
-            respond('error', 'Failed to prepare decrypted backup for restore');
+        $restoreError = null;
+        if (!settingsRestoreTenantBackup($db, $cid, $parsed, $restoreError)) {
+            respond('error', 'Failed to restore decrypted backup' . ($restoreError ? ': ' . $restoreError : ''));
         }
-
-        $db->close();
-
-        if (!settingsRestoreSqliteDatabaseFromFile($tempRestorePath, $sourcePath)) {
-            @unlink($tempRestorePath);
-            respond('error', 'Failed to restore decrypted backup');
-        }
-        @unlink($tempRestorePath);
 
         $uid = intval($_SESSION['user_id'] ?? 0);
-        $auditDb = appDbConnectCompat();
-        settingsEnsureBackupAuditTable($auditDb);
         settingsAuditBackupEvent(
-            $auditDb,
+            $db,
             $cid,
             $uid > 0 ? $uid : null,
             'backup_encrypted_restored',
             $originalName,
-            strlen($plain)
+            strlen($plain),
+            ['format' => 'tm-tenant-backup-v1']
         );
-        $auditDb->close();
 
         respond('success', 'Encrypted backup restored successfully');
         break;
@@ -1289,40 +1562,57 @@ switch ($action) {
         settingsRequireBackupAccess($db, $cid);
 
         $filename = basename(trim((string)($_POST['filename'] ?? '')));
-        if ($filename === '') {
-            respond('error', 'Backup filename is required');
+        $jsonPayload = null;
+
+        if ($filename !== '') {
+            $jsonPayload = settingsReadBackupFilePayload($cid, $filename);
+            if (!is_string($jsonPayload)) {
+                respond('error', 'Backup file not found or invalid');
+            }
+        } else {
+            $file = $_FILES['backupFile'] ?? null;
+            if (!is_array($file) || intval($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                respond('error', 'Backup JSON file is required');
+            }
+
+            $originalName = basename((string)($file['name'] ?? ''));
+            if ($originalName === '' || preg_match('/\.json$/i', $originalName) !== 1) {
+                respond('error', 'Invalid backup file name. Expected .json file.');
+            }
+
+            $tmpPath = (string)($file['tmp_name'] ?? '');
+            if ($tmpPath === '' || !is_file($tmpPath)) {
+                respond('error', 'Uploaded backup file is unavailable');
+            }
+
+            $jsonPayload = @file_get_contents($tmpPath);
+            $filename = $originalName;
+            if (!is_string($jsonPayload) || trim($jsonPayload) === '') {
+                respond('error', 'Failed to read uploaded backup file');
+            }
         }
 
-        $prefix = settingsBackupPrefix($cid);
-        if (strpos($filename, $prefix) !== 0 || preg_match('/\.sqlite$/', $filename) !== 1) {
-            respond('error', 'Invalid backup filename');
+        $parseError = null;
+        $payload = settingsParseBackupPayload($jsonPayload, $cid, $parseError);
+        if (!is_array($payload)) {
+            respond('error', $parseError ?: 'Invalid backup payload');
         }
 
-        $dir = settingsBackupDir();
-        $backupPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
-        if (!is_file($backupPath)) {
-            respond('error', 'Backup file not found');
-        }
-
-        $sourcePath = appSqlitePath();
-        $db->close();
-
-        if (!settingsRestoreSqliteDatabaseFromFile($backupPath, $sourcePath)) {
-            respond('error', 'Failed to restore backup');
+        $restoreError = null;
+        if (!settingsRestoreTenantBackup($db, $cid, $payload, $restoreError)) {
+            respond('error', 'Failed to restore backup' . ($restoreError ? ': ' . $restoreError : ''));
         }
 
         $uid = intval($_SESSION['user_id'] ?? 0);
-        $auditDb = appDbConnectCompat();
-        settingsEnsureBackupAuditTable($auditDb);
         settingsAuditBackupEvent(
-            $auditDb,
+            $db,
             $cid,
             $uid > 0 ? $uid : null,
             'backup_restored',
             $filename,
-            intval(filesize($backupPath) ?: 0)
+            strlen($jsonPayload),
+            ['format' => 'tm-tenant-backup-v1']
         );
-        $auditDb->close();
 
         respond('success', 'Backup restored successfully');
         break;
