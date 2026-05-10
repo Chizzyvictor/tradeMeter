@@ -1,3 +1,20 @@
+// HIDE BACK BUTTON ON LARGER SCREENS
+function toggleBackButton() {
+    if ($(window).width() < 992) {
+        $(".back-btn").show();
+    } else {
+        $(".back-btn").hide();
+    }
+}
+
+// INITIAL CHECK
+toggleBackButton();
+
+// CHECK ON RESIZE
+$(window).on("resize", function () {
+    toggleBackButton();
+});
+
 // MOBILE SIDEBAR
 $("#mobileMenuBtn").on("click", function () {
     $("#sidebar").toggleClass("show");
