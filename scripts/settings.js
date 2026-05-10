@@ -33,6 +33,7 @@ class SettingsPage {
 
   initialize() {
     this.setupTabs();
+    this.syncMobileOffsets();
     this.loadSettings();
 
     this.app.loadUserPermissions(() => {
@@ -277,6 +278,20 @@ class SettingsPage {
       if (!fileName) return;
       this.downloadEncryptedBackup(fileName);
     });
+
+    $(window).on('resize orientationchange', () => {
+      this.syncMobileOffsets();
+    });
+  }
+
+  syncMobileOffsets() {
+    const $navbar = $('.settings-top-nav').first();
+    if (!$navbar.length) return;
+
+    const navRect = $navbar[0].getBoundingClientRect();
+    const fallbackOffset = 126;
+    const computedOffset = Math.max(fallbackOffset, Math.ceil(navRect.bottom));
+    document.documentElement.style.setProperty('--settings-mobile-offset', `${computedOffset}px`);
   }
 
   closeMobileSidebar() {

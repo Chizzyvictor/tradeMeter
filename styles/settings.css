@@ -1,4 +1,8 @@
 /* ====== SETTINGS REFINEMENTS ====== */
+:root {
+    --settings-mobile-offset: 126px;
+}
+
 .settings-page .content-header {
     margin-bottom: 0.5rem;
 }
@@ -16,7 +20,7 @@
     display: block !important;
 }
 
-.settings-page .navbar {
+.settings-top-nav {
     position: relative;
     z-index: 1105;
 }
@@ -257,11 +261,11 @@
 
     .settings-sidebar {
         width: 260px;
-        max-height: calc(100vh - 56px);
-        height: calc(100vh - 56px);
+        max-height: calc(100vh - var(--settings-mobile-offset));
+        height: calc(100vh - var(--settings-mobile-offset));
         position: fixed;
         left: -280px;
-        top: 56px;
+        top: var(--settings-mobile-offset);
         border-radius: 0 14px 14px 0;
         z-index: 1060;
     }
@@ -275,7 +279,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        top: 56px;
+        top: var(--settings-mobile-offset);
         background: rgba(15, 23, 42, 0.45);
         z-index: 1050;
     }

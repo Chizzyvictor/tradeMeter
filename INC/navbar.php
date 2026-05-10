@@ -1,8 +1,10 @@
 
 <?php $currentPage = basename($_SERVER['PHP_SELF'] ?? ''); ?>
+<?php $navbarClass = 'navbar navbar-expand-lg navbar-light bg-light shadow-sm'; ?>
+<?php if ($currentPage === 'settings.php') { $navbarClass .= ' settings-top-nav'; } ?>
 
     <!-- NAVBAR -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
+    <nav class="<?php echo $navbarClass; ?>">
         <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarMenu" 
                 aria-controls="navbarMenu" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
