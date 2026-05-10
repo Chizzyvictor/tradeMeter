@@ -32,6 +32,9 @@ if (!function_exists('asset_ver')) {
 
 <!-- ✅ Your custom stylesheet -->
 <link rel="stylesheet" href="styles/styles.css" type="text/css"/>
+<?php if (basename($_SERVER['PHP_SELF'] ?? '') === 'settings.php'): ?>
+<link rel="stylesheet" href="styles/settings.css?v=<?= asset_ver('styles/settings.css') ?>" type="text/css"/>
+<?php endif; ?>
 </head>
 
 <body>
