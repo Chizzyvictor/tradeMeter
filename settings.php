@@ -21,38 +21,58 @@ include "INC/navbar.php";
 
 	<div class="content-body">
 		<div class="container-fluid">
-			<div class="row">
-				<div class="col-lg-4 mb-4">
-					<div class="card shadow-sm h-100 settings-profile-card">
-						<div class="card-header font-weight-bold">Company Profile</div>
-						<div class="card-body text-center">
-							<img id="settingsCompanyLogo" src="Images/companyDP/logo.jpg" alt="Company Logo" class="image img-thumbnail mb-3" style="max-width: 160px; max-height: 160px;">
-							<h5 id="settingsCompanyName" class="mb-1">-</h5>
-							<p id="settingsCompanyEmail" class="text-muted mb-2">-</p>
-							<small class="text-muted">Registered: <span id="settingsRegDate">-</span></small>
+			<div class="settings-layout">
+				<aside class="settings-sidebar" id="settingsSidebar" aria-label="Settings Navigation">
+					<div class="settings-sidebar-header">
+						<button type="button" class="btn btn-sm btn-outline-light settings-sidebar-toggle" id="toggleSettingsSidebar" aria-label="Toggle sidebar">
+							<i class="fas fa-bars"></i>
+						</button>
+						<div class="settings-sidebar-brand">
+							<img id="settingsCompanyLogo" src="Images/companyDP/logo.jpg" alt="Company Logo" class="settings-sidebar-logo">
+							<div class="settings-sidebar-brand-text">
+								<h5 id="settingsCompanyName" class="mb-1">-</h5>
+								<p id="settingsCompanyEmail" class="mb-1">-</p>
+								<small>Registered: <span id="settingsRegDate">-</span></small>
+							</div>
 						</div>
 					</div>
-				</div>
 
-				<div class="col-lg-8 mb-4 settings-main-column">
-					<ul class="nav nav-tabs settings-tabs mb-3" id="settingsTabs" role="tablist">
+					<ul class="nav flex-column settings-sidebar-menu" id="settingsTabs" role="tablist">
 						<li class="nav-item" role="presentation">
-							<a class="nav-link active" id="settings-general-tab" data-toggle="tab" href="#settings-general" role="tab" aria-controls="settings-general" aria-selected="true">General</a>
+							<a class="nav-link settings-link-dashboard" href="index.php"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></a>
+						</li>
+						<li class="settings-menu-title">General</li>
+						<li class="nav-item" role="presentation">
+							<a class="nav-link active" id="settings-general-tab" data-toggle="tab" href="#settings-general" role="tab" aria-controls="settings-general" aria-selected="true"><i class="fas fa-building"></i><span>Company Profile</span></a>
 						</li>
 						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="settings-users-tab" data-toggle="tab" href="#settings-users" role="tab" aria-controls="settings-users" aria-selected="false">Users</a>
+							<a class="nav-link" id="settings-smtp-tab" data-toggle="tab" href="#settings-smtp" role="tab" aria-controls="settings-smtp" aria-selected="false"><i class="fas fa-envelope"></i><span>SMTP Test</span></a>
 						</li>
-						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="settings-security-tab" data-toggle="tab" href="#settings-security" role="tab" aria-controls="settings-security" aria-selected="false">Security</a>
+						<li class="settings-menu-title settings-admin-section" style="display:none;">Management</li>
+						<li class="nav-item settings-admin-section" role="presentation" style="display:none;">
+							<a class="nav-link" id="settings-users-tab" data-toggle="tab" href="#settings-users" role="tab" aria-controls="settings-users" aria-selected="false"><i class="fas fa-users"></i><span>Users</span></a>
 						</li>
+						<li class="nav-item settings-owner-section" role="presentation" style="display:none;">
+							<a class="nav-link" id="settings-attendance-tab" data-toggle="tab" href="#settings-attendance" role="tab" aria-controls="settings-attendance" aria-selected="false"><i class="fas fa-user-clock"></i><span>Attendance Policy</span></a>
+						</li>
+						<li class="settings-menu-title settings-admin-section" style="display:none;">Security</li>
+						<li class="nav-item settings-admin-section" role="presentation" style="display:none;">
+							<a class="nav-link" id="settings-security-tab" data-toggle="tab" href="#settings-security" role="tab" aria-controls="settings-security" aria-selected="false"><i class="fas fa-shield-alt"></i><span>Remember Audit</span></a>
+						</li>
+						<li class="nav-item settings-admin-section" role="presentation" style="display:none;">
+							<a class="nav-link" id="settings-sessions-tab" data-toggle="tab" href="#settings-sessions" role="tab" aria-controls="settings-sessions" aria-selected="false"><i class="fas fa-laptop"></i><span>Sessions</span></a>
+						</li>
+						<li class="nav-item settings-admin-section" role="presentation" style="display:none;">
+							<a class="nav-link" id="settings-login-logs-tab" data-toggle="tab" href="#settings-login-logs" role="tab" aria-controls="settings-login-logs" aria-selected="false"><i class="fas fa-history"></i><span>Login Logs</span></a>
+						</li>
+						<li class="settings-menu-title settings-backup-section" style="display:none;">System</li>
 						<li class="nav-item settings-backup-section" role="presentation" style="display:none;">
-							<a class="nav-link" id="settings-backups-tab" data-toggle="tab" href="#settings-backups" role="tab" aria-controls="settings-backups" aria-selected="false">Backups</a>
-						</li>
-						<li class="nav-item" role="presentation">
-							<a class="nav-link" id="settings-smtp-tab" data-toggle="tab" href="#settings-smtp" role="tab" aria-controls="settings-smtp" aria-selected="false">SMTP</a>
+							<a class="nav-link" id="settings-backups-tab" data-toggle="tab" href="#settings-backups" role="tab" aria-controls="settings-backups" aria-selected="false"><i class="fas fa-database"></i><span>Backups</span></a>
 						</li>
 					</ul>
+				</aside>
 
+				<main class="settings-main" id="settingsMain">
 					<div class="tab-content settings-tab-content" id="settingsTabsContent">
 						<div class="tab-pane fade show active" id="settings-general" role="tabpanel" aria-labelledby="settings-general-tab">
 					<div class="card shadow-sm mb-4 settings-section-card">
@@ -80,6 +100,8 @@ include "INC/navbar.php";
 							</form>
 						</div>
 					</div>
+						</div>
+						<div class="tab-pane fade settings-owner-section" id="settings-attendance" role="tabpanel" aria-labelledby="settings-attendance-tab" style="display:none;">
 
 					<div class="card shadow-sm mb-4 settings-section-card settings-owner-section" style="display:none;">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
@@ -202,6 +224,8 @@ include "INC/navbar.php";
 							</div>
 						</div>
 					</div>
+						</div>
+						<div class="tab-pane fade" id="settings-sessions" role="tabpanel" aria-labelledby="settings-sessions-tab">
 
 					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
@@ -239,6 +263,8 @@ include "INC/navbar.php";
 							</div>
 						</div>
 					</div>
+						</div>
+						<div class="tab-pane fade" id="settings-login-logs" role="tabpanel" aria-labelledby="settings-login-logs-tab">
 
 					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
@@ -377,9 +403,7 @@ include "INC/navbar.php";
 					</div>
 						</div>
 					</div>
-
-
-				</div>
+				</main>
 			</div>
 		</div>
 	</div>

@@ -8,8 +8,19 @@ class SettingsPage {
     this.canManageBackups = false;
     this.isOwner = false;
     this.backupSupported = false;
+    this.backupCapabilityLoaded = false;
+    this.backupCapabilityLoading = false;
     this.settingsTabStorageKey = 'settings_active_tab';
+    this.settingsSidebarStorageKey = 'settings_sidebar_collapsed';
     this.searchDebounceTimers = {};
+    this.lazyLoadedTabs = {
+      users: false,
+      attendance: false,
+      security: false,
+      sessions: false,
+      loginLogs: false,
+      backups: false
+    };
 
     this.usersPager = { page: 1, perPage: 10, totalPages: 1, totalItems: 0, search: '' };
     this.sessionsPager = { page: 1, perPage: 10, totalPages: 1, totalItems: 0, search: '' };
@@ -29,10 +40,6 @@ class SettingsPage {
 
       if (this.canManageUsers) {
         $('.settings-admin-section').show();
-        this.loadRoles(() => this.loadUsers());
-        this.loadRememberAudit();
-        this.loadActiveSessions();
-        this.loadLoginLogs();
 
         this.AuthApp.loadCurrentUserContext((user) => {
           const roleName = String(user?.role || '').toLowerCase();
@@ -48,34 +55,18 @@ class SettingsPage {
 
           if (this.canManageBackups) {
             $('.settings-backup-section').show();
-            this.loadBackupCapability((capability) => {
-              this.backupSupported = Boolean(capability?.supported);
-
-              if (this.backupSupported) {
-                this.loadBackups();
-                this.loadBackupAudit();
-              } else {
-                this.disableBackupActions();
-                this.renderBackupPolicy({
-                  supported: false,
-                  retention_days: capability?.retention_days,
-                  scheduler_hint: capability?.scheduler_hint,
-                  message: capability?.message,
-                  last_auto_backup_created_at: 0
-                });
-                this.renderBackups([]);
-                this.renderBackupAudit([]);
-              }
-              this.activateFirstVisibleTab();
-            });
           } else {
             $('.settings-backup-section').hide();
-            this.activateFirstVisibleTab();
           }
+
+          this.activateFirstVisibleTab();
+          this.loadActiveTabData();
         });
       } else {
         $('.settings-admin-section').hide();
+        $('.settings-backup-section').hide();
         this.activateFirstVisibleTab();
+        this.loadActiveTabData();
       }
     });
   }
@@ -222,6 +213,18 @@ class SettingsPage {
       this.saveAttendancePolicy();
     });
 
+    $('#toggleSettingsSidebar').on('click', () => {
+      const $sidebar = $('#settingsSidebar');
+      if (!$sidebar.length) return;
+      $sidebar.toggleClass('collapsed');
+      try {
+        const isCollapsed = $sidebar.hasClass('collapsed') ? '1' : '0';
+        window.localStorage.setItem(this.settingsSidebarStorageKey, isCollapsed);
+      } catch (_error) {
+        // Ignore storage errors in private mode.
+      }
+    });
+
     $(document).on('click', '.save-user-role-btn', (e) => {
       const userId = Number($(e.currentTarget).data('id')) || 0;
       const roleId = Number($(`#roleSelect_${userId}`).val()) || 0;
@@ -318,6 +321,15 @@ class SettingsPage {
     const $tabs = $('#settingsTabs a[data-toggle="tab"]');
     if (!$tabs.length) return;
 
+    try {
+      const collapsed = String(window.localStorage.getItem(this.settingsSidebarStorageKey) || '') === '1';
+      if (collapsed) {
+        $('#settingsSidebar').addClass('collapsed');
+      }
+    } catch (_error) {
+      // Ignore storage errors in private mode.
+    }
+
     let requestedTab = window.location.hash || '';
     if (!requestedTab || !$(requestedTab).length) {
       requestedTab = String(window.localStorage.getItem(this.settingsTabStorageKey) || '').trim();
@@ -341,17 +353,96 @@ class SettingsPage {
       if (window.location.hash !== target) {
         history.replaceState(null, '', target);
       }
+      this.handleLazyTabLoad(target);
     });
   }
 
   activateFirstVisibleTab() {
-    const $activeLink = $('#settingsTabs .nav-link.active');
+    const $activeLink = $('#settingsTabs a[data-toggle="tab"].active');
     if ($activeLink.length && $activeLink.is(':visible')) return;
 
-    const $firstVisible = $('#settingsTabs .nav-link:visible').first();
+    const $firstVisible = $('#settingsTabs a[data-toggle="tab"]:visible').first();
     if ($firstVisible.length) {
       $firstVisible.tab('show');
     }
+  }
+
+  loadActiveTabData() {
+    const activeTarget = String($('#settingsTabs a[data-toggle="tab"].active').attr('href') || '').trim();
+    if (!activeTarget) return;
+    this.handleLazyTabLoad(activeTarget);
+  }
+
+  handleLazyTabLoad(target) {
+    switch (target) {
+      case '#settings-users':
+        if (!this.canManageUsers || this.lazyLoadedTabs.users) return;
+        this.lazyLoadedTabs.users = true;
+        this.loadRoles(() => this.loadUsers());
+        break;
+      case '#settings-attendance':
+        if (!this.isOwner || this.lazyLoadedTabs.attendance) return;
+        this.lazyLoadedTabs.attendance = true;
+        this.loadAttendancePolicy();
+        break;
+      case '#settings-security':
+        if (!this.canManageUsers || this.lazyLoadedTabs.security) return;
+        this.lazyLoadedTabs.security = true;
+        this.loadRememberAudit();
+        break;
+      case '#settings-sessions':
+        if (!this.canManageUsers || this.lazyLoadedTabs.sessions) return;
+        this.lazyLoadedTabs.sessions = true;
+        this.loadActiveSessions();
+        break;
+      case '#settings-login-logs':
+        if (!this.canManageUsers || this.lazyLoadedTabs.loginLogs) return;
+        this.lazyLoadedTabs.loginLogs = true;
+        this.loadLoginLogs();
+        break;
+      case '#settings-backups':
+        if (!this.canManageBackups || this.lazyLoadedTabs.backups) return;
+        this.lazyLoadedTabs.backups = true;
+        this.loadBackupsTabData();
+        break;
+      default:
+        break;
+    }
+  }
+
+  loadBackupsTabData() {
+    if (this.backupCapabilityLoaded) {
+      if (this.backupSupported) {
+        this.loadBackups();
+        this.loadBackupAudit();
+      }
+      return;
+    }
+
+    if (this.backupCapabilityLoading) return;
+    this.backupCapabilityLoading = true;
+
+    this.loadBackupCapability((capability) => {
+      this.backupCapabilityLoading = false;
+      this.backupCapabilityLoaded = true;
+      this.backupSupported = Boolean(capability?.supported);
+
+      if (this.backupSupported) {
+        this.loadBackups();
+        this.loadBackupAudit();
+      } else {
+        this.disableBackupActions();
+        this.renderBackupPolicy({
+          supported: false,
+          retention_days: capability?.retention_days,
+          scheduler_hint: capability?.scheduler_hint,
+          message: capability?.message,
+          last_auto_backup_created_at: 0
+        });
+        this.renderBackups([]);
+        this.renderBackupAudit([]);
+      }
+    });
   }
 
   setButtonLoading($btn, isLoading, loadingText = 'Saving...') {
