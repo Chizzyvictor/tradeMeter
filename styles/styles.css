@@ -2528,6 +2528,9 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 }
 
 .settings-sidebar-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
     padding: 0.95rem;
     border-bottom: 1px solid rgba(148, 163, 184, 0.24);
 }
@@ -2544,8 +2547,10 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 }
 
 .settings-sidebar-logo {
+    display: block;
     width: 54px;
     height: 54px;
+    flex-shrink: 0;
     border-radius: 14px;
     object-fit: cover;
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -2691,7 +2696,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 
     .settings-sidebar {
         width: 100%;
-        max-height: none;
+        max-height: auto;
         border-radius: 12px;
     }
 
@@ -2719,6 +2724,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     .settings-sidebar-logo {
         width: 48px;
         height: 48px;
+        flex-shrink: 0;
     }
 
     .settings-sidebar-menu {
