@@ -1,7 +1,6 @@
 
 <?php $currentPage = basename($_SERVER['PHP_SELF'] ?? ''); ?>
 <?php $navbarClass = 'navbar navbar-expand-lg navbar-light bg-light shadow-sm'; ?>
-<?php if ($currentPage === 'settings.php') { $navbarClass .= ' settings-top-nav'; } ?>
 
     <!-- NAVBAR -->
     <nav class="<?php echo $navbarClass; ?>">
