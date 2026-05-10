@@ -35,6 +35,62 @@ function toEpochInt($value): int {
     return $ts === false ? 0 : intval($ts);
 }
 
+function settingsPasswordPolicyError(string $password): string {
+    if (strlen($password) < 8) {
+        return 'Password must be at least 8 characters';
+    }
+
+    if (!preg_match('/[A-Z]/', $password)) {
+        return 'Password must include at least one uppercase letter';
+    }
+
+    if (!preg_match('/[a-z]/', $password)) {
+        return 'Password must include at least one lowercase letter';
+    }
+
+    if (!preg_match('/[0-9]/', $password)) {
+        return 'Password must include at least one number';
+    }
+
+    return '';
+}
+
+function settingsPaginationFromRequest(int $defaultPerPage = 10, int $maxPerPage = 50): array {
+    $page = intval($_POST['page'] ?? 1);
+    $perPage = intval($_POST['per_page'] ?? $defaultPerPage);
+
+    if ($page < 1) {
+        $page = 1;
+    }
+
+    if ($perPage < 1) {
+        $perPage = $defaultPerPage;
+    }
+
+    $perPage = min($maxPerPage, $perPage);
+
+    return [
+        'page' => $page,
+        'per_page' => $perPage,
+    ];
+}
+
+function settingsBuildPagination(int $totalItems, int $page, int $perPage): array {
+    $safePerPage = max(1, $perPage);
+    $safeTotalItems = max(0, $totalItems);
+    $totalPages = max(1, (int)ceil($safeTotalItems / $safePerPage));
+    $safePage = min($totalPages, max(1, $page));
+
+    return [
+        'page' => $safePage,
+        'per_page' => $safePerPage,
+        'total_items' => $safeTotalItems,
+        'total_pages' => $totalPages,
+        'has_prev' => $safePage > 1,
+        'has_next' => $safePage < $totalPages,
+    ];
+}
+
 function settingsBackupDir(): string {
     $configured = trim((string)(appEnv('TM_BACKUP_DIR', '') ?? ''));
     $dir = $configured !== ''
@@ -429,6 +485,7 @@ switch ($action) {
         break;
 
     case 'updateProfile':
+        requirePermission($db, 'manage_users');
         $name = safe_input($_POST['cName'] ?? '');
         $email = strtolower(safe_input($_POST['cEmail'] ?? ''));
 
@@ -507,6 +564,30 @@ switch ($action) {
 
     case 'loadUsers':
         requirePermission($db, 'manage_users');
+        $search = strtolower(trim((string)($_POST['search'] ?? '')));
+        $pager = settingsPaginationFromRequest(10, 50);
+
+        $whereSql = 'u.cid = :cid';
+        if ($search !== '') {
+            $whereSql .= ' AND (lower(u.full_name) LIKE :search OR lower(u.email) LIKE :search)';
+        }
+
+        $countStmt = $db->prepare("SELECT COUNT(*) AS total
+                                   FROM users u
+                                   WHERE " . $whereSql);
+        if (!$countStmt) {
+            respond('error', 'Failed to load users');
+        }
+        $countStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        if ($search !== '') {
+            $countStmt->bindValue(':search', '%' . $search . '%', SQLITE3_TEXT);
+        }
+        $countRow = $countStmt->execute()->fetchArray(SQLITE3_ASSOC);
+        $totalItems = intval($countRow['total'] ?? 0);
+
+        $pagination = settingsBuildPagination($totalItems, $pager['page'], $pager['per_page']);
+        $offset = ($pagination['page'] - 1) * $pagination['per_page'];
+
         $users = [];
         $stmt = $db->prepare("SELECT u.user_id,
                                      u.full_name,
@@ -518,9 +599,15 @@ switch ($action) {
                               FROM users u
                               LEFT JOIN user_roles ur ON ur.user_id = u.user_id
                               LEFT JOIN roles r ON r.role_id = ur.role_id
-                              WHERE u.cid = :cid
-                              ORDER BY u.created_at DESC, u.user_id DESC");
+                              WHERE " . $whereSql . "
+                              ORDER BY u.created_at DESC, u.user_id DESC
+                              LIMIT :limit OFFSET :offset");
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        if ($search !== '') {
+            $stmt->bindValue(':search', '%' . $search . '%', SQLITE3_TEXT);
+        }
+        $stmt->bindValue(':limit', $pagination['per_page'], SQLITE3_INTEGER);
+        $stmt->bindValue(':offset', $offset, SQLITE3_INTEGER);
         $res = $stmt->execute();
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
             $users[] = [
@@ -534,7 +621,7 @@ switch ($action) {
             ];
         }
 
-        respond('success', 'Users loaded', ['data' => $users]);
+        respond('success', 'Users loaded', ['data' => $users, 'pagination' => $pagination]);
         break;
 
     case 'createUser':
@@ -550,8 +637,10 @@ switch ($action) {
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             respond('error', 'Valid email is required');
         }
-        if (strlen($password) < 6) {
-            respond('error', 'Password must be at least 6 characters');
+
+        $passwordPolicyError = settingsPasswordPolicyError($password);
+        if ($passwordPolicyError !== '') {
+            respond('error', $passwordPolicyError);
         }
         if ($roleId <= 0) {
             respond('error', 'Role is required');
@@ -762,6 +851,37 @@ switch ($action) {
 
     case 'loadActiveSessions':
         requirePermission($db, 'manage_users');
+        $search = strtolower(trim((string)($_POST['search'] ?? '')));
+        $pager = settingsPaginationFromRequest(10, 50);
+
+        $whereSql = 's.cid = :cid';
+        if ($search !== '') {
+            $whereSql .= ' AND (
+                lower(COALESCE(u.full_name, "")) LIKE :search OR
+                lower(COALESCE(u.email, "")) LIKE :search OR
+                lower(COALESCE(s.ip_address, "")) LIKE :search OR
+                lower(COALESCE(s.user_agent, "")) LIKE :search OR
+                lower(COALESCE(s.session_id, "")) LIKE :search
+            )';
+        }
+
+        $countStmt = $db->prepare("SELECT COUNT(*) AS total
+                                   FROM user_sessions s
+                                   LEFT JOIN users u ON u.user_id = s.user_id
+                                   WHERE " . $whereSql);
+        if (!$countStmt) {
+            respond('error', 'Failed to load active sessions');
+        }
+        $countStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        if ($search !== '') {
+            $countStmt->bindValue(':search', '%' . $search . '%', SQLITE3_TEXT);
+        }
+        $countRow = $countStmt->execute()->fetchArray(SQLITE3_ASSOC);
+        $totalItems = intval($countRow['total'] ?? 0);
+
+        $pagination = settingsBuildPagination($totalItems, $pager['page'], $pager['per_page']);
+        $offset = ($pagination['page'] - 1) * $pagination['per_page'];
+
         $sessions = [];
         $currentSessionId = session_id();
 
@@ -776,13 +896,18 @@ switch ($action) {
                                      COALESCE(u.email, '-') AS email
                               FROM user_sessions s
                               LEFT JOIN users u ON u.user_id = s.user_id
-                              WHERE s.cid = :cid
+                              WHERE " . $whereSql . "
                               ORDER BY s.last_activity DESC, s.created_at DESC
-                              LIMIT 100");
+                              LIMIT :limit OFFSET :offset");
         if (!$stmt) {
             respond('error', 'Failed to load active sessions');
         }
         $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        if ($search !== '') {
+            $stmt->bindValue(':search', '%' . $search . '%', SQLITE3_TEXT);
+        }
+        $stmt->bindValue(':limit', $pagination['per_page'], SQLITE3_INTEGER);
+        $stmt->bindValue(':offset', $offset, SQLITE3_INTEGER);
         $res = $stmt->execute();
 
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
@@ -801,7 +926,7 @@ switch ($action) {
             ];
         }
 
-        respond('success', 'Active sessions loaded', ['data' => $sessions]);
+        respond('success', 'Active sessions loaded', ['data' => $sessions, 'pagination' => $pagination]);
         break;
 
     case 'revokeSession':
@@ -845,13 +970,47 @@ switch ($action) {
         requirePermission($db, 'manage_users');
         $allowedStatuses = ['all', 'success', 'failed', 'blocked', 'success_auto', 'failed_auto'];
         $status = strtolower(trim((string)($_POST['status'] ?? 'all')));
+        $search = strtolower(trim((string)($_POST['search'] ?? '')));
+        $pager = settingsPaginationFromRequest(10, 50);
         if (!in_array($status, $allowedStatuses, true)) {
             $status = 'all';
         }
 
+        $whereSql = 'l.cid = :cid';
+        if ($status !== 'all') {
+            $whereSql .= ' AND lower(l.status) = lower(:status)';
+        }
+        if ($search !== '') {
+            $whereSql .= ' AND (
+                lower(COALESCE(u.full_name, "")) LIKE :search OR
+                lower(COALESCE(u.email, "")) LIKE :search OR
+                lower(COALESCE(l.ip_address, "")) LIKE :search OR
+                lower(COALESCE(l.user_agent, "")) LIKE :search
+            )';
+        }
+
+        $countStmt = $db->prepare("SELECT COUNT(*) AS total
+                                   FROM login_logs l
+                                   LEFT JOIN users u ON u.user_id = l.user_id
+                                   WHERE " . $whereSql);
+        if (!$countStmt) {
+            respond('error', 'Failed to load login logs');
+        }
+        $countStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        if ($status !== 'all') {
+            $countStmt->bindValue(':status', $status, SQLITE3_TEXT);
+        }
+        if ($search !== '') {
+            $countStmt->bindValue(':search', '%' . $search . '%', SQLITE3_TEXT);
+        }
+        $countRow = $countStmt->execute()->fetchArray(SQLITE3_ASSOC);
+        $totalItems = intval($countRow['total'] ?? 0);
+
+        $pagination = settingsBuildPagination($totalItems, $pager['page'], $pager['per_page']);
+        $offset = ($pagination['page'] - 1) * $pagination['per_page'];
+
         $rows = [];
-        if ($status === 'all') {
-            $stmt = $db->prepare("SELECT l.id,
+        $stmt = $db->prepare("SELECT l.id,
                                          l.user_id,
                                          l.ip_address,
                                          l.user_agent,
@@ -861,33 +1020,21 @@ switch ($action) {
                                          COALESCE(u.email, '-') AS email
                                   FROM login_logs l
                                   LEFT JOIN users u ON u.user_id = l.user_id
-                                  WHERE l.cid = :cid
+                                  WHERE " . $whereSql . "
                                   ORDER BY l.login_time DESC, l.id DESC
-                                  LIMIT 100");
-            if (!$stmt) {
-                respond('error', 'Failed to load login logs');
-            }
-            $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
-        } else {
-            $stmt = $db->prepare("SELECT l.id,
-                                         l.user_id,
-                                         l.ip_address,
-                                         l.user_agent,
-                                         l.login_time,
-                                         l.status,
-                                         COALESCE(u.full_name, '-') AS full_name,
-                                         COALESCE(u.email, '-') AS email
-                                  FROM login_logs l
-                                  LEFT JOIN users u ON u.user_id = l.user_id
-                                  WHERE l.cid = :cid AND lower(l.status) = lower(:status)
-                                  ORDER BY l.login_time DESC, l.id DESC
-                                  LIMIT 100");
-            if (!$stmt) {
-                respond('error', 'Failed to load login logs');
-            }
-            $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+                                  LIMIT :limit OFFSET :offset");
+        if (!$stmt) {
+            respond('error', 'Failed to load login logs');
+        }
+        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        if ($status !== 'all') {
             $stmt->bindValue(':status', $status, SQLITE3_TEXT);
         }
+        if ($search !== '') {
+            $stmt->bindValue(':search', '%' . $search . '%', SQLITE3_TEXT);
+        }
+        $stmt->bindValue(':limit', $pagination['per_page'], SQLITE3_INTEGER);
+        $stmt->bindValue(':offset', $offset, SQLITE3_INTEGER);
 
         $res = $stmt->execute();
         while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
@@ -903,7 +1050,7 @@ switch ($action) {
             ];
         }
 
-        respond('success', 'Login logs loaded', ['data' => $rows]);
+        respond('success', 'Login logs loaded', ['data' => $rows, 'pagination' => $pagination]);
         break;
 
     case 'createBackup':
@@ -933,6 +1080,8 @@ switch ($action) {
 
     case 'loadBackups':
         settingsRequireBackupAccess($db, $cid);
+        $search = strtolower(trim((string)($_POST['search'] ?? '')));
+        $pager = settingsPaginationFromRequest(10, 50);
 
         $dir = settingsBackupDir();
         $prefix = settingsBackupPrefix($cid);
@@ -943,17 +1092,28 @@ switch ($action) {
             return intval(@filemtime($b)) <=> intval(@filemtime($a));
         });
 
-        $rows = [];
-        $maxItems = 30;
-        foreach (array_slice($files, 0, $maxItems) as $file) {
+        $allEntries = [];
+        foreach ($files as $file) {
             if (is_file($file)) {
-                $rows[] = settingsBackupMeta($file);
+                $allEntries[] = settingsBackupMeta($file);
             }
         }
 
+        $filteredEntries = $allEntries;
+        if ($search !== '') {
+            $filteredEntries = array_values(array_filter($allEntries, function (array $entry) use ($search): bool {
+                return strpos(strtolower((string)($entry['filename'] ?? '')), $search) !== false;
+            }));
+        }
+
+        $totalItems = count($filteredEntries);
+        $pagination = settingsBuildPagination($totalItems, $pager['page'], $pager['per_page']);
+        $offset = ($pagination['page'] - 1) * $pagination['per_page'];
+        $rows = array_slice($filteredEntries, $offset, $pagination['per_page']);
+
         $autoPrefix = settingsAutoBackupPrefix($cid);
         $latestAuto = null;
-        foreach ($rows as $entry) {
+        foreach ($allEntries as $entry) {
             if (strpos((string)$entry['filename'], $autoPrefix) === 0) {
                 $latestAuto = $entry;
                 break;
@@ -962,6 +1122,7 @@ switch ($action) {
 
         respond('success', 'Backups loaded', [
             'data' => $rows,
+            'pagination' => $pagination,
             'retention_days' => settingsBackupRetentionDays(),
             'last_auto_backup_created_at' => $latestAuto['created_at'] ?? 0,
             'storage_path' => settingsBackupDir(),

@@ -2508,6 +2508,37 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     font-weight: 600;
 }
 
+.settings-tabs {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.settings-tabs .nav-link {
+    border: 0;
+    border-radius: 999px;
+    color: #334155;
+    font-weight: 600;
+    padding: 0.45rem 0.95rem;
+    margin-right: 0.35rem;
+}
+
+.settings-tabs .nav-link.active {
+    background: #0f766e;
+    color: #ffffff;
+}
+
+.dark-mode .settings-tabs .nav-link {
+    color: #cbd5e1;
+}
+
+.dark-mode .settings-tabs .nav-link.active {
+    background: #14b8a6;
+    color: #0f172a;
+}
+
+.settings-tab-content {
+    min-height: 220px;
+}
+
 .settings-section-card .table-responsive {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -2526,6 +2557,17 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 }
 
 @media (max-width: 767.98px) {
+    .settings-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 0.35rem;
+    }
+
+    .settings-tabs .nav-item {
+        flex: 0 0 auto;
+    }
+
     .settings-form-actions {
         width: 100%;
     }

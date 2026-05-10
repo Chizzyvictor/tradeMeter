@@ -35,6 +35,26 @@ include "INC/navbar.php";
 				</div>
 
 				<div class="col-lg-8 mb-4 settings-main-column">
+					<ul class="nav nav-tabs settings-tabs mb-3" id="settingsTabs" role="tablist">
+						<li class="nav-item" role="presentation">
+							<a class="nav-link active" id="settings-general-tab" data-toggle="tab" href="#settings-general" role="tab" aria-controls="settings-general" aria-selected="true">General</a>
+						</li>
+						<li class="nav-item" role="presentation">
+							<a class="nav-link" id="settings-users-tab" data-toggle="tab" href="#settings-users" role="tab" aria-controls="settings-users" aria-selected="false">Users</a>
+						</li>
+						<li class="nav-item" role="presentation">
+							<a class="nav-link" id="settings-security-tab" data-toggle="tab" href="#settings-security" role="tab" aria-controls="settings-security" aria-selected="false">Security</a>
+						</li>
+						<li class="nav-item settings-backup-section" role="presentation" style="display:none;">
+							<a class="nav-link" id="settings-backups-tab" data-toggle="tab" href="#settings-backups" role="tab" aria-controls="settings-backups" aria-selected="false">Backups</a>
+						</li>
+						<li class="nav-item" role="presentation">
+							<a class="nav-link" id="settings-smtp-tab" data-toggle="tab" href="#settings-smtp" role="tab" aria-controls="settings-smtp" aria-selected="false">SMTP</a>
+						</li>
+					</ul>
+
+					<div class="tab-content settings-tab-content" id="settingsTabsContent">
+						<div class="tab-pane fade show active" id="settings-general" role="tabpanel" aria-labelledby="settings-general-tab">
 					<div class="card shadow-sm mb-4 settings-section-card">
 						<div class="card-header font-weight-bold">Update Company Details</div>
 						<div class="card-body">
@@ -93,8 +113,10 @@ include "INC/navbar.php";
 							<small class="text-muted d-block mt-2">Late fines are applied automatically on employee sign-in.</small>
 						</div>
 					</div>
+						</div>
+						<div class="tab-pane fade" id="settings-users" role="tabpanel" aria-labelledby="settings-users-tab">
 
-					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section settings-backup-section">
+					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
 							<span>User Management</span>
 							<button type="button" class="btn btn-sm btn-outline-primary" id="seedDemoUsersBtn">Seed Demo Manager/Staff</button>
@@ -112,7 +134,8 @@ include "INC/navbar.php";
 									</div>
 									<div class="form-group col-md-2">
 										<label for="newUserPassword">Password</label>
-										<input type="password" id="newUserPassword" class="form-control" required>
+										<input type="password" id="newUserPassword" class="form-control" minlength="8" pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}" autocomplete="new-password" required>
+										<small class="form-text text-muted">8+ chars with uppercase, lowercase and number.</small>
 									</div>
 									<div class="form-group col-md-2">
 										<label for="newUserRole">Role</label>
@@ -123,6 +146,15 @@ include "INC/navbar.php";
 									<button type="submit" class="btn btn-primary" id="createUserBtn">Create User</button>
 								</div>
 							</form>
+
+							<div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+								<input type="text" id="usersSearchInput" class="form-control form-control-sm" style="max-width: 280px;" placeholder="Search by name or email">
+								<div class="d-flex align-items-center mt-2 mt-sm-0">
+									<button type="button" class="btn btn-sm btn-outline-secondary" id="usersPrevPageBtn">Prev</button>
+									<span class="mx-2 text-muted small" id="usersPageInfo">Page 1 of 1</span>
+									<button type="button" class="btn btn-sm btn-outline-secondary" id="usersNextPageBtn">Next</button>
+								</div>
+							</div>
 
 							<div class="table-responsive">
 								<table class="table table-bordered table-striped" id="usersTable">
@@ -136,11 +168,15 @@ include "INC/navbar.php";
 											<th>Actions</th>
 										</tr>
 									</thead>
-									<tbody></tbody>
+									<tbody>
+										<tr><td colspan="6" class="text-center text-muted">No users found</td></tr>
+									</tbody>
 								</table>
 							</div>
 						</div>
 					</div>
+						</div>
+						<div class="tab-pane fade" id="settings-security" role="tabpanel" aria-labelledby="settings-security-tab">
 
 					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
@@ -159,7 +195,9 @@ include "INC/navbar.php";
 											<th>Details</th>
 										</tr>
 									</thead>
-									<tbody></tbody>
+									<tbody>
+										<tr><td colspan="5" class="text-center text-muted">No remember-me audit records yet</td></tr>
+									</tbody>
 								</table>
 							</div>
 						</div>
@@ -174,6 +212,14 @@ include "INC/navbar.php";
 							</div>
 						</div>
 						<div class="card-body">
+							<div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+								<input type="text" id="sessionsSearchInput" class="form-control form-control-sm" style="max-width: 280px;" placeholder="Search user, IP or device">
+								<div class="d-flex align-items-center mt-2 mt-sm-0">
+									<button type="button" class="btn btn-sm btn-outline-secondary" id="sessionsPrevPageBtn">Prev</button>
+									<span class="mx-2 text-muted small" id="sessionsPageInfo">Page 1 of 1</span>
+									<button type="button" class="btn btn-sm btn-outline-secondary" id="sessionsNextPageBtn">Next</button>
+								</div>
+							</div>
 							<div class="table-responsive">
 								<table class="table table-bordered table-striped" id="activeSessionsTable">
 									<thead>
@@ -186,7 +232,9 @@ include "INC/navbar.php";
 											<th>Actions</th>
 										</tr>
 									</thead>
-									<tbody></tbody>
+									<tbody>
+										<tr><td colspan="6" class="text-center text-muted">No active sessions found</td></tr>
+									</tbody>
 								</table>
 							</div>
 						</div>
@@ -208,6 +256,14 @@ include "INC/navbar.php";
 							</div>
 						</div>
 						<div class="card-body">
+							<div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+								<input type="text" id="loginLogsSearchInput" class="form-control form-control-sm" style="max-width: 280px;" placeholder="Search user, IP or device">
+								<div class="d-flex align-items-center mt-2 mt-sm-0">
+									<button type="button" class="btn btn-sm btn-outline-secondary" id="loginLogsPrevPageBtn">Prev</button>
+									<span class="mx-2 text-muted small" id="loginLogsPageInfo">Page 1 of 1</span>
+									<button type="button" class="btn btn-sm btn-outline-secondary" id="loginLogsNextPageBtn">Next</button>
+								</div>
+							</div>
 							<div class="table-responsive">
 								<table class="table table-bordered table-striped" id="loginLogsTable">
 									<thead>
@@ -219,13 +275,17 @@ include "INC/navbar.php";
 											<th>Device</th>
 										</tr>
 									</thead>
-									<tbody></tbody>
+									<tbody>
+										<tr><td colspan="5" class="text-center text-muted">No login activity found</td></tr>
+									</tbody>
 								</table>
 							</div>
 						</div>
 					</div>
+						</div>
+						<div class="tab-pane fade settings-backup-section" id="settings-backups" role="tabpanel" aria-labelledby="settings-backups-tab" style="display:none;">
 
-					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section">
+					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section settings-backup-section" style="display:none;">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
 							<span>Data Backup & Restore</span>
 							<div>
@@ -239,6 +299,14 @@ include "INC/navbar.php";
 							</div>
 							<small class="text-muted d-block mb-1" id="backupPolicyNote">Automatic backups are managed by scheduler.</small>
 							<small class="text-muted d-block mb-2" id="backupSchedulerNote">Scheduler command: php tasks/run_backup_scheduler.php</small>
+							<div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+								<input type="text" id="backupsSearchInput" class="form-control form-control-sm" style="max-width: 280px;" placeholder="Search by backup filename">
+								<div class="d-flex align-items-center mt-2 mt-sm-0">
+									<button type="button" class="btn btn-sm btn-outline-secondary" id="backupsPrevPageBtn">Prev</button>
+									<span class="mx-2 text-muted small" id="backupsPageInfo">Page 1 of 1</span>
+									<button type="button" class="btn btn-sm btn-outline-secondary" id="backupsNextPageBtn">Next</button>
+								</div>
+							</div>
 							<div class="table-responsive">
 								<table class="table table-bordered table-striped" id="backupsTable">
 									<thead>
@@ -249,7 +317,9 @@ include "INC/navbar.php";
 											<th>Actions</th>
 										</tr>
 									</thead>
-									<tbody></tbody>
+									<tbody>
+										<tr><td colspan="4" class="text-center text-muted">No backups available</td></tr>
+									</tbody>
 								</table>
 							</div>
 							<div class="d-flex justify-content-between align-items-center mt-3 mb-2">
@@ -282,11 +352,15 @@ include "INC/navbar.php";
 											<th>IP</th>
 										</tr>
 									</thead>
-									<tbody></tbody>
+									<tbody>
+										<tr><td colspan="5" class="text-center text-muted">No backup audit entries yet</td></tr>
+									</tbody>
 								</table>
 							</div>
 						</div>
 					</div>
+						</div>
+						<div class="tab-pane fade" id="settings-smtp" role="tabpanel" aria-labelledby="settings-smtp-tab">
 
 					<div class="card shadow-sm settings-section-card mt-4">
 						<div class="card-header font-weight-bold">SMTP Test Email</div>
@@ -299,6 +373,8 @@ include "INC/navbar.php";
 								<button type="submit" class="btn btn-outline-primary mb-2" id="sendSmtpTestEmailBtn">Send Test Email</button>
 							</form>
 							<small class="text-muted">Uses configured SMTP settings when available, otherwise falls back to local mail transport.</small>
+						</div>
+					</div>
 						</div>
 					</div>
 

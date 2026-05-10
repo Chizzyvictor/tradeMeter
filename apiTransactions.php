@@ -201,7 +201,7 @@ switch ($action) {
                 // rates are preserved. Fallback to legacy formula when not supplied.
                 if ($submittedFractionUnitRate > 0) {
                     $lineRate = $submittedFractionUnitRate * $requestedFraction;
-                } elseif ($submittedLineAmount > 0) {
+                } elseif ($submittedLineAmount > 0 ) {
                     $lineRate = $submittedLineAmount;
                 } else {
                     $basePrice = $transactionType === 'sell'

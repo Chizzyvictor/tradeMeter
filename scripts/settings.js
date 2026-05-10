@@ -8,12 +8,20 @@ class SettingsPage {
     this.canManageBackups = false;
     this.isOwner = false;
     this.backupSupported = false;
+    this.settingsTabStorageKey = 'settings_active_tab';
+    this.searchDebounceTimers = {};
+
+    this.usersPager = { page: 1, perPage: 10, totalPages: 1, totalItems: 0, search: '' };
+    this.sessionsPager = { page: 1, perPage: 10, totalPages: 1, totalItems: 0, search: '' };
+    this.loginLogsPager = { page: 1, perPage: 10, totalPages: 1, totalItems: 0, search: '' };
+    this.backupsPager = { page: 1, perPage: 10, totalPages: 1, totalItems: 0, search: '' };
 
     this.bindEvents();
     this.initialize();
   }
 
   initialize() {
+    this.setupTabs();
     this.loadSettings();
 
     this.app.loadUserPermissions(() => {
@@ -58,13 +66,16 @@ class SettingsPage {
                 this.renderBackups([]);
                 this.renderBackupAudit([]);
               }
+              this.activateFirstVisibleTab();
             });
           } else {
             $('.settings-backup-section').hide();
+            this.activateFirstVisibleTab();
           }
         });
       } else {
         $('.settings-admin-section').hide();
+        this.activateFirstVisibleTab();
       }
     });
   }
@@ -99,8 +110,42 @@ class SettingsPage {
       this.loadRememberAudit();
     });
 
+    $('#usersSearchInput').on('input', (e) => {
+      const value = String($(e.currentTarget).val() || '').trim();
+      this.debounceSearch('users', () => {
+        this.usersPager.search = value;
+        this.usersPager.page = 1;
+        this.loadUsers();
+      });
+    });
+
+    $('#usersPrevPageBtn').on('click', () => {
+      this.setUsersPage(this.usersPager.page - 1);
+    });
+
+    $('#usersNextPageBtn').on('click', () => {
+      this.setUsersPage(this.usersPager.page + 1);
+    });
+
     $('#refreshSessionsBtn').on('click', () => {
       this.loadActiveSessions();
+    });
+
+    $('#sessionsSearchInput').on('input', (e) => {
+      const value = String($(e.currentTarget).val() || '').trim();
+      this.debounceSearch('sessions', () => {
+        this.sessionsPager.search = value;
+        this.sessionsPager.page = 1;
+        this.loadActiveSessions();
+      });
+    });
+
+    $('#sessionsPrevPageBtn').on('click', () => {
+      this.setSessionsPage(this.sessionsPager.page - 1);
+    });
+
+    $('#sessionsNextPageBtn').on('click', () => {
+      this.setSessionsPage(this.sessionsPager.page + 1);
     });
 
     $('#logoutAllDevicesBtn').on('click', () => {
@@ -111,12 +156,46 @@ class SettingsPage {
       this.loadLoginLogs();
     });
 
+    $('#loginLogsSearchInput').on('input', (e) => {
+      const value = String($(e.currentTarget).val() || '').trim();
+      this.debounceSearch('loginLogs', () => {
+        this.loginLogsPager.search = value;
+        this.loginLogsPager.page = 1;
+        this.loadLoginLogs();
+      });
+    });
+
+    $('#loginLogsPrevPageBtn').on('click', () => {
+      this.setLoginLogsPage(this.loginLogsPager.page - 1);
+    });
+
+    $('#loginLogsNextPageBtn').on('click', () => {
+      this.setLoginLogsPage(this.loginLogsPager.page + 1);
+    });
+
     $('#createBackupBtn').on('click', () => {
       this.createBackup();
     });
 
     $('#refreshBackupsBtn').on('click', () => {
       this.loadBackups();
+    });
+
+    $('#backupsSearchInput').on('input', (e) => {
+      const value = String($(e.currentTarget).val() || '').trim();
+      this.debounceSearch('backups', () => {
+        this.backupsPager.search = value;
+        this.backupsPager.page = 1;
+        this.loadBackups();
+      });
+    });
+
+    $('#backupsPrevPageBtn').on('click', () => {
+      this.setBackupsPage(this.backupsPager.page - 1);
+    });
+
+    $('#backupsNextPageBtn').on('click', () => {
+      this.setBackupsPage(this.backupsPager.page + 1);
     });
 
     $('#refreshBackupAuditBtn').on('click', () => {
@@ -129,6 +208,7 @@ class SettingsPage {
     });
 
     $('#loginLogsStatusFilter').on('change', () => {
+      this.loginLogsPager.page = 1;
       this.loadLoginLogs();
     });
 
@@ -181,6 +261,132 @@ class SettingsPage {
     });
   }
 
+  debounceSearch(key, callback, delay = 300) {
+    if (this.searchDebounceTimers[key]) {
+      clearTimeout(this.searchDebounceTimers[key]);
+    }
+
+    this.searchDebounceTimers[key] = setTimeout(() => {
+      callback();
+    }, delay);
+  }
+
+  normalizePager(rawPager, fallbackPerPage = 10) {
+    const perPage = Math.max(1, Number(rawPager?.per_page) || fallbackPerPage);
+    const totalItems = Math.max(0, Number(rawPager?.total_items) || 0);
+    const totalPages = Math.max(1, Number(rawPager?.total_pages) || Math.ceil(totalItems / perPage) || 1);
+    const page = Math.min(totalPages, Math.max(1, Number(rawPager?.page) || 1));
+    return { page, perPage, totalItems, totalPages };
+  }
+
+  renderPager(infoSelector, prevSelector, nextSelector, pager) {
+    const infoText = `Page ${pager.page} of ${pager.totalPages} (${pager.totalItems} record${pager.totalItems === 1 ? '' : 's'})`;
+    $(infoSelector).text(infoText);
+    $(prevSelector).prop('disabled', pager.page <= 1);
+    $(nextSelector).prop('disabled', pager.page >= pager.totalPages);
+  }
+
+  setUsersPage(page) {
+    const nextPage = Math.max(1, Math.min(this.usersPager.totalPages, Number(page) || 1));
+    if (nextPage === this.usersPager.page) return;
+    this.usersPager.page = nextPage;
+    this.loadUsers();
+  }
+
+  setSessionsPage(page) {
+    const nextPage = Math.max(1, Math.min(this.sessionsPager.totalPages, Number(page) || 1));
+    if (nextPage === this.sessionsPager.page) return;
+    this.sessionsPager.page = nextPage;
+    this.loadActiveSessions();
+  }
+
+  setLoginLogsPage(page) {
+    const nextPage = Math.max(1, Math.min(this.loginLogsPager.totalPages, Number(page) || 1));
+    if (nextPage === this.loginLogsPager.page) return;
+    this.loginLogsPager.page = nextPage;
+    this.loadLoginLogs();
+  }
+
+  setBackupsPage(page) {
+    const nextPage = Math.max(1, Math.min(this.backupsPager.totalPages, Number(page) || 1));
+    if (nextPage === this.backupsPager.page) return;
+    this.backupsPager.page = nextPage;
+    this.loadBackups();
+  }
+
+  setupTabs() {
+    const $tabs = $('#settingsTabs a[data-toggle="tab"]');
+    if (!$tabs.length) return;
+
+    let requestedTab = window.location.hash || '';
+    if (!requestedTab || !$(requestedTab).length) {
+      requestedTab = String(window.localStorage.getItem(this.settingsTabStorageKey) || '').trim();
+    }
+
+    if (requestedTab && $(requestedTab).length) {
+      const $requestedLink = $(`#settingsTabs a[href="${requestedTab}"]`);
+      if ($requestedLink.length && $requestedLink.is(':visible')) {
+        $requestedLink.tab('show');
+      }
+    }
+
+    $tabs.on('shown.bs.tab', (event) => {
+      const target = String($(event.target).attr('href') || '');
+      if (!target || !$(target).length) return;
+      try {
+        window.localStorage.setItem(this.settingsTabStorageKey, target);
+      } catch (_error) {
+        // Ignore storage errors in private mode.
+      }
+      if (window.location.hash !== target) {
+        history.replaceState(null, '', target);
+      }
+    });
+  }
+
+  activateFirstVisibleTab() {
+    const $activeLink = $('#settingsTabs .nav-link.active');
+    if ($activeLink.length && $activeLink.is(':visible')) return;
+
+    const $firstVisible = $('#settingsTabs .nav-link:visible').first();
+    if ($firstVisible.length) {
+      $firstVisible.tab('show');
+    }
+  }
+
+  setButtonLoading($btn, isLoading, loadingText = 'Saving...') {
+    if (!$btn || !$btn.length) return;
+
+    const cachedHtml = String($btn.data('default-html') || '');
+    if (!cachedHtml) {
+      $btn.data('default-html', $btn.html());
+    }
+
+    if (isLoading) {
+      $btn.prop('disabled', true);
+      $btn.html(`<span class="spinner-border spinner-border-sm mr-1" role="status" aria-hidden="true"></span>${loadingText}`);
+      return;
+    }
+
+    const originalHtml = String($btn.data('default-html') || '');
+    if (originalHtml) {
+      $btn.html(originalHtml);
+    }
+    $btn.prop('disabled', false);
+  }
+
+  getPasswordStrengthError(password) {
+    if (password.length < 8) {
+      return 'User password must be at least 8 characters';
+    }
+
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+      return 'Password must include uppercase, lowercase and number';
+    }
+
+    return '';
+  }
+
 
   loadSettings() {
     this.app.ajaxHelper({
@@ -212,7 +418,7 @@ class SettingsPage {
 
   updateProfile() {
     const $btn = $('#saveCompanyProfileBtn');
-    $btn.prop('disabled', true);
+    this.setButtonLoading($btn, true, 'Saving...');
 
     const formData = new FormData();
     formData.append('cName', String($('#companyName').val() || '').trim());
@@ -233,7 +439,7 @@ class SettingsPage {
         this.AuthApp.loadCompanyLogo();        
       },
       onComplete: () => {
-        $btn.prop('disabled', false);
+        this.setButtonLoading($btn, false);
       }
     });
   }
@@ -252,12 +458,23 @@ class SettingsPage {
   }
 
   loadUsers() {
+    const pager = this.usersPager;
     this.app.ajaxHelper({
       url: 'apiSettings.php',
       action: 'loadUsers',
-      data: {},
+      data: {
+        page: pager.page,
+        per_page: pager.perPage,
+        search: pager.search
+      },
       onSuccess: (res) => {
+        const normalizedPager = this.normalizePager(res.pagination, pager.perPage);
+        this.usersPager.page = normalizedPager.page;
+        this.usersPager.perPage = normalizedPager.perPage;
+        this.usersPager.totalPages = normalizedPager.totalPages;
+        this.usersPager.totalItems = normalizedPager.totalItems;
         this.renderUsers(Array.isArray(res.data) ? res.data : []);
+        this.renderPager('#usersPageInfo', '#usersPrevPageBtn', '#usersNextPageBtn', this.usersPager);
       }
     });
   }
@@ -347,12 +564,13 @@ class SettingsPage {
       return;
     }
 
-    if (password.length < 6) {
-      this.app.showAlert('User password must be at least 6 characters', 'error');
+    const passwordError = this.getPasswordStrengthError(password);
+    if (passwordError) {
+      this.app.showAlert(passwordError, 'error');
       return;
     }
 
-    $btn.prop('disabled', true);
+    this.setButtonLoading($btn, true, 'Creating...');
 
     this.app.ajaxHelper({
       url: 'apiSettings.php',
@@ -360,10 +578,11 @@ class SettingsPage {
       data: { full_name, email, password, role_id },
       onSuccess: () => {
         $('#createUserForm')[0].reset();
+        this.usersPager.page = 1;
         this.loadUsers();
       },
       onComplete: () => {
-        $btn.prop('disabled', false);
+        this.setButtonLoading($btn, false);
       }
     });
   }
@@ -374,6 +593,7 @@ class SettingsPage {
       action: 'updateUserRole',
       data: { user_id: userId, role_id: roleId },
       onSuccess: () => {
+        this.usersPager.page = 1;
         this.loadUsers();
       }
     });
@@ -505,14 +725,25 @@ class SettingsPage {
 
   loadActiveSessions() {
     const $btn = $('#refreshSessionsBtn');
+    const pager = this.sessionsPager;
     if ($btn.length) $btn.prop('disabled', true);
 
     this.app.ajaxHelper({
       url: 'apiSettings.php',
       action: 'loadActiveSessions',
-      data: {},
+      data: {
+        page: pager.page,
+        per_page: pager.perPage,
+        search: pager.search
+      },
       onSuccess: (res) => {
+        const normalizedPager = this.normalizePager(res.pagination, pager.perPage);
+        this.sessionsPager.page = normalizedPager.page;
+        this.sessionsPager.perPage = normalizedPager.perPage;
+        this.sessionsPager.totalPages = normalizedPager.totalPages;
+        this.sessionsPager.totalItems = normalizedPager.totalItems;
         this.renderActiveSessions(Array.isArray(res.data) ? res.data : []);
+        this.renderPager('#sessionsPageInfo', '#sessionsPrevPageBtn', '#sessionsNextPageBtn', this.sessionsPager);
       },
       onComplete: () => {
         if ($btn.length) $btn.prop('disabled', false);
@@ -535,7 +766,7 @@ class SettingsPage {
       const device = row.user_agent || '-';
       const lastActivity = this.app.formatDateSafe(row.last_activity, '-');
       const createdAt = this.app.formatDateSafe(row.created_at, '-');
-      const currentBadge = row.is_current ? ' <span class="badge badge-success">Current</span>' : '';
+      const currentBadge = row.is_current ? ' <span class="badge badge-success">Current Device</span>' : '';
 
       return `
         <tr>
@@ -566,6 +797,7 @@ class SettingsPage {
           window.location.href = 'login.php';
           return;
         }
+        this.sessionsPager.page = 1;
         this.loadActiveSessions();
       }
     });
@@ -585,14 +817,26 @@ class SettingsPage {
   loadLoginLogs() {
     const $btn = $('#refreshLoginLogsBtn');
     const selectedStatus = String($('#loginLogsStatusFilter').val() || 'all').trim();
+    const pager = this.loginLogsPager;
     if ($btn.length) $btn.prop('disabled', true);
 
     this.app.ajaxHelper({
       url: 'apiSettings.php',
       action: 'loadLoginLogs',
-      data: { status: selectedStatus },
+      data: {
+        status: selectedStatus,
+        page: pager.page,
+        per_page: pager.perPage,
+        search: pager.search
+      },
       onSuccess: (res) => {
+        const normalizedPager = this.normalizePager(res.pagination, pager.perPage);
+        this.loginLogsPager.page = normalizedPager.page;
+        this.loginLogsPager.perPage = normalizedPager.perPage;
+        this.loginLogsPager.totalPages = normalizedPager.totalPages;
+        this.loginLogsPager.totalItems = normalizedPager.totalItems;
         this.renderLoginLogs(Array.isArray(res.data) ? res.data : []);
+        this.renderPager('#loginLogsPageInfo', '#loginLogsPrevPageBtn', '#loginLogsNextPageBtn', this.loginLogsPager);
       },
       onComplete: () => {
         if ($btn.length) $btn.prop('disabled', false);
@@ -644,14 +888,14 @@ class SettingsPage {
     const $btn = $('#sendSmtpTestEmailBtn');
     const email = String($('#smtpTestEmail').val() || '').trim().toLowerCase();
 
-    $btn.prop('disabled', true);
+    this.setButtonLoading($btn, true, 'Sending...');
 
     this.app.ajaxHelper({
       url: 'apiAuthentications.php',
       action: 'sendSmtpTestEmail',
       data: { email },
       onComplete: () => {
-        $btn.prop('disabled', false);
+        this.setButtonLoading($btn, false);
       }
     });
   }
@@ -693,7 +937,7 @@ class SettingsPage {
       return;
     }
 
-    $btn.prop('disabled', true);
+    this.setButtonLoading($btn, true, 'Saving...');
 
     this.app.ajaxHelper({
       url: 'apiEmployeeAttendance.php',
@@ -708,7 +952,7 @@ class SettingsPage {
         this.loadAttendancePolicy();
       },
       onComplete: () => {
-        $btn.prop('disabled', false);
+        this.setButtonLoading($btn, false);
       }
     });
   }
@@ -733,15 +977,26 @@ class SettingsPage {
     if (!this.canManageUsers || !this.canManageBackups || !this.backupSupported) return;
 
     const $btn = $('#refreshBackupsBtn');
+    const pager = this.backupsPager;
     if ($btn.length) $btn.prop('disabled', true);
 
     this.app.ajaxHelper({
       url: 'apiSettings.php',
       action: 'loadBackups',
-      data: {},
+      data: {
+        page: pager.page,
+        per_page: pager.perPage,
+        search: pager.search
+      },
       onSuccess: (res) => {
+        const normalizedPager = this.normalizePager(res.pagination, pager.perPage);
+        this.backupsPager.page = normalizedPager.page;
+        this.backupsPager.perPage = normalizedPager.perPage;
+        this.backupsPager.totalPages = normalizedPager.totalPages;
+        this.backupsPager.totalItems = normalizedPager.totalItems;
         this.renderBackupPolicy(res);
         this.renderBackups(Array.isArray(res.data) ? res.data : []);
+        this.renderPager('#backupsPageInfo', '#backupsPrevPageBtn', '#backupsNextPageBtn', this.backupsPager);
       },
       onComplete: () => {
         if ($btn.length) $btn.prop('disabled', false);
@@ -814,7 +1069,7 @@ class SettingsPage {
     if (!this.canManageUsers || !this.canManageBackups || !this.backupSupported) return;
 
     const $btn = $('#createBackupBtn');
-    $btn.prop('disabled', true);
+    this.setButtonLoading($btn, true, 'Creating...');
 
     this.app.ajaxHelper({
       url: 'apiSettings.php',
@@ -825,7 +1080,7 @@ class SettingsPage {
         this.loadBackupAudit();
       },
       onComplete: () => {
-        $btn.prop('disabled', false);
+        this.setButtonLoading($btn, false);
       }
     });
   }
@@ -833,7 +1088,7 @@ class SettingsPage {
   restoreBackup(fileName) {
     if (!this.canManageUsers || !this.canManageBackups || !this.backupSupported) return;
 
-    const confirmed = window.confirm(`Restore backup ${fileName}? This will replace current data immediately.`);
+    const confirmed = window.confirm(`Restore backup ${fileName}? This will permanently overwrite the current database.`);
     if (!confirmed) return;
 
     this.app.ajaxHelper({
@@ -841,6 +1096,7 @@ class SettingsPage {
       action: 'restoreBackup',
       data: { filename: fileName },
       onSuccess: () => {
+        this.backupsPager.page = 1;
         this.loadBackups();
         this.loadBackupAudit();
         this.loadSettings();
@@ -935,10 +1191,10 @@ class SettingsPage {
       return;
     }
 
-    const confirmed = window.confirm('Restore encrypted backup now? This will replace current data immediately.');
+    const confirmed = window.confirm('Restore encrypted backup now? This will permanently overwrite the current database.');
     if (!confirmed) return;
 
-    $btn.prop('disabled', true);
+    this.setButtonLoading($btn, true, 'Restoring...');
 
     const formData = new FormData();
     formData.append('encryptedBackupFile', file);
@@ -950,12 +1206,13 @@ class SettingsPage {
       data: formData,
       onSuccess: () => {
         $('#restoreEncryptedBackupForm')[0].reset();
+        this.backupsPager.page = 1;
         this.loadBackups();
         this.loadBackupAudit();
         this.loadSettings();
       },
       onComplete: () => {
-        $btn.prop('disabled', false);
+        this.setButtonLoading($btn, false);
       }
     });
   }
