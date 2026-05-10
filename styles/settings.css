@@ -8,6 +8,23 @@
     letter-spacing: -0.02em;
 }
 
+/*
+ * Global legacy CSS hides all .tab-content blocks.
+ * Scope an override for Settings so Bootstrap tab panes render correctly.
+ */
+.settings-page .settings-tab-content {
+    display: block !important;
+}
+
+.settings-page .settings-tab-content > .tab-pane {
+    display: none;
+}
+
+.settings-page .settings-tab-content > .tab-pane.active,
+.settings-page .settings-tab-content > .tab-pane.show.active {
+    display: block;
+}
+
 .settings-profile-card,
 .settings-section-card {
     border: 1px solid rgba(148, 163, 184, 0.18);
