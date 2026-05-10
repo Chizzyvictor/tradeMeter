@@ -2510,6 +2510,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 
 .settings-layout {
     display: flex;
+    min-height: 100vh;
     gap: 1rem;
     align-items: flex-start;
 }
@@ -2517,12 +2518,14 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 .settings-sidebar {
     width: 270px;
     min-height: auto;
-    max-height: calc(100vh - 180px);
+    max-height: calc(100vh - 140px);
     background: linear-gradient(170deg, #0b1328 0%, #101c3a 48%, #17284a 100%);
     border-radius: 18px;
     border: 1px solid rgba(148, 163, 184, 0.22);
     box-shadow: 0 20px 36px rgba(2, 6, 23, 0.24);
-    transition: width 0.25s ease;
+    position: sticky;
+    top: 1rem;
+    transition: width 0.3s ease, transform 0.3s ease, left 0.3s ease;
     overflow-y: auto;
     overflow-x: hidden;
 }
@@ -2615,18 +2618,22 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 }
 
 .settings-sidebar-menu .nav-link.active {
-    color: #0f172a;
-    background: linear-gradient(90deg, #22d3ee, #93c5fd);
+    color: #ffffff;
+    background: #2563eb;
 }
 
 .settings-main {
     flex: 1;
     min-width: 0;
-    padding: 0.5rem;
+    overflow: hidden;
+    padding: 1.5rem;
+    border-radius: 16px;
+    background: #f4f6f9;
+    transition: all 0.3s ease;
 }
 
 .settings-sidebar.collapsed {
-    width: 86px;
+    width: 80px;
 }
 
 .settings-sidebar.collapsed .settings-sidebar-brand-text,
@@ -2646,6 +2653,10 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 
 .settings-sidebar.collapsed .settings-sidebar-menu .nav-link {
     justify-content: center;
+}
+
+.settings-sidebar-backdrop {
+    display: none;
 }
 
 .settings-tab-content {
@@ -2672,10 +2683,52 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 @media (max-width: 991.98px) {
     .settings-layout {
         gap: 0.75rem;
+        min-height: auto;
     }
 
     .settings-sidebar {
-        width: 240px;
+        width: 260px;
+        max-height: 100vh;
+        height: 100vh;
+        position: fixed;
+        left: -280px;
+        top: 0;
+        border-radius: 0 14px 14px 0;
+        z-index: 1060;
+    }
+
+    .settings-sidebar.mobile-open {
+        left: 0;
+    }
+
+    .settings-sidebar-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        z-index: 1050;
+    }
+
+    body.settings-drawer-open .settings-sidebar-backdrop {
+        display: block;
+    }
+
+    .settings-sidebar.collapsed {
+        width: 260px;
+    }
+
+    .settings-sidebar.collapsed .settings-sidebar-brand-text,
+    .settings-sidebar.collapsed .settings-menu-title,
+    .settings-sidebar.collapsed .settings-sidebar-menu .nav-link span {
+        display: block;
+    }
+
+    .settings-sidebar.collapsed .settings-sidebar-menu .nav-link {
+        justify-content: flex-start;
+    }
+
+    .settings-main {
+        width: 100%;
+        padding: 1rem;
     }
 
     .settings-sidebar-brand-text h5 {
@@ -2690,24 +2743,11 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 
 @media (max-width: 767.98px) {
     .settings-layout {
-        flex-direction: column;
         gap: 0.5rem;
     }
 
     .settings-sidebar {
-        width: 100%;
-        max-height: auto;
-        border-radius: 12px;
-    }
-
-    .settings-sidebar.collapsed {
-        width: 100%;
-    }
-
-    .settings-sidebar.collapsed .settings-sidebar-brand-text,
-    .settings-sidebar.collapsed .settings-menu-title,
-    .settings-sidebar.collapsed .settings-sidebar-menu .nav-link span {
-        display: block;
+        width: 260px;
     }
 
     .settings-sidebar-header {
@@ -2728,16 +2768,8 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     }
 
     .settings-sidebar-menu {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        column-gap: 0.5rem;
-        row-gap: 0.4rem;
+        display: block;
         padding: 0.75rem;
-    }
-
-    .settings-sidebar-menu .nav-item,
-    .settings-menu-title {
-        grid-column: span 3;
     }
 
     .settings-menu-title {
@@ -2753,7 +2785,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     }
 
     .settings-main {
-        padding: 0 0.5rem;
+        padding: 0.9rem;
     }
 
     .settings-form-actions {
@@ -2791,15 +2823,6 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 }
 
 @media (max-width: 575.98px) {
-    .settings-sidebar-menu {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .settings-sidebar-menu .nav-item,
-    .settings-menu-title {
-        grid-column: span 2;
-    }
-
     .settings-sidebar-header {
         flex-direction: column;
         align-items: flex-start;
@@ -2833,7 +2856,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     }
 
     .settings-main {
-        padding: 0;
+        padding: 0.75rem;
     }
 
     .settings-section-card {
@@ -2894,13 +2917,13 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 }
 
 @media (max-width: 420px) {
-    .settings-sidebar-menu {
-        grid-template-columns: 1fr;
+    .settings-sidebar {
+        width: 240px;
+        left: -252px;
     }
 
-    .settings-sidebar-menu .nav-item,
-    .settings-menu-title {
-        grid-column: span 1;
+    .settings-sidebar.collapsed {
+        width: 240px;
     }
 
     .settings-section-card {

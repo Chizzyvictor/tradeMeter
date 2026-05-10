@@ -21,7 +21,7 @@ include "INC/navbar.php";
 
 	<div class="content-body">
 		<div class="container-fluid">
-			<div class="settings-layout">
+			<div class="settings-layout" id="settingsLayout">
 				<aside class="settings-sidebar" id="settingsSidebar" aria-label="Settings Navigation">
 					<div class="settings-sidebar-header">
 						<button type="button" class="btn btn-sm btn-outline-light settings-sidebar-toggle" id="toggleSettingsSidebar" aria-label="Toggle sidebar">
@@ -48,29 +48,30 @@ include "INC/navbar.php";
 						<li class="nav-item" role="presentation">
 							<a class="nav-link" id="settings-smtp-tab" data-toggle="tab" href="#settings-smtp" role="tab" aria-controls="settings-smtp" aria-selected="false"><i class="fas fa-envelope"></i><span>SMTP Test</span></a>
 						</li>
-						<li class="settings-menu-title settings-admin-section" style="display:none;">Management</li>
-						<li class="nav-item settings-admin-section" role="presentation" style="display:none;">
+						<li class="settings-menu-title settings-admin-section d-none">Management</li>
+						<li class="nav-item settings-admin-section d-none" role="presentation">
 							<a class="nav-link" id="settings-users-tab" data-toggle="tab" href="#settings-users" role="tab" aria-controls="settings-users" aria-selected="false"><i class="fas fa-users"></i><span>Users</span></a>
 						</li>
-						<li class="nav-item settings-owner-section" role="presentation" style="display:none;">
+						<li class="nav-item settings-owner-section d-none" role="presentation">
 							<a class="nav-link" id="settings-attendance-tab" data-toggle="tab" href="#settings-attendance" role="tab" aria-controls="settings-attendance" aria-selected="false"><i class="fas fa-user-clock"></i><span>Attendance Policy</span></a>
 						</li>
-						<li class="settings-menu-title settings-admin-section" style="display:none;">Security</li>
-						<li class="nav-item settings-admin-section" role="presentation" style="display:none;">
+						<li class="settings-menu-title settings-admin-section d-none">Security</li>
+						<li class="nav-item settings-admin-section d-none" role="presentation">
 							<a class="nav-link" id="settings-security-tab" data-toggle="tab" href="#settings-security" role="tab" aria-controls="settings-security" aria-selected="false"><i class="fas fa-shield-alt"></i><span>Remember Audit</span></a>
 						</li>
-						<li class="nav-item settings-admin-section" role="presentation" style="display:none;">
+						<li class="nav-item settings-admin-section d-none" role="presentation">
 							<a class="nav-link" id="settings-sessions-tab" data-toggle="tab" href="#settings-sessions" role="tab" aria-controls="settings-sessions" aria-selected="false"><i class="fas fa-laptop"></i><span>Sessions</span></a>
 						</li>
-						<li class="nav-item settings-admin-section" role="presentation" style="display:none;">
+						<li class="nav-item settings-admin-section d-none" role="presentation">
 							<a class="nav-link" id="settings-login-logs-tab" data-toggle="tab" href="#settings-login-logs" role="tab" aria-controls="settings-login-logs" aria-selected="false"><i class="fas fa-history"></i><span>Login Logs</span></a>
 						</li>
-						<li class="settings-menu-title settings-backup-section" style="display:none;">System</li>
-						<li class="nav-item settings-backup-section" role="presentation" style="display:none;">
+						<li class="settings-menu-title settings-backup-section d-none">System</li>
+						<li class="nav-item settings-backup-section d-none" role="presentation">
 							<a class="nav-link" id="settings-backups-tab" data-toggle="tab" href="#settings-backups" role="tab" aria-controls="settings-backups" aria-selected="false"><i class="fas fa-database"></i><span>Backups</span></a>
 						</li>
 					</ul>
 				</aside>
+				<div class="settings-sidebar-backdrop" id="settingsSidebarBackdrop" aria-hidden="true"></div>
 
 				<main class="settings-main" id="settingsMain">
 					<div class="tab-content settings-tab-content" id="settingsTabsContent">
@@ -101,9 +102,9 @@ include "INC/navbar.php";
 						</div>
 					</div>
 						</div>
-						<div class="tab-pane fade settings-owner-section" id="settings-attendance" role="tabpanel" aria-labelledby="settings-attendance-tab" style="display:none;">
+						<div class="tab-pane fade settings-owner-section d-none" id="settings-attendance" role="tabpanel" aria-labelledby="settings-attendance-tab">
 
-					<div class="card shadow-sm mb-4 settings-section-card settings-owner-section" style="display:none;">
+					<div class="card shadow-sm mb-4 settings-section-card settings-owner-section d-none">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
 							<span>Employee Attendance Policy</span>
 							<span class="badge badge-dark">Owner Only</span>
@@ -309,9 +310,9 @@ include "INC/navbar.php";
 						</div>
 					</div>
 						</div>
-						<div class="tab-pane fade settings-backup-section" id="settings-backups" role="tabpanel" aria-labelledby="settings-backups-tab" style="display:none;">
+						<div class="tab-pane fade settings-backup-section d-none" id="settings-backups" role="tabpanel" aria-labelledby="settings-backups-tab">
 
-					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section settings-backup-section" style="display:none;">
+					<div class="card shadow-sm settings-section-card mt-4 settings-admin-section settings-backup-section d-none">
 						<div class="card-header font-weight-bold d-flex justify-content-between align-items-center">
 							<span>Data Backup & Restore</span>
 							<div>

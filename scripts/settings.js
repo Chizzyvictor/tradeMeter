@@ -39,7 +39,7 @@ class SettingsPage {
       this.canManageUsers = this.app.hasPermission('manage_users');
 
       if (this.canManageUsers) {
-        $('.settings-admin-section').show();
+        $('.settings-admin-section').removeClass('d-none');
 
         this.AuthApp.loadCurrentUserContext((user) => {
           const roleName = String(user?.role || '').toLowerCase();
@@ -47,24 +47,24 @@ class SettingsPage {
           this.canManageBackups = roleName === 'owner';
 
           if (this.isOwner) {
-            $('.settings-owner-section').show();
-            this.loadAttendancePolicy();
+            $('.settings-owner-section').removeClass('d-none');
           } else {
-            $('.settings-owner-section').hide();
+            $('.settings-owner-section').addClass('d-none');
           }
 
           if (this.canManageBackups) {
-            $('.settings-backup-section').show();
+            $('.settings-backup-section').removeClass('d-none');
           } else {
-            $('.settings-backup-section').hide();
+            $('.settings-backup-section').addClass('d-none');
           }
 
           this.activateFirstVisibleTab();
           this.loadActiveTabData();
         });
       } else {
-        $('.settings-admin-section').hide();
-        $('.settings-backup-section').hide();
+        $('.settings-admin-section').addClass('d-none');
+        $('.settings-owner-section').addClass('d-none');
+        $('.settings-backup-section').addClass('d-none');
         this.activateFirstVisibleTab();
         this.loadActiveTabData();
       }
@@ -216,6 +216,13 @@ class SettingsPage {
     $('#toggleSettingsSidebar').on('click', () => {
       const $sidebar = $('#settingsSidebar');
       if (!$sidebar.length) return;
+
+      if (window.matchMedia('(max-width: 991.98px)').matches) {
+        const isOpen = $sidebar.toggleClass('mobile-open').hasClass('mobile-open');
+        $('body').toggleClass('settings-drawer-open', isOpen);
+        return;
+      }
+
       $sidebar.toggleClass('collapsed');
       try {
         const isCollapsed = $sidebar.hasClass('collapsed') ? '1' : '0';
@@ -223,6 +230,14 @@ class SettingsPage {
       } catch (_error) {
         // Ignore storage errors in private mode.
       }
+    });
+
+    $('#settingsSidebarBackdrop').on('click', () => {
+      this.closeMobileSidebar();
+    });
+
+    $('#settingsTabs a[data-toggle="tab"]').on('shown.bs.tab', () => {
+      this.closeMobileSidebar();
     });
 
     $(document).on('click', '.save-user-role-btn', (e) => {
@@ -262,6 +277,12 @@ class SettingsPage {
       if (!fileName) return;
       this.downloadEncryptedBackup(fileName);
     });
+  }
+
+  closeMobileSidebar() {
+    if (!window.matchMedia('(max-width: 991.98px)').matches) return;
+    $('#settingsSidebar').removeClass('mobile-open');
+    $('body').removeClass('settings-drawer-open');
   }
 
   debounceSearch(key, callback, delay = 300) {
