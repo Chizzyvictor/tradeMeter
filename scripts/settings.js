@@ -27,3 +27,26 @@ $(".settings-item").on("click", function () {
     }
 
 });
+
+    // CLOSE SIDEBAR ON BACK BUTTON (MOBILE)
+    $(document).on("click", ".back-btn", function (e) {
+      if ($(window).width() < 992) {
+        $("#sidebar").removeClass("show");
+    }
+});
+
+//CLOSE SIDEBAR ON OUTSIDE CLICK (MOBILE)
+$(document).on("click", function (e) {
+    if (!$(e.target).closest("#sidebar, #mobileMenuBtn").length) {
+        if ($(window).width() < 992) {
+            $("#sidebar").removeClass("show");
+        }
+    }
+});
+
+// CLOSE SIDEBAR ON RESIZE
+$(window).on("resize", function () {
+    if ($(window).width() >= 992) {
+        $("#sidebar").removeClass("show");
+    }
+});
