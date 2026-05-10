@@ -6,7 +6,7 @@
 
 /* SIDEBAR */
 
-.settings-sidebar{
+.settings-container .settings-sidebar{
     width:380px;
     background:#000;
     border-right:1px solid #1e1e1e;
@@ -14,11 +14,11 @@
     padding:20px;
 }
 
-.sidebar-header{
+.settings-container .sidebar-header{
     margin-bottom:30px;
 }
 
-.back-btn{
+.settings-container .back-btn{
     width:50px;
     height:50px;
     border:none;
@@ -29,11 +29,11 @@
     margin-bottom:30px;
 }
 
-.profile-box{
+.settings-container .profile-box{
     text-align:center;
 }
 
-.profile-avatar{
+.settings-container .profile-avatar{
     width:110px;
     height:110px;
     background:#f4c400;
@@ -48,7 +48,7 @@
     position:relative;
 }
 
-.edit-avatar-btn{
+.settings-container .edit-avatar-btn{
     position:absolute;
     right:0;
     bottom:0;
@@ -60,16 +60,16 @@
     color:#fff;
 }
 
-.profile-box h3{
+.settings-container .profile-box h3{
     margin-top:20px;
     font-size:30px;
 }
 
-.profile-box p{
+.settings-container .profile-box p{
     color:#aaa;
 }
 
-.menu-label{
+.settings-container .menu-label{
     color:#888;
     font-size:13px;
     margin:30px 10px 15px;
@@ -77,7 +77,7 @@
     letter-spacing:1px;
 }
 
-.settings-item{
+.settings-container .settings-item{
     width:100%;
     background:#2b2b2b;
     border:none;
@@ -91,81 +91,81 @@
     transition:.3s;
 }
 
-.settings-item:hover{
+.settings-container .settings-item:hover{
     background:#3a3a3a;
 }
 
-.settings-item.active{
+.settings-container .settings-item.active{
     border:2px solid #f4c400;
 }
 
-.item-left{
+.settings-container .item-left{
     display:flex;
     align-items:center;
     gap:15px;
 }
 
-.item-left i{
+.settings-container .item-left i{
     font-size:22px;
 }
 
-.item-left h4{
+.settings-container .item-left h4{
     margin:0;
     font-size:18px;
 }
 
-.item-left span{
+.settings-container .item-left span{
     font-size:13px;
     color:#aaa;
 }
 
 /* MAIN */
 
-.settings-main{
+.settings-container .settings-main{
     flex:1;
     padding:40px;
     background:#111;
 }
 
-.mobile-header{
+.settings-container .mobile-header{
     display:none;
 }
 
-.content-card{
+.settings-container .content-card{
     background:#1a1a1a;
     border-radius:24px;
     padding:30px;
 }
 
-.content-header{
+.settings-container .content-header{
     margin-bottom:30px;
 }
 
-.content-header h2{
+.settings-container .content-header h2{
     margin:0;
 }
 
-.content-header p{
+.settings-container .content-header p{
     color:#999;
 }
 
-.form-grid{
+.settings-container .form-grid{
     display:grid;
     grid-template-columns:1fr 1fr;
     gap:20px;
 }
 
-.form-group{
+.settings-container .form-group{
     margin-bottom:20px;
 }
 
-.form-group label{
+.settings-container .form-group label{
     display:block;
     margin-bottom:8px;
     color:#ccc;
 }
 
-.form-control{
+.settings-container .form-control{
     width:100%;
     height:50px;
     border:none;
@@ -175,7 +175,7 @@
     padding:0 15px;
 }
 
-.save-btn{
+.settings-container .save-btn{
     border:none;
     background:#f4c400;
     color:#000;
@@ -188,7 +188,7 @@
 
 @media(max-width:991px){
 
-    .settings-sidebar{
+    .settings-container .settings-sidebar{
         position:fixed;
         left:-100%;
         top:0;
@@ -197,18 +197,18 @@
         transition:.3s;
     }
 
-    .settings-sidebar.show{
+    .settings-container .settings-sidebar.show{
         left:0;
     }
 
-    .mobile-header{
+    .settings-container .mobile-header{
         display:flex;
         align-items:center;
         gap:15px;
         margin-bottom:25px;
     }
 
-    .mobile-header button{
+    .settings-container .mobile-header button{
         width:45px;
         height:45px;
         border:none;
@@ -217,12 +217,12 @@
         color:#fff;
     }
 
-    .settings-main{
+    .settings-container .settings-main{
         width:100%;
         padding:20px;
     }
 
-    .form-grid{
+    .settings-container .form-grid{
         grid-template-columns:1fr;
     }
 
@@ -230,10 +230,10 @@
 
 /* TAB SYSTEM */
 
-.tab-content{
+.settings-container .tab-content{
     display:none;
 }
 
-.tab-content.active{
+.settings-container .tab-content.active{
     display:block;
 }
