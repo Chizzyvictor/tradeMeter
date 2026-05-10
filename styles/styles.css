@@ -265,7 +265,7 @@ body:not(.dark-mode) .moon { opacity: 0; transform: scale(0.5); }
 body.dark-mode .sun { opacity: 0; transform: scale(0.5); }
 body.dark-mode .moon { opacity: 1; transform: scale(1); }
 
-.tab-content { display: none; }
+.tab-content:not(.settings-tab-content) { display: none; }
 #loginTab, #home { display: block; }
 
 /* ================================================================
