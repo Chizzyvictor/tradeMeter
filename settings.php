@@ -353,43 +353,87 @@ include "INC/navbar.php";
 			<div class="content-card">
 				<div class="content-header">
 					<h2>Backups</h2>
-					<p>Database backup & restore</p>
+					<p>Tenant JSON backup, encrypted export, and restore</p>
 				</div>
-				<button class="backup-btn">
-					<i class="fas fa-database"></i> Create Backup
-				</button>
-				<table class="table">
-					<thead>
-						<tr>
-							<th>Filename</th>
-							<th>Created At</th>
-							<th>Size</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>backup_2024-06-01.sql</td>
-							<td>2024-06-01 12:34:56</td>
-							<td>5 MB</td>
-							<td>
-								<button class="download-btn">
-									<i class="fas fa-download"></i> Download
-								</button>
-								<button class="restore-btn">
-									<i class="fas fa-upload"></i> Restore
-								</button>
-								<button class="delete-btn">
-									<i class="fas fa-trash"></i> Delete
-								</button>
-							</td>
-						</tr>
-					</tbody>
-				</table>
+
+				<div class="backup-status" id="backupCapabilityNotice">
+					<div class="backup-status-icon">
+						<i class="fas fa-shield-alt"></i>
+					</div>
+					<div class="backup-status-body">
+						<h4>Backup Capability</h4>
+						<p id="backupCapabilityText">Checking backup support...</p>
+					</div>
+				</div>
+
+				<div class="backup-grid">
+					<div class="backup-card">
+						<h5>Create And Export</h5>
+						<p>Generate a fresh tenant backup and download as JSON.</p>
+						<div class="backup-actions">
+							<button type="button" class="save-btn" id="createBackupBtn">
+								<i class="fas fa-plus-circle"></i> Create Backup
+							</button>
+							<button type="button" class="backup-btn-secondary" id="refreshBackupListBtn">
+								<i class="fas fa-sync-alt"></i> Refresh List
+							</button>
+						</div>
+					</div>
+
+					<div class="backup-card">
+						<h5>Restore From JSON</h5>
+						<p>Upload a .json tenant backup file and restore company data.</p>
+						<div class="backup-form-row">
+							<input type="file" class="form-control" id="restoreBackupFileInput" accept=".json,application/json">
+							<button type="button" class="backup-btn-secondary" id="restoreBackupUploadBtn">
+								<i class="fas fa-upload"></i> Restore JSON
+							</button>
+						</div>
+					</div>
+
+					<div class="backup-card">
+						<h5>Restore Encrypted Backup</h5>
+						<p>Upload a .json.enc file and provide passphrase to restore.</p>
+						<div class="backup-form-row">
+							<input type="file" class="form-control" id="restoreEncryptedBackupFileInput" accept=".enc,.json.enc,application/octet-stream">
+						</div>
+						<div class="backup-form-row">
+							<input type="password" class="form-control" id="restoreEncryptedPassphrase" placeholder="Enter passphrase">
+							<button type="button" class="backup-btn-secondary" id="restoreEncryptedBackupBtn">
+								<i class="fas fa-key"></i> Restore Encrypted
+							</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="backup-list-wrap">
+					<div class="backup-list-head">
+						<h5>Available Backups</h5>
+						<span id="backupListMeta">0 files</span>
+					</div>
+					<div class="table-responsive">
+						<table class="table backup-table" id="backupTable">
+							<thead>
+								<tr>
+									<th>Filename</th>
+									<th>Created</th>
+									<th>Size</th>
+									<th>Type</th>
+									<th>Actions</th>
+								</tr>
+							</thead>
+							<tbody id="backupListBody">
+								<tr>
+									<td colspan="5" class="backup-empty">No backups loaded yet.</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
 			</div>
 		</section>
 
-		
+
 
     </main>
 
