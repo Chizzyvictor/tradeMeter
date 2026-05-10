@@ -4,88 +4,128 @@ include "INC/isLogedin.php";
 include "INC/header.php";
 include "INC/navbar.php";
 ?>
-
-<!-- SETTINGS PAGE LAYOUT -->
-<div class="settings-app">
+<!-- SETTINGS APP -->
+<div class="settings-container">
 
     <!-- SIDEBAR -->
-    <aside class="settings-sidebar" id="settingsSidebar">
+    <aside class="settings-sidebar" id="sidebar">
 
-        <!-- TOP -->
-        <div class="sidebar-top">
+        <div class="sidebar-header">
 
-            <div class="company-box">
-                <img src="Images/companyDP/logo.jpg" alt="Logo">
-
-                <div class="company-info">
-                    <h4>Chivicks Concept</h4>
-                    <p>company@email.com</p>
-                </div>
-            </div>
-
-            <button class="sidebar-toggle" id="sidebarToggle">
-                <i class="fas fa-bars"></i>
+            <button class="back-btn">
+                <i class="fas fa-arrow-left"></i>
             </button>
+
+            <div class="profile-box">
+
+                <div class="profile-avatar">
+                    CV
+                    <button class="edit-avatar-btn">
+                        <i class="fas fa-pen"></i>
+                    </button>
+                </div>
+
+                <h3>Chidiogo Victor</h3>
+                <p>Administrator</p>
+
+            </div>
 
         </div>
 
-        <!-- MENU -->
-        <div class="sidebar-menu">
+        <div class="settings-menu">
 
-            <p class="menu-title">GENERAL</p>
+            <p class="menu-label">My Company</p>
 
-            <button class="menu-link active" data-tab="profileTab">
-                <i class="fas fa-building"></i>
-                <span>Company Profile</span>
+            <button class="settings-item active" data-tab="profileTab">
+                <div class="item-left">
+                    <i class="fas fa-building"></i>
+                    <div>
+                        <h4>Company Profile</h4>
+                        <span>Manage company details</span>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right"></i>
             </button>
 
-            <button class="menu-link" data-tab="smtpTab">
-                <i class="fas fa-envelope"></i>
-                <span>SMTP Settings</span>
+            <button class="settings-item" data-tab="smtpTab">
+                <div class="item-left">
+                    <i class="fas fa-envelope"></i>
+                    <div>
+                        <h4>SMTP Settings</h4>
+                        <span>Email configuration</span>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right"></i>
             </button>
 
-            <p class="menu-title">MANAGEMENT</p>
-
-            <button class="menu-link" data-tab="usersTab">
-                <i class="fas fa-users"></i>
-                <span>Users</span>
+            <button class="settings-item" data-tab="usersTab">
+                <div class="item-left">
+                    <i class="fas fa-users"></i>
+                    <div>
+                        <h4>Users</h4>
+                        <span>Manage staff accounts</span>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right"></i>
             </button>
 
-            <button class="menu-link" data-tab="attendanceTab">
-                <i class="fas fa-user-clock"></i>
-                <span>Attendance</span>
+            <button class="settings-item" data-tab="attendanceTab">
+                <div class="item-left">
+                    <i class="fas fa-user-clock"></i>
+                    <div>
+                        <h4>Attendance</h4>
+                        <span>Employee attendance policy</span>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right"></i>
             </button>
 
-            <p class="menu-title">SECURITY</p>
+            <p class="menu-label">Security</p>
 
-            <button class="menu-link" data-tab="sessionsTab">
-                <i class="fas fa-laptop"></i>
-                <span>Sessions</span>
+            <button class="settings-item" data-tab="sessionsTab">
+                <div class="item-left">
+                    <i class="fas fa-laptop"></i>
+                    <div>
+                        <h4>Sessions</h4>
+                        <span>Logged in devices</span>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right"></i>
             </button>
 
-            <button class="menu-link" data-tab="logsTab">
-                <i class="fas fa-history"></i>
-                <span>Login Logs</span>
+            <button class="settings-item" data-tab="logsTab">
+                <div class="item-left">
+                    <i class="fas fa-history"></i>
+                    <div>
+                        <h4>Login Logs</h4>
+                        <span>Authentication activity</span>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right"></i>
             </button>
 
-            <p class="menu-title">SYSTEM</p>
-
-            <button class="menu-link" data-tab="backupTab">
-                <i class="fas fa-database"></i>
-                <span>Backups</span>
+            <button class="settings-item" data-tab="backupTab">
+                <div class="item-left">
+                    <i class="fas fa-database"></i>
+                    <div>
+                        <h4>Backups</h4>
+                        <span>Database backup & restore</span>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right"></i>
             </button>
 
         </div>
 
     </aside>
 
-    <!-- MAIN -->
+    <!-- MAIN CONTENT -->
     <main class="settings-main">
 
-        <!-- MOBILE TOPBAR -->
-        <div class="mobile-topbar">
+        <!-- MOBILE HEADER -->
+        <div class="mobile-header">
 
-            <button class="mobile-toggle" id="mobileToggle">
+            <button id="mobileMenuBtn">
                 <i class="fas fa-bars"></i>
             </button>
 
@@ -93,293 +133,42 @@ include "INC/navbar.php";
 
         </div>
 
-        <!-- HEADER -->
-        <div class="main-header">
+        <!-- PROFILE TAB -->
+        <section class="tab-content active" id="profileTab">
 
-            <div>
-                <h2 id="pageTitle">Company Profile</h2>
-                <p>Manage company information and settings</p>
-            </div>
+            <div class="content-card">
 
-        </div>
-
-        <!-- CONTENT -->
-
-        <!-- PROFILE -->
-        <section class="settings-tab active" id="profileTab">
-
-            <div class="settings-card">
-
-                <div class="card-header">
-                    <h4>Company Profile</h4>
+                <div class="content-header">
+                    <h2>Company Profile</h2>
+                    <p>Manage company information</p>
                 </div>
 
-                <div class="card-body">
+                <form>
 
-                    <form>
+                    <div class="form-grid">
 
-                        <div class="form-grid">
-
-                            <div class="form-group">
-                                <label>Company Name</label>
-                                <input type="text" class="form-control">
-                            </div>
-
-                            <div class="form-group">
-                                <label>Company Email</label>
-                                <input type="email" class="form-control">
-                            </div>
-
+                        <div class="form-group">
+                            <label>Company Name</label>
+                            <input type="text" class="form-control">
                         </div>
 
                         <div class="form-group">
-                            <label>Company Logo</label>
-                            <input type="file" class="form-control">
-                        </div>
-
-                        <button class="btn-primary-custom">
-                            Save Changes
-                        </button>
-
-                    </form>
-
-                </div>
-
-            </div>
-
-        </section>
-
-        <!-- USERS -->
-        <section class="settings-tab" id="usersTab">
-
-            <div class="settings-card">
-
-                <div class="card-header">
-                    <h4>User Management</h4>
-                </div>
-
-                <div class="card-body">
-
-                    <div class="table-responsive">
-
-                        <table class="custom-table">
-
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                <tr>
-                                    <td colspan="4" class="empty-state">
-                                        No users found
-                                    </td>
-                                </tr>
-                            </tbody>
-
-                        </table>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </section>
-
-        <!-- SMTP -->
-        <section class="settings-tab" id="smtpTab">
-
-            <div class="settings-card">
-
-                <div class="card-header">
-                    <h4>SMTP Test</h4>
-                </div>
-
-                <div class="card-body">
-
-                    <form>
-
-                        <div class="form-group">
-                            <label>Test Email</label>
+                            <label>Company Email</label>
                             <input type="email" class="form-control">
                         </div>
 
-                        <button class="btn-primary-custom">
-                            Send Test Email
-                        </button>
-
-                    </form>
-
-                </div>
-
-            </div>
-
-        </section>
-
-        <!-- ATTENDANCE -->
-        <section class="settings-tab" id="attendanceTab">
-
-            <div class="settings-card">
-
-                <div class="card-header">
-                    <h4>Attendance Settings</h4>
-                </div>
-
-                <div class="card-body">
-
-                    <form>
-
-                        <div class="form-grid">
-
-                            <div class="form-group">
-                                <label>Resumption Time</label>
-                                <input type="time" class="form-control">
-                            </div>
-
-                            <div class="form-group">
-                                <label>Late Fine (0-15 mins)</label>
-                                <input type="number" class="form-control" step="0.01">
-                            </div>
-
-                        </div>
-
-                        <button class="btn-primary-custom">
-                            Save Settings
-                        </button>
-
-                    </form>
-
-                </div>
-
-            </div>
-
-        </section>
-
-        <!-- SESSIONS -->
-        <section class="settings-tab" id="sessionsTab">
-
-            <div class="settings-card">
-
-                <div class="card-header">
-                    <h4>Active Sessions</h4>
-                </div>
-
-                <div class="card-body">
-
-                    <div class="table-responsive">
-
-                        <table class="custom-table">
-
-                            <thead>
-                                <tr>
-                                    <th>User</th>
-                                    <th>Device</th>
-                                    <th>IP</th>
-                                    <th>Last Active</th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                <tr>
-                                    <td colspan="4" class="empty-state">
-                                        No sessions found
-                                    </td>
-                                </tr>
-                            </tbody>
-
-                        </table>
-
                     </div>
 
-                </div>
-
-            </div>
-
-        </section>
-
-        <!-- LOGS -->
-        <section class="settings-tab" id="logsTab">
-
-            <div class="settings-card">
-
-                <div class="card-header">
-                    <h4>Login Logs</h4>
-                </div>
-
-                <div class="card-body">
-
-                    <div class="table-responsive">
-
-                        <table class="custom-table">
-
-                            <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    <th>User</th>
-                                    <th>IP</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                <tr>
-                                    <td colspan="4" class="empty-state">
-                                        No logs found
-                                    </td>
-                                </tr>
-                            </tbody>
-
-                        </table>
-
+                    <div class="form-group">
+                        <label>Company Logo</label>
+                        <input type="file" class="form-control">
                     </div>
 
-                </div>
+                    <button class="save-btn">
+                        Save Changes
+                    </button>
 
-            </div>
-
-        </section>
-
-        <!-- BACKUPS -->
-        <section class="settings-tab" id="backupTab">
-
-            <div class="settings-card">
-
-                <div class="card-header">
-                    <h4>Backups</h4>
-                </div>
-
-                <div class="card-body">
-
-                    <div class="table-responsive">
-
-                        <table class="custom-table">
-
-                            <thead>
-                                <tr>
-                                    <th>Created</th>
-                                    <th>File</th>
-                                    <th>Size</th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                <tr>
-                                    <td colspan="3" class="empty-state">
-                                        No backups found
-                                    </td>
-                                </tr>
-                            </tbody>
-
-                        </table>
-
-                    </div>
-
-                </div>
+                </form>
 
             </div>
 
@@ -388,7 +177,6 @@ include "INC/navbar.php";
     </main>
 
 </div>
-
 <?php include "INC/footer.php"; ?>
 <script src="scripts/settings.js?v=<?= asset_ver('scripts/settings.js') ?>"></script>
 

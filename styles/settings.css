@@ -1,166 +1,162 @@
-/* SETTINGS LAYOUT */
+body{
+    background:#0d0d0d;
+    font-family:Arial, sans-serif;
+    color:#fff;
+}
 
-.settings-app{
+.settings-container{
     display:flex;
     min-height:100vh;
-    background:#f4f7fb;
 }
 
 /* SIDEBAR */
 
 .settings-sidebar{
-    width:260px;
-    background:#111827;
-    color:#fff;
-    transition:.3s;
-    display:flex;
-    flex-direction:column;
-    position:fixed;
-    left:0;
-    top:0;
-    height:100vh;
-    z-index:999;
-}
-
-.settings-sidebar.collapsed{
-    width:80px;
-}
-
-.settings-sidebar.collapsed span,
-.settings-sidebar.collapsed .menu-title,
-.settings-sidebar.collapsed .company-info{
-    display:none;
-}
-
-/* TOP */
-
-.sidebar-top{
+    width:380px;
+    background:#000;
+    border-right:1px solid #1e1e1e;
+    overflow-y:auto;
     padding:20px;
-    border-bottom:1px solid rgba(255,255,255,.1);
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
 }
 
-.company-box{
-    display:flex;
-    align-items:center;
-    gap:12px;
+.sidebar-header{
+    margin-bottom:30px;
 }
 
-.company-box img{
-    width:45px;
-    height:45px;
-    border-radius:10px;
-    object-fit:cover;
-}
-
-.company-info h4{
-    margin:0;
-    font-size:15px;
-}
-
-.company-info p{
-    margin:0;
-    font-size:12px;
-    opacity:.7;
-}
-
-.sidebar-toggle{
-    background:none;
+.back-btn{
+    width:50px;
+    height:50px;
     border:none;
+    border-radius:50%;
+    background:#1f1f1f;
     color:#fff;
+    font-size:18px;
+    margin-bottom:30px;
+}
+
+.profile-box{
+    text-align:center;
+}
+
+.profile-avatar{
+    width:110px;
+    height:110px;
+    background:#f4c400;
+    border-radius:50%;
+    margin:auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:42px;
+    font-weight:bold;
+    color:#fff;
+    position:relative;
+}
+
+.edit-avatar-btn{
+    position:absolute;
+    right:0;
+    bottom:0;
+    width:38px;
+    height:38px;
+    border:none;
+    border-radius:50%;
+    background:#2b2b2b;
+    color:#fff;
+}
+
+.profile-box h3{
+    margin-top:20px;
+    font-size:30px;
+}
+
+.profile-box p{
+    color:#aaa;
+}
+
+.menu-label{
+    color:#888;
+    font-size:13px;
+    margin:30px 10px 15px;
+    text-transform:uppercase;
+    letter-spacing:1px;
+}
+
+.settings-item{
+    width:100%;
+    background:#2b2b2b;
+    border:none;
+    border-radius:24px;
+    padding:18px;
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:14px;
+    transition:.3s;
+}
+
+.settings-item:hover{
+    background:#3a3a3a;
+}
+
+.settings-item.active{
+    border:2px solid #f4c400;
+}
+
+.item-left{
+    display:flex;
+    align-items:center;
+    gap:15px;
+}
+
+.item-left i{
+    font-size:22px;
+}
+
+.item-left h4{
+    margin:0;
     font-size:18px;
 }
 
-/* MENU */
-
-.sidebar-menu{
-    padding:20px 12px;
-    overflow-y:auto;
-}
-
-.menu-title{
-    font-size:11px;
-    color:#9ca3af;
-    margin:18px 12px 10px;
-    font-weight:600;
-}
-
-.menu-link{
-    width:100%;
-    border:none;
-    background:none;
-    color:#d1d5db;
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding:12px;
-    border-radius:12px;
-    margin-bottom:6px;
-    transition:.2s;
-    cursor:pointer;
-}
-
-.menu-link:hover{
-    background:#1f2937;
-}
-
-.menu-link.active{
-    background:#2563eb;
-    color:#fff;
-}
-
-.menu-link i{
-    width:20px;
+.item-left span{
+    font-size:13px;
+    color:#aaa;
 }
 
 /* MAIN */
 
 .settings-main{
     flex:1;
-    margin-left:260px;
+    padding:40px;
+    background:#111;
+}
+
+.mobile-header{
+    display:none;
+}
+
+.content-card{
+    background:#1a1a1a;
+    border-radius:24px;
     padding:30px;
-    transition:.3s;
 }
 
-/* HEADER */
-
-.main-header{
-    margin-bottom:25px;
+.content-header{
+    margin-bottom:30px;
 }
 
-.main-header h2{
-    margin-bottom:6px;
+.content-header h2{
+    margin:0;
 }
 
-.main-header p{
-    color:#6b7280;
+.content-header p{
+    color:#999;
 }
-
-/* CARD */
-
-.settings-card{
-    background:#fff;
-    border-radius:18px;
-    box-shadow:0 2px 10px rgba(0,0,0,.05);
-    overflow:hidden;
-}
-
-.card-header{
-    padding:20px;
-    border-bottom:1px solid #eee;
-}
-
-.card-body{
-    padding:20px;
-}
-
-/* FORM */
 
 .form-grid{
     display:grid;
-    grid-template-columns:repeat(2,1fr);
+    grid-template-columns:1fr 1fr;
     gap:20px;
 }
 
@@ -171,90 +167,64 @@
 .form-group label{
     display:block;
     margin-bottom:8px;
-    font-weight:600;
+    color:#ccc;
 }
 
 .form-control{
     width:100%;
-    height:48px;
-    border:1px solid #d1d5db;
-    border-radius:12px;
-    padding:0 14px;
-}
-
-.btn-primary-custom{
-    background:#2563eb;
-    color:#fff;
+    height:50px;
     border:none;
-    padding:12px 20px;
-    border-radius:12px;
-    cursor:pointer;
+    border-radius:14px;
+    background:#2b2b2b;
+    color:#fff;
+    padding:0 15px;
 }
 
-/* TABLE */
-
-.custom-table{
-    width:100%;
-    border-collapse:collapse;
-}
-
-.custom-table th,
-.custom-table td{
-    padding:14px;
-    border-bottom:1px solid #eee;
-}
-
-.empty-state{
-    text-align:center;
-    color:#9ca3af;
-}
-
-/* TABS */
-
-.settings-tab{
-    display:none;
-}
-
-.settings-tab.active{
-    display:block;
+.save-btn{
+    border:none;
+    background:#f4c400;
+    color:#000;
+    padding:14px 25px;
+    border-radius:14px;
+    font-weight:bold;
 }
 
 /* MOBILE */
 
-.mobile-topbar{
-    display:none;
-}
-
 @media(max-width:991px){
 
     .settings-sidebar{
-        left:-260px;
+        position:fixed;
+        left:-100%;
+        top:0;
+        z-index:999;
+        height:100%;
+        transition:.3s;
     }
 
-    .settings-sidebar.mobile-open{
+    .settings-sidebar.show{
         left:0;
     }
 
-    .settings-main{
-        margin-left:0;
-        width:100%;
-        padding:20px;
-    }
-
-    .mobile-topbar{
+    .mobile-header{
         display:flex;
         align-items:center;
         gap:15px;
-        margin-bottom:20px;
+        margin-bottom:25px;
     }
 
-    .mobile-toggle{
-        background:#2563eb;
+    .mobile-header button{
+        width:45px;
+        height:45px;
         border:none;
+        border-radius:12px;
+        background:#2b2b2b;
         color:#fff;
-        width:40px;
-        height:40px;
-        border-radius:10px;
+    }
+
+    .settings-main{
+        width:100%;
+        padding:20px;
     }
 
     .form-grid{
@@ -263,3 +233,12 @@
 
 }
 
+/* TAB SYSTEM */
+
+.tab-content{
+    display:none;
+}
+
+.tab-content.active{
+    display:block;
+}

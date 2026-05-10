@@ -1,37 +1,29 @@
-// SIDEBAR COLLAPSE
-
-$('#sidebarToggle').click(function(){
-
-    $('#settingsSidebar').toggleClass('collapsed');
-
-});
-
-
 // MOBILE SIDEBAR
-
-$('#mobileToggle').click(function(){
-
-    $('#settingsSidebar').toggleClass('mobile-open');
-
+$("#mobileMenuBtn").on("click", function () {
+    $("#sidebar").toggleClass("show");
 });
-
 
 // TAB SWITCHING
+$(".settings-item").on("click", function () {
 
-$('.menu-link').click(function(){
+    // REMOVE ACTIVE CLASS
+    $(".settings-item").removeClass("active");
 
-    $('.menu-link').removeClass('active');
+    // ADD ACTIVE TO CLICKED ITEM
+    $(this).addClass("active");
 
-    $(this).addClass('active');
+    // GET TARGET TAB
+    let target = $(this).data("tab");
 
-    const tab = $(this).data('tab');
+    // HIDE ALL TABS
+    $(".tab-content").removeClass("active");
 
-    $('.settings-tab').removeClass('active');
+    // SHOW SELECTED TAB
+    $("#" + target).addClass("active");
 
-    $('#' + tab).addClass('active');
-
-    // CHANGE PAGE TITLE
-
-    $('#pageTitle').text($(this).find('span').text());
+    // CLOSE SIDEBAR ON MOBILE
+    if ($(window).width() < 992) {
+        $("#sidebar").removeClass("show");
+    }
 
 });
