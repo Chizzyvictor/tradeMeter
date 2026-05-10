@@ -174,6 +174,223 @@ include "INC/navbar.php";
 
         </section>
 
+		<!-- SMTP SETTINGS TAB -->
+		<section class="tab-content" id="smtpTab">
+
+			<div class="content-card">
+
+				<div class="content-header">
+					<h2>SMTP Settings</h2>
+					<p>Configure email server</p>
+				</div>
+
+				<form>
+
+					<div class="form-grid">
+
+						<div class="form-group">
+							<label>SMTP Host</label>
+							<input type="text" class="form-control">
+						</div>	
+						<div class="form-group">
+							<label>SMTP Port</label>
+							<input type="number" class="form-control">
+						</div>
+						<div class="form-group">
+							<label>SMTP Username</label>
+							<input type="text" class="form-control">
+						</div>
+						<div class="form-group">
+							<label>SMTP Password</label>
+							<input type="password" class="form-control">
+						</div>	
+						<div class="form-group">
+							<label>Encryption</label>
+							<select class="form-control">
+								<option value="">None</option>
+								<option value="ssl">SSL</option>
+								<option value="tls">TLS</option>
+							</select>
+						</div>
+					</div>
+				</button class="save-btn">
+					Save Changes
+				</button>
+				</form>
+			</div>
+		</section>
+
+		<!-- USERS TAB -->
+		<section class="tab-content" id="usersTab">
+			<div class="content-card">
+				<div class="content-header">
+					<h2>Users</h2>
+					<p>Manage staff accounts</p>
+				</div>
+				<button class="add-user-btn">
+					<i class="fas fa-user-plus"></i> Add New User
+				</button>
+				<table class="table">
+					<thead>
+						<tr>
+							<th>Name</th>
+							<th>Email</th>
+							<th>Role</th>
+							<th>Status</th>
+							<th>Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>John Doe</td>
+							<td>john.doe@example.com</td>
+							<td>Admin</td>
+							<td>Active</td>
+							<td>
+								<button class="edit-btn">
+									<i class="fas fa-edit"></i> Edit
+								</button>
+								<button class="delete-btn">
+									<i class="fas fa-trash"></i> Delete
+								</button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<!-- ATTENDANCE TAB -->
+		<section class="tab-content" id="attendanceTab">
+			<div class="content-card">
+				<div class="content-header">
+					<h2>Attendance</h2>
+					<p>Employee attendance policy</p>
+				</div>
+				<form>
+					<div class="form-group">
+						<label>Working Hours</label>
+						<input type="text" class="form-control">
+					</div>
+					<div class="form-group">
+						<label>Late Arrival Policy</label>
+						<textarea class="form-control" rows="3"></textarea>
+					</div>
+					<div class="form-group">
+						<label>Absence Policy</label>
+						<textarea class="form-control" rows="3"></textarea>
+					</div>
+					<button class="save-btn">	
+						Save Changes
+					</button>
+				</form>
+			</div>
+		</section>	
+
+
+		<!-- SESSIONS TAB -->
+		<section class="tab-content" id="sessionsTab">
+			<div class="content-card">
+				<div class="content-header">
+					<h2>Sessions</h2>
+					<p>Logged in devices</p>
+				</div>
+				<table class="table">
+					<thead>
+						<tr>
+							<th>Device</th>
+							<th>IP Address</th>
+							<th>Last Active</th>
+							<th>Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Chrome on Windows</td>
+							<td>192.168.1.1</td>
+							<td>2024-06-01 12:34:56</td>
+							<td>
+								<button class="logout-btn">
+									<i class="fas fa-sign-out-alt"></i> Logout
+								</button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</section>	
+
+		<!-- LOGIN LOGS TAB -->
+		<section class="tab-content" id="logsTab">
+			<div class="content-card">
+				<div class="content-header">
+					<h2>Login Logs</h2>
+					<p>Authentication activity</p>
+				</div>
+				<table class="table">
+					<thead>
+						<tr>
+							<th>User</th>
+							<th>IP Address</th>
+							<th>Timestamp</th>
+							<th>Status</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>John Doe</td>
+							<td>192.168.1.1</td>
+							<td>2024-06-01 12:34:56</td>
+							<td>Success</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<!-- BACKUP TAB -->
+		<section class="tab-content" id="backupTab">
+			<div class="content-card">
+				<div class="content-header">
+					<h2>Backups</h2>
+					<p>Database backup & restore</p>
+				</div>
+				<button class="backup-btn">
+					<i class="fas fa-database"></i> Create Backup
+				</button>
+				<table class="table">
+					<thead>
+						<tr>
+							<th>Filename</th>
+							<th>Created At</th>
+							<th>Size</th>
+							<th>Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>backup_2024-06-01.sql</td>
+							<td>2024-06-01 12:34:56</td>
+							<td>5 MB</td>
+							<td>
+								<button class="download-btn">
+									<i class="fas fa-download"></i> Download
+								</button>
+								<button class="restore-btn">
+									<i class="fas fa-upload"></i> Restore
+								</button>
+								<button class="delete-btn">
+									<i class="fas fa-trash"></i> Delete
+								</button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		
+
     </main>
 
 </div>
