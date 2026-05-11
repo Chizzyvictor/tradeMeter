@@ -36,8 +36,8 @@ function toEpochInt($value): int {
 }
 
 function settingsPasswordPolicyError(string $password): string {
-    if (strlen($password) < 8) {
-        return 'Password must be at least 8 characters';
+    if (strlen($password) < 10) {
+        return 'Password must be at least 10 characters';
     }
 
     if (!preg_match('/[A-Z]/', $password)) {
@@ -52,7 +52,176 @@ function settingsPasswordPolicyError(string $password): string {
         return 'Password must include at least one number';
     }
 
+    if (!preg_match('/[\W_]/', $password)) {
+        return 'Password must include at least one special character';
+    }
+
     return '';
+}
+
+function settingsVerifyCsrfToken(): void {
+    $requestToken = (string)($_POST['csrf_token'] ?? '');
+    $sessionToken = (string)($_SESSION['csrf_token'] ?? '');
+    if ($requestToken === '' || $sessionToken === '' || !hash_equals($sessionToken, $requestToken)) {
+        respond('error', 'Invalid CSRF token.');
+    }
+}
+
+function settingsEnforceRateLimit(string $bucket, int $maxRequests, int $windowSeconds): void {
+    $max = max(1, $maxRequests);
+    $window = max(1, $windowSeconds);
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    $key = 'settings_rl_' . md5($bucket . '|' . $ip . '|' . intval($_SESSION['user_id'] ?? 0));
+    $now = time();
+
+    if (!isset($_SESSION[$key]) || !is_array($_SESSION[$key])) {
+        $_SESSION[$key] = ['start' => $now, 'count' => 0];
+    }
+
+    $start = intval($_SESSION[$key]['start'] ?? $now);
+    $count = intval($_SESSION[$key]['count'] ?? 0);
+
+    if (($now - $start) >= $window) {
+        $start = $now;
+        $count = 0;
+    }
+
+    $count += 1;
+    $_SESSION[$key] = ['start' => $start, 'count' => $count];
+
+    if ($count > $max) {
+        respond('error', 'Too many requests. Please try again shortly.');
+    }
+}
+
+function settingsSafeIdentifier(string $identifier): string {
+    $safe = preg_replace('/[^a-zA-Z0-9_]/', '', $identifier);
+    if (!is_string($safe) || $safe === '') {
+        throw new RuntimeException('Invalid SQL identifier');
+    }
+
+    return $safe;
+}
+
+function settingsSafeTable(string $table): string {
+    $allowed = array_merge(
+        settingsTenantDirectTables(),
+        array_map(static function (array $cfg): string {
+            return (string)($cfg['table'] ?? '');
+        }, settingsTenantSubTables())
+    );
+
+    if (!in_array($table, $allowed, true)) {
+        throw new RuntimeException('Invalid table reference');
+    }
+
+    return settingsSafeIdentifier($table);
+}
+
+function settingsMaxBackupUploadBytes(): int {
+    return 50 * 1024 * 1024;
+}
+
+function settingsValidateUploadedBackupSize(array $file): void {
+    $size = intval($file['size'] ?? 0);
+    if ($size <= 0) {
+        respond('error', 'Uploaded backup file is empty');
+    }
+
+    if ($size > settingsMaxBackupUploadBytes()) {
+        respond('error', 'Backup file too large. Maximum allowed size is 50MB.');
+    }
+}
+
+function settingsRoleIdIsOwner(AppDbConnection $db, int $cid, int $roleId): bool {
+    if ($roleId <= 0) {
+        return false;
+    }
+
+    $stmt = $db->prepare("SELECT 1
+                         FROM roles
+                         WHERE role_id = :rid
+                           AND cid = :cid
+                           AND lower(role_name) = 'owner'
+                         LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bindValue(':rid', $roleId, SQLITE3_INTEGER);
+    $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    return (bool)$stmt->execute()->fetchArray(SQLITE3_ASSOC);
+}
+
+function settingsUserIsOwner(AppDbConnection $db, int $cid, int $userId): bool {
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $stmt = $db->prepare("SELECT 1
+                         FROM user_roles ur
+                         JOIN roles r ON r.role_id = ur.role_id
+                         JOIN users u ON u.user_id = ur.user_id
+                         WHERE ur.user_id = :uid
+                           AND u.cid = :cid
+                           AND lower(r.role_name) = 'owner'
+                         LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+    $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    return (bool)$stmt->execute()->fetchArray(SQLITE3_ASSOC);
+}
+
+function settingsCountOwners(AppDbConnection $db, int $cid, bool $activeOnly = false): int {
+    $sql = "SELECT COUNT(DISTINCT u.user_id) AS total
+            FROM users u
+            JOIN user_roles ur ON ur.user_id = u.user_id
+            JOIN roles r ON r.role_id = ur.role_id
+            WHERE u.cid = :cid
+              AND lower(r.role_name) = 'owner'";
+
+    if ($activeOnly) {
+        $sql .= ' AND u.is_active = 1';
+    }
+
+    $stmt = $db->prepare($sql);
+    if (!$stmt) {
+        return 0;
+    }
+
+    $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    return intval($row['total'] ?? 0);
+}
+
+function settingsDeleteSessionFile(string $sessionId): void {
+    if ($sessionId === '') {
+        return;
+    }
+
+    $safeSessionId = preg_replace('/[^a-zA-Z0-9,-]/', '', $sessionId);
+    if (!is_string($safeSessionId) || $safeSessionId === '') {
+        return;
+    }
+
+    $savePath = trim((string)session_save_path());
+    if ($savePath === '') {
+        $savePath = sys_get_temp_dir();
+    }
+
+    $basePath = explode(';', $savePath);
+    $dir = trim((string)($basePath[count($basePath) - 1] ?? ''));
+    if ($dir === '' || !is_dir($dir)) {
+        return;
+    }
+
+    $sessionFile = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . 'sess_' . $safeSessionId;
+    if (is_file($sessionFile)) {
+        @unlink($sessionFile);
+    }
 }
 
 function settingsPaginationFromRequest(int $defaultPerPage = 10, int $maxPerPage = 50): array {
@@ -95,7 +264,7 @@ function settingsBackupDir(): string {
     $configured = trim((string)(appEnv('TM_BACKUP_DIR', '') ?? ''));
     $dir = $configured !== ''
         ? $configured
-        : (__DIR__ . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'backups');
+        : (dirname(__DIR__) . DIRECTORY_SEPARATOR . 'private_storage' . DIRECTORY_SEPARATOR . 'backups');
 
     $dir = rtrim($dir, '/\\');
     if (!is_dir($dir)) {
@@ -274,8 +443,9 @@ function settingsTenantSubTables(): array {
 }
 
 function settingsTableColumns(AppDbConnection $db, string $table): array {
-    $safeTable = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
-    if ($safeTable === '') {
+    try {
+        $safeTable = settingsSafeTable($table);
+    } catch (Throwable $e) {
         return [];
     }
 
@@ -324,6 +494,7 @@ function settingsExportTenantBackupData(AppDbConnection $db, int $cid): array {
     ];
 
     foreach (settingsTenantDirectTables() as $table) {
+        $table = settingsSafeTable($table);
         if (!settingsTableExists($db, $table) || !settingsTableHasColumn($db, $table, 'cid')) {
             continue;
         }
@@ -344,10 +515,10 @@ function settingsExportTenantBackupData(AppDbConnection $db, int $cid): array {
     }
 
     foreach (settingsTenantSubTables() as $cfg) {
-        $table = (string)$cfg['table'];
-        $parent = (string)$cfg['parent'];
-        $parentPk = (string)$cfg['parent_pk'];
-        $childFk = (string)$cfg['child_fk'];
+        $table = settingsSafeTable((string)$cfg['table']);
+        $parent = settingsSafeTable((string)$cfg['parent']);
+        $parentPk = settingsSafeIdentifier((string)$cfg['parent_pk']);
+        $childFk = settingsSafeIdentifier((string)$cfg['child_fk']);
 
         if (!settingsTableExists($db, $table) || !settingsTableExists($db, $parent)) {
             continue;
@@ -471,6 +642,7 @@ function settingsBindDynamicValue(AppDbStatement $stmt, string $param, $value): 
 }
 
 function settingsInsertTableRows(AppDbConnection $db, string $table, array $rows, int $cid, bool $forceCid): void {
+    $table = settingsSafeTable($table);
     $columns = settingsTableColumns($db, $table);
     if (empty($columns)) {
         return;
@@ -529,10 +701,10 @@ function settingsInsertTableRows(AppDbConnection $db, string $table, array $rows
 
 function settingsDeleteTenantRows(AppDbConnection $db, int $cid): void {
     foreach (settingsTenantSubTables() as $cfg) {
-        $table = (string)$cfg['table'];
-        $parent = (string)$cfg['parent'];
-        $parentPk = (string)$cfg['parent_pk'];
-        $childFk = (string)$cfg['child_fk'];
+        $table = settingsSafeTable((string)$cfg['table']);
+        $parent = settingsSafeTable((string)$cfg['parent']);
+        $parentPk = settingsSafeIdentifier((string)$cfg['parent_pk']);
+        $childFk = settingsSafeIdentifier((string)$cfg['child_fk']);
 
         if (!settingsTableExists($db, $table) || !settingsTableExists($db, $parent)) {
             continue;
@@ -551,6 +723,7 @@ function settingsDeleteTenantRows(AppDbConnection $db, int $cid): void {
 
     $tables = array_reverse(settingsTenantDirectTables());
     foreach ($tables as $table) {
+        $table = settingsSafeTable($table);
         if (!settingsTableExists($db, $table) || !settingsTableHasColumn($db, $table, 'cid')) {
             continue;
         }
@@ -642,7 +815,7 @@ function settingsBuildEncryptedBackupPayload(string $plainData, string $passphra
         return null;
     }
 
-    $cipher = 'AES-256-CBC';
+    $cipher = 'aes-256-gcm';
     $ivLength = openssl_cipher_iv_length($cipher);
     if (!is_int($ivLength) || $ivLength <= 0) {
         return null;
@@ -655,12 +828,17 @@ function settingsBuildEncryptedBackupPayload(string $plainData, string $passphra
     }
 
     $key = hash('sha256', $passphrase, true);
-    $cipherText = openssl_encrypt($plainData, $cipher, $key, OPENSSL_RAW_DATA, $iv);
+    $tag = '';
+    $cipherText = openssl_encrypt($plainData, $cipher, $key, OPENSSL_RAW_DATA, $iv, $tag);
     if ($cipherText === false) {
         return null;
     }
 
-    return "TMENC1\n" . base64_encode($iv) . "\n" . base64_encode($cipherText);
+    if (!is_string($tag) || strlen($tag) < 12) {
+        return null;
+    }
+
+    return "TMENC2\n" . base64_encode($iv) . "\n" . base64_encode($tag) . "\n" . base64_encode($cipherText);
 }
 
 function settingsDecryptEncryptedBackupPayload(string $payload, string $passphrase): ?string {
@@ -674,28 +852,63 @@ function settingsDecryptEncryptedBackupPayload(string $payload, string $passphra
     }
 
     $version = trim((string)$parts[0]);
-    $ivB64 = trim((string)$parts[1]);
-    $cipherB64 = trim((string)$parts[2]);
 
-    if ($version !== 'TMENC1' || $ivB64 === '' || $cipherB64 === '') {
-        return null;
+    if ($version === 'TMENC2') {
+        if (count($parts) < 4) {
+            return null;
+        }
+
+        $ivB64 = trim((string)$parts[1]);
+        $tagB64 = trim((string)$parts[2]);
+        $cipherB64 = trim((string)$parts[3]);
+        if ($ivB64 === '' || $tagB64 === '' || $cipherB64 === '') {
+            return null;
+        }
+
+        $iv = base64_decode($ivB64, true);
+        $tag = base64_decode($tagB64, true);
+        $cipherText = base64_decode($cipherB64, true);
+        if (!is_string($iv) || !is_string($tag) || !is_string($cipherText)) {
+            return null;
+        }
+
+        $cipher = 'aes-256-gcm';
+        $ivLength = openssl_cipher_iv_length($cipher);
+        if (!is_int($ivLength) || $ivLength <= 0 || strlen($iv) !== $ivLength) {
+            return null;
+        }
+
+        $key = hash('sha256', $passphrase, true);
+        $plain = openssl_decrypt($cipherText, $cipher, $key, OPENSSL_RAW_DATA, $iv, $tag);
+        return is_string($plain) ? $plain : null;
     }
 
-    $iv = base64_decode($ivB64, true);
-    $cipherText = base64_decode($cipherB64, true);
-    if (!is_string($iv) || !is_string($cipherText)) {
-        return null;
+    // Backward compatibility for older encrypted backups.
+    if ($version === 'TMENC1') {
+        $ivB64 = trim((string)$parts[1]);
+        $cipherB64 = trim((string)$parts[2]);
+        if ($ivB64 === '' || $cipherB64 === '') {
+            return null;
+        }
+
+        $iv = base64_decode($ivB64, true);
+        $cipherText = base64_decode($cipherB64, true);
+        if (!is_string($iv) || !is_string($cipherText)) {
+            return null;
+        }
+
+        $cipher = 'AES-256-CBC';
+        $ivLength = openssl_cipher_iv_length($cipher);
+        if (!is_int($ivLength) || $ivLength <= 0 || strlen($iv) !== $ivLength) {
+            return null;
+        }
+
+        $key = hash('sha256', $passphrase, true);
+        $plain = openssl_decrypt($cipherText, $cipher, $key, OPENSSL_RAW_DATA, $iv);
+        return is_string($plain) ? $plain : null;
     }
 
-    $cipher = 'AES-256-CBC';
-    $ivLength = openssl_cipher_iv_length($cipher);
-    if (!is_int($ivLength) || $ivLength <= 0 || strlen($iv) !== $ivLength) {
-        return null;
-    }
-
-    $key = hash('sha256', $passphrase, true);
-    $plain = openssl_decrypt($cipherText, $cipher, $key, OPENSSL_RAW_DATA, $iv);
-    return is_string($plain) ? $plain : null;
+    return null;
 }
 
 function settingsApplyAutoBackupRetention(int $cid): void {
@@ -744,6 +957,23 @@ ensureRbacSchemaForSettings($db);
 seedRolesAndPermissionsForSettings($db, $cid);
 settingsEnsureBackupAuditTable($db);
 
+$settingsStrictCsrfActions = [
+    'updateProfile',
+    'createUser',
+    'updateUserRole',
+    'toggleUserStatus',
+    'revokeSession',
+    'createBackup',
+    'downloadEncryptedBackup',
+    'restoreEncryptedBackup',
+    'restoreBackup',
+    'seedDemoUsers'
+];
+
+if (is_string($action) && in_array($action, $settingsStrictCsrfActions, true)) {
+    settingsVerifyCsrfToken();
+}
+
 switch ($action) {
     case 'getBackupCapability':
         requirePermission($db, 'manage_users');
@@ -774,6 +1004,7 @@ switch ($action) {
 
     case 'updateProfile':
         requirePermission($db, 'manage_users');
+        settingsEnforceRateLimit('settings_update_profile', 20, 300);
         $name = safe_input($_POST['cName'] ?? '');
         $email = strtolower(safe_input($_POST['cEmail'] ?? ''));
 
@@ -914,6 +1145,7 @@ switch ($action) {
 
     case 'createUser':
         requirePermission($db, 'manage_users');
+        settingsEnforceRateLimit('settings_create_user', 15, 300);
         $fullName = safe_input($_POST['full_name'] ?? '');
         $email = strtolower(safe_input($_POST['email'] ?? ''));
         $password = $_POST['password'] ?? '';
@@ -971,6 +1203,7 @@ switch ($action) {
 
     case 'updateUserRole':
         requirePermission($db, 'manage_users');
+        settingsEnforceRateLimit('settings_update_user_role', 30, 300);
         $userId = intval($_POST['user_id'] ?? 0);
         $roleId = intval($_POST['role_id'] ?? 0);
 
@@ -992,6 +1225,15 @@ switch ($action) {
             respond('error', 'Role not found');
         }
 
+        $targetIsOwner = settingsUserIsOwner($db, $cid, $userId);
+        $newRoleIsOwner = settingsRoleIdIsOwner($db, $cid, $roleId);
+        if ($targetIsOwner && !$newRoleIsOwner) {
+            $ownerCount = settingsCountOwners($db, $cid, false);
+            if ($ownerCount <= 1) {
+                respond('error', 'Cannot remove the last Owner role.');
+            }
+        }
+
         if (!assignSingleRoleToUser($db, $userId, $roleId)) {
             respond('error', 'Failed to update user role');
         }
@@ -1001,6 +1243,7 @@ switch ($action) {
 
     case 'toggleUserStatus':
         requirePermission($db, 'manage_users');
+        settingsEnforceRateLimit('settings_toggle_user_status', 30, 300);
         $userId = intval($_POST['user_id'] ?? 0);
         $isActive = intval($_POST['is_active'] ?? 0) === 1 ? 1 : 0;
         $currentUserId = intval($_SESSION['user_id'] ?? 0);
@@ -1011,6 +1254,13 @@ switch ($action) {
 
         if ($currentUserId > 0 && $userId === $currentUserId && $isActive === 0) {
             respond('error', 'You cannot deactivate your own account');
+        }
+
+        if ($isActive === 0 && settingsUserIsOwner($db, $cid, $userId)) {
+            $activeOwnerCount = settingsCountOwners($db, $cid, true);
+            if ($activeOwnerCount <= 1) {
+                respond('error', 'Cannot deactivate the last active Owner.');
+            }
         }
 
         $stmt = $db->prepare("UPDATE users
@@ -1029,6 +1279,7 @@ switch ($action) {
 
     case 'seedDemoUsers':
         requirePermission($db, 'manage_users');
+        settingsEnforceRateLimit('settings_seed_demo_users', 3, 300);
         $managerPassword = 'Manager123!';
         $staffPassword = 'Staff123!';
 
@@ -1219,6 +1470,7 @@ switch ($action) {
 
     case 'revokeSession':
         requirePermission($db, 'manage_users');
+        settingsEnforceRateLimit('settings_revoke_session', 40, 300);
         $sessionId = trim((string)($_POST['session_id'] ?? ''));
         if ($sessionId === '') {
             respond('error', 'Session ID is required');
@@ -1247,6 +1499,8 @@ switch ($action) {
         if (!$del->execute()) {
             respond('error', 'Failed to revoke session');
         }
+
+        settingsDeleteSessionFile($sessionId);
 
         respond('success', 'Session revoked', [
             'revoked_session_id' => $sessionId,
@@ -1343,6 +1597,7 @@ switch ($action) {
 
     case 'createBackup':
         settingsRequireBackupAccess($db, $cid);
+        settingsEnforceRateLimit('settings_create_backup', 10, 300);
 
         $targetPath = settingsCreateBackupFile($db, $cid, false);
         if ($targetPath === null) {
@@ -1454,6 +1709,7 @@ switch ($action) {
 
     case 'downloadEncryptedBackup':
         settingsRequireBackupAccess($db, $cid);
+        settingsEnforceRateLimit('settings_download_encrypted_backup', 10, 300);
 
         $filename = basename(trim((string)($_POST['filename'] ?? '')));
         $passphrase = (string)($_POST['passphrase'] ?? '');
@@ -1502,6 +1758,7 @@ switch ($action) {
 
     case 'restoreEncryptedBackup':
         settingsRequireBackupAccess($db, $cid);
+        settingsEnforceRateLimit('settings_restore_encrypted_backup', 5, 300);
 
         $passphrase = (string)($_POST['passphrase'] ?? '');
         if (strlen($passphrase) < 8) {
@@ -1512,6 +1769,7 @@ switch ($action) {
         if (!is_array($file) || intval($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             respond('error', 'Encrypted backup file is required');
         }
+        settingsValidateUploadedBackupSize($file);
 
         $originalName = basename((string)($file['name'] ?? ''));
         if ($originalName === '' || preg_match('/\.json\.enc$/i', $originalName) !== 1) {
@@ -1560,6 +1818,7 @@ switch ($action) {
 
     case 'restoreBackup':
         settingsRequireBackupAccess($db, $cid);
+        settingsEnforceRateLimit('settings_restore_backup', 5, 300);
 
         $filename = basename(trim((string)($_POST['filename'] ?? '')));
         $jsonPayload = null;
@@ -1574,6 +1833,7 @@ switch ($action) {
             if (!is_array($file) || intval($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
                 respond('error', 'Backup JSON file is required');
             }
+            settingsValidateUploadedBackupSize($file);
 
             $originalName = basename((string)($file['name'] ?? ''));
             if ($originalName === '' || preg_match('/\.json$/i', $originalName) !== 1) {
