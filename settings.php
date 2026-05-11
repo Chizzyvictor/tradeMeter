@@ -241,15 +241,6 @@ include "INC/navbar.php";
 				</div>
 				<div class="table-responsive">
 					<table class="table settings-mobile-cards">
-						<thead>
-							<tr>
-								<th>Name</th>
-								<th>Email</th>
-								<th>Role</th>
-								<th>Status</th>
-								<th>Actions</th>
-							</tr>
-						</thead>
 						<tbody id="usersTableBody">
 							<tr>
 								<td data-label="Name">John Doe</td>
@@ -316,14 +307,6 @@ include "INC/navbar.php";
 				</div>
 				<div class="table-responsive">
 					<table class="table settings-mobile-cards">
-						<thead>
-							<tr>
-								<th>Device</th>
-								<th>IP Address</th>
-								<th>Last Active</th>
-								<th>Actions</th>
-							</tr>
-						</thead>
 						<tbody id="sessionsTableBody">
 							<tr>
 								<td data-label="Device">Chrome on Windows</td>
@@ -362,17 +345,9 @@ include "INC/navbar.php";
 				</div>
 				<div class="table-responsive">
 					<table class="table settings-mobile-cards">
-						<thead>
-							<tr>
-								<th>User</th>
-								<th>IP Address</th>
-								<th>Timestamp</th>
-								<th>Status</th>
-							</tr>
-						</thead>
 						<tbody id="loginLogsTableBody">
-							<tr>
-								<td colspan="4" class="text-muted">Loading login logs...</td>
+							<tr class="table-empty-row">
+								<td colspan="4" data-label="Status" class="text-muted">Loading login logs...</td>
 							</tr>
 						</tbody>
 					</table>
@@ -448,15 +423,7 @@ include "INC/navbar.php";
 					</div>
 					<div class="table-responsive">
 						<table class="table backup-table settings-mobile-cards" id="backupTable">
-							<thead>
-								<tr>
-									<th>Filename</th>
-									<th>Created</th>
-									<th>Size</th>
-									<th>Type</th>
-									<th>Actions</th>
-								</tr>
-							</thead>
+
 							<tbody id="backupListBody">
 								<tr class="table-empty-row">
 									<td colspan="5" class="backup-empty">No backups loaded yet.</td>
