@@ -18,15 +18,15 @@ include "INC/navbar.php";
 
             <div class="profile-box">
 
-                <div class="profile-avatar">
+				<div class="profile-avatar" id="settingsSidebarAvatar">
                     CV
                     <button class="edit-avatar-btn">
                         <i class="fas fa-pen"></i>
                     </button>
                 </div>
 
-                <h3>Chidiogo Victor</h3>
-                <p>Administrator</p>
+				<h3 id="settingsSidebarName">-</h3>
+				<p id="settingsSidebarRole">-</p>
 
             </div>
 
@@ -143,28 +143,28 @@ include "INC/navbar.php";
                     <p>Manage company information</p>
                 </div>
 
-                <form>
+				<form id="companyProfileForm" enctype="multipart/form-data">
 
                     <div class="form-grid">
 
                         <div class="form-group">
                             <label>Company Name</label>
-                            <input type="text" class="form-control">
+							<input type="text" class="form-control" id="companyName" name="cName" required>
                         </div>
 
                         <div class="form-group">
                             <label>Company Email</label>
-                            <input type="email" class="form-control">
+							<input type="email" class="form-control" id="companyEmail" name="cEmail" required>
                         </div>
 
                     </div>
 
                     <div class="form-group">
                         <label>Company Logo</label>
-                        <input type="file" class="form-control">
+						<input type="file" class="form-control" id="companyLogo" name="companyLogo" accept="image/*">
                     </div>
 
-                    <button class="save-btn">
+					<button type="submit" class="save-btn" id="saveCompanyProfileBtn">
                         Save Changes
                     </button>
 
@@ -184,38 +184,43 @@ include "INC/navbar.php";
 					<p>Configure email server</p>
 				</div>
 
-				<form>
+				<form id="smtpSettingsForm">
 
 					<div class="form-grid">
 
 						<div class="form-group">
 							<label>SMTP Host</label>
-							<input type="text" class="form-control">
+							<input type="text" class="form-control" id="smtpHost" disabled>
 						</div>	
 						<div class="form-group">
 							<label>SMTP Port</label>
-							<input type="number" class="form-control">
+							<input type="number" class="form-control" id="smtpPort" disabled>
 						</div>
 						<div class="form-group">
 							<label>SMTP Username</label>
-							<input type="text" class="form-control">
+							<input type="text" class="form-control" id="smtpUsername" disabled>
 						</div>
 						<div class="form-group">
 							<label>SMTP Password</label>
-							<input type="password" class="form-control">
+							<input type="password" class="form-control" id="smtpPassword" disabled>
 						</div>	
 						<div class="form-group">
 							<label>Encryption</label>
-							<select class="form-control">
+							<select class="form-control" id="smtpEncryption" disabled>
 								<option value="">None</option>
 								<option value="ssl">SSL</option>
 								<option value="tls">TLS</option>
 							</select>
 						</div>
 					</div>
-				</button class="save-btn">
-					Save Changes
-				</button>
+					<div class="form-group">
+						<label>Send Test Email</label>
+						<div class="d-flex flex-wrap">
+							<input type="email" class="form-control mr-2 mb-2" id="smtpTestEmail" placeholder="recipient@example.com" style="max-width:320px;">
+							<button type="submit" class="save-btn mb-2" id="sendSmtpTestEmailBtn">Send Test Email</button>
+						</div>
+						<small class="text-muted d-block" id="smtpSettingsInfo">SMTP settings are managed by server configuration in this build.</small>
+					</div>
 				</form>
 			</div>
 		</section>
@@ -227,9 +232,13 @@ include "INC/navbar.php";
 					<h2>Users</h2>
 					<p>Manage staff accounts</p>
 				</div>
-				<button class="add-user-btn">
+				<button type="button" class="add-user-btn" id="seedDemoUsersBtn">
 					<i class="fas fa-user-plus"></i> Add New User
 				</button>
+				<div class="form-group mt-3" style="max-width: 340px;">
+					<label>Search Users</label>
+					<input type="text" class="form-control" id="usersSearchInput" placeholder="Search by name or email">
+				</div>
 				<table class="table">
 					<thead>
 						<tr>
@@ -240,7 +249,7 @@ include "INC/navbar.php";
 							<th>Actions</th>
 						</tr>
 					</thead>
-					<tbody>
+					<tbody id="usersTableBody">
 						<tr>
 							<td>John Doe</td>
 							<td>john.doe@example.com</td>
@@ -267,20 +276,24 @@ include "INC/navbar.php";
 					<h2>Attendance</h2>
 					<p>Employee attendance policy</p>
 				</div>
-				<form>
+				<form id="attendancePolicyForm">
 					<div class="form-group">
-						<label>Working Hours</label>
-						<input type="text" class="form-control">
+						<label>Resumption Time</label>
+						<input type="time" class="form-control" id="attendanceResumptionTime" required>
 					</div>
 					<div class="form-group">
-						<label>Late Arrival Policy</label>
-						<textarea class="form-control" rows="3"></textarea>
+						<label>0-15 mins late fine</label>
+						<input type="number" class="form-control" id="attendanceFine0To15" min="0" step="0.01" required>
 					</div>
 					<div class="form-group">
-						<label>Absence Policy</label>
-						<textarea class="form-control" rows="3"></textarea>
+						<label>15-60 mins late fine</label>
+						<input type="number" class="form-control" id="attendanceFine15To60" min="0" step="0.01" required>
 					</div>
-					<button class="save-btn">	
+					<div class="form-group">
+						<label>1hr+ late fine</label>
+						<input type="number" class="form-control" id="attendanceFine60Plus" min="0" step="0.01" required>
+					</div>
+					<button type="submit" class="save-btn" id="saveAttendancePolicyBtn">	
 						Save Changes
 					</button>
 				</form>
@@ -295,6 +308,10 @@ include "INC/navbar.php";
 					<h2>Sessions</h2>
 					<p>Logged in devices</p>
 				</div>
+				<div class="d-flex flex-wrap mb-2">
+					<input type="text" class="form-control mr-2 mb-2" id="sessionsSearchInput" placeholder="Search user, IP or device" style="max-width:320px;">
+					<button type="button" class="backup-btn-secondary mb-2" id="refreshSessionsBtn"><i class="fas fa-sync-alt"></i> Refresh</button>
+				</div>
 				<table class="table">
 					<thead>
 						<tr>
@@ -304,7 +321,7 @@ include "INC/navbar.php";
 							<th>Actions</th>
 						</tr>
 					</thead>
-					<tbody>
+					<tbody id="sessionsTableBody">
 						<tr>
 							<td>Chrome on Windows</td>
 							<td>192.168.1.1</td>
@@ -327,6 +344,18 @@ include "INC/navbar.php";
 					<h2>Login Logs</h2>
 					<p>Authentication activity</p>
 				</div>
+				<div class="d-flex flex-wrap mb-2">
+					<select class="form-control mr-2 mb-2" id="loginLogsStatusFilter" style="max-width:220px;">
+						<option value="all">All statuses</option>
+						<option value="failed">Failed</option>
+						<option value="blocked">Blocked</option>
+						<option value="success">Success</option>
+						<option value="success_auto">Success (Auto)</option>
+						<option value="failed_auto">Failed (Auto)</option>
+					</select>
+					<input type="text" class="form-control mr-2 mb-2" id="loginLogsSearchInput" placeholder="Search user, IP or device" style="max-width:320px;">
+					<button type="button" class="backup-btn-secondary mb-2" id="refreshLoginLogsBtn"><i class="fas fa-sync-alt"></i> Refresh</button>
+				</div>
 				<table class="table">
 					<thead>
 						<tr>
@@ -336,7 +365,7 @@ include "INC/navbar.php";
 							<th>Status</th>
 						</tr>
 					</thead>
-					<tbody>
+					<tbody id="loginLogsTableBody">
 						<tr>
 							<td>John Doe</td>
 							<td>192.168.1.1</td>
@@ -410,6 +439,9 @@ include "INC/navbar.php";
 					<div class="backup-list-head">
 						<h5>Available Backups</h5>
 						<span id="backupListMeta">0 files</span>
+					</div>
+					<div class="d-flex flex-wrap mb-2">
+						<input type="text" class="form-control mr-2 mb-2" id="backupsSearchInput" placeholder="Search backup filename" style="max-width:320px;">
 					</div>
 					<div class="table-responsive">
 						<table class="table backup-table" id="backupTable">
