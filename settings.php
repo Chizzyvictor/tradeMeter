@@ -239,33 +239,35 @@ include "INC/navbar.php";
 					<label>Search Users</label>
 					<input type="text" class="form-control" id="usersSearchInput" placeholder="Search by name or email">
 				</div>
-				<table class="table">
-					<thead>
-						<tr>
-							<th>Name</th>
-							<th>Email</th>
-							<th>Role</th>
-							<th>Status</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody id="usersTableBody">
-						<tr>
-							<td>John Doe</td>
-							<td>john.doe@example.com</td>
-							<td>Admin</td>
-							<td>Active</td>
-							<td>
-								<button class="edit-btn">
-									<i class="fas fa-edit"></i> Edit
-								</button>
-								<button class="delete-btn">
-									<i class="fas fa-trash"></i> Delete
-								</button>
-							</td>
-						</tr>
-					</tbody>
-				</table>
+				<div class="table-responsive">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>Name</th>
+								<th>Email</th>
+								<th>Role</th>
+								<th>Status</th>
+								<th>Actions</th>
+							</tr>
+						</thead>
+						<tbody id="usersTableBody">
+							<tr>
+								<td>John Doe</td>
+								<td>john.doe@example.com</td>
+								<td>Admin</td>
+								<td>Active</td>
+								<td>
+									<button class="edit-btn">
+										<i class="fas fa-edit"></i> Edit
+									</button>
+									<button class="delete-btn">
+										<i class="fas fa-trash"></i> Delete
+									</button>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 			</div>
 		</section>
 
@@ -312,28 +314,30 @@ include "INC/navbar.php";
 					<input type="text" class="form-control mr-2 mb-2" id="sessionsSearchInput" placeholder="Search user, IP or device" style="max-width:320px;">
 					<button type="button" class="backup-btn-secondary mb-2" id="refreshSessionsBtn"><i class="fas fa-sync-alt"></i> Refresh</button>
 				</div>
-				<table class="table">
-					<thead>
-						<tr>
-							<th>Device</th>
-							<th>IP Address</th>
-							<th>Last Active</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody id="sessionsTableBody">
-						<tr>
-							<td>Chrome on Windows</td>
-							<td>192.168.1.1</td>
-							<td>2024-06-01 12:34:56</td>
-							<td>
-								<button class="logout-btn">
-									<i class="fas fa-sign-out-alt"></i> Logout
-								</button>
-							</td>
-						</tr>
-					</tbody>
-				</table>
+				<div class="table-responsive">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>Device</th>
+								<th>IP Address</th>
+								<th>Last Active</th>
+								<th>Actions</th>
+							</tr>
+						</thead>
+						<tbody id="sessionsTableBody">
+							<tr>
+								<td>Chrome on Windows</td>
+								<td>192.168.1.1</td>
+								<td>2024-06-01 12:34:56</td>
+								<td>
+									<button class="logout-btn">
+										<i class="fas fa-sign-out-alt"></i> Logout
+									</button>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 			</div>
 		</section>	
 
@@ -356,24 +360,26 @@ include "INC/navbar.php";
 					<input type="text" class="form-control mr-2 mb-2" id="loginLogsSearchInput" placeholder="Search user, IP or device" style="max-width:320px;">
 					<button type="button" class="backup-btn-secondary mb-2" id="refreshLoginLogsBtn"><i class="fas fa-sync-alt"></i> Refresh</button>
 				</div>
-				<table class="table">
-					<thead>
-						<tr>
-							<th>User</th>
-							<th>IP Address</th>
-							<th>Timestamp</th>
-							<th>Status</th>
-						</tr>
-					</thead>
-					<tbody id="loginLogsTableBody">
-						<tr>
-							<td>John Doe</td>
-							<td>192.168.1.1</td>
-							<td>2024-06-01 12:34:56</td>
-							<td>Success</td>
-						</tr>
-					</tbody>
-				</table>
+				<div class="table-responsive">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>User</th>
+								<th>IP Address</th>
+								<th>Timestamp</th>
+								<th>Status</th>
+							</tr>
+						</thead>
+						<tbody id="loginLogsTableBody">
+							<tr>
+								<td>John Doe</td>
+								<td>192.168.1.1</td>
+								<td>2024-06-01 12:34:56</td>
+								<td>Success</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 			</div>
 		</section>
 
