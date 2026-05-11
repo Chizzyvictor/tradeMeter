@@ -90,6 +90,11 @@ class SettingsTemplateApp {
             this.createUserFromModal();
         });
 
+        $('#editUserForm').on('submit', (event) => {
+            event.preventDefault();
+            this.updateUserFromModal();
+        });
+
         $('#refreshSessionsBtn').on('click', () => {
             this.loadSessions();
         });
@@ -143,6 +148,12 @@ class SettingsTemplateApp {
             const roleId = Number($(`#roleSelect_${userId}`).val()) || 0;
             if (!userId || !roleId) return;
             this.updateUserRole(userId, roleId);
+        });
+
+        $(document).on('click', '.edit-user-btn', (event) => {
+            const userId = Number($(event.currentTarget).data('id')) || 0;
+            if (!userId) return;
+            this.openEditUserModal(userId);
         });
 
         $(document).on('click', '.toggle-user-status-btn', (event) => {
@@ -481,6 +492,9 @@ class SettingsTemplateApp {
             dir: 'companyDP',
             onSuccess: () => {
                 this.loadProfile();
+                if (this.auth && typeof this.auth.loadCompanyLogo === 'function') {
+                    this.auth.loadCompanyLogo();
+                }
             },
             onComplete: () => {
                 this.setButtonLoading($btn, false);
@@ -530,11 +544,10 @@ class SettingsTemplateApp {
         });
     }
 
-    renderCreateUserRoleOptions() {
-        const $roleSelect = $('#createUserRole');
+    renderRoleOptions(selector, selectedRoleId = 0) {
+        const $roleSelect = $(selector);
         if (!$roleSelect.length) return;
 
-        const currentValue = String($roleSelect.val() || '');
         const optionsHtml = ['<option value="">Select role</option>']
             .concat((this.roles || []).map((role) => {
                 const roleId = Number(role.role_id) || 0;
@@ -545,18 +558,55 @@ class SettingsTemplateApp {
             .join('');
 
         $roleSelect.html(optionsHtml);
-        if (currentValue) {
-            $roleSelect.val(currentValue);
+        if (Number(selectedRoleId) > 0) {
+            $roleSelect.val(String(selectedRoleId));
         }
+    }
+
+    renderCreateUserRoleOptions() {
+        this.renderRoleOptions('#createUserRole');
+    }
+
+    renderEditUserRoleOptions(selectedRoleId = 0) {
+        this.renderRoleOptions('#editUserRole', selectedRoleId);
     }
 
     openCreateUserModal() {
         const showModal = () => {
-            this.renderCreateUserRoleOptions();
             $('#createUserForm')[0]?.reset();
             this.renderCreateUserRoleOptions();
             $('#createUserModal').modal('show');
             setTimeout(() => $('#createUserFullName').trigger('focus'), 150);
+        };
+
+        if (!Array.isArray(this.roles) || !this.roles.length) {
+            this.loadRoles(() => showModal());
+            return;
+        }
+
+        showModal();
+    }
+
+    openEditUserModal(userId) {
+        const showModal = () => {
+            const $row = $(`#usersTableBody button.edit-user-btn[data-id="${userId}"]`).closest('tr');
+            if (!$row.length) {
+                this.app.showAlert('User row not found', 'error');
+                return;
+            }
+
+            const fullName = String($row.find('td[data-label="Name"]').text() || '').trim();
+            const email = String($row.find('td[data-label="Email"]').text() || '').trim();
+            const roleId = Number($row.find(`#roleSelect_${userId}`).val() || 0);
+
+            $('#editUserId').val(String(userId));
+            $('#editUserFullName').val(fullName);
+            $('#editUserEmail').val(email);
+            $('#editUserPassword').val('');
+            this.renderEditUserRoleOptions(roleId);
+
+            $('#editUserModal').modal('show');
+            setTimeout(() => $('#editUserFullName').trigger('focus'), 150);
         };
 
         if (!Array.isArray(this.roles) || !this.roles.length) {
@@ -593,6 +643,42 @@ class SettingsTemplateApp {
             onSuccess: () => {
                 $('#createUserForm')[0]?.reset();
                 $('#createUserModal').modal('hide');
+                this.loadUsers();
+            },
+            onComplete: () => {
+                this.setButtonLoading($btn, false);
+            }
+        });
+    }
+
+    updateUserFromModal() {
+        const $btn = $('#editUserSubmitBtn');
+        const userId = Number($('#editUserId').val() || 0);
+        const fullName = String($('#editUserFullName').val() || '').trim();
+        const email = String($('#editUserEmail').val() || '').trim();
+        const password = String($('#editUserPassword').val() || '');
+        const roleId = Number($('#editUserRole').val() || 0);
+
+        if (!userId || !fullName || !email || roleId <= 0) {
+            this.app.showAlert('Please complete all required user fields', 'error');
+            return;
+        }
+
+        this.setButtonLoading($btn, true, 'Updating...');
+
+        this.app.ajaxHelper({
+            url: 'apiSettings.php',
+            action: 'updateUserDetails',
+            data: {
+                user_id: userId,
+                full_name: fullName,
+                email,
+                password,
+                role_id: roleId
+            },
+            onSuccess: () => {
+                $('#editUserForm')[0]?.reset();
+                $('#editUserModal').modal('hide');
                 this.loadUsers();
             },
             onComplete: () => {
@@ -654,6 +740,7 @@ class SettingsTemplateApp {
                     </td>
                     <td data-label="Status">${statusBadge}</td>
                     <td data-label="Actions">
+                        <button type="button" class="edit-btn edit-user-btn" data-id="${userId}"><i class="fas fa-edit"></i> Edit</button>
                         <button type="button" class="edit-btn save-user-role-btn" data-id="${userId}"><i class="fas fa-save"></i> Save Role</button>
                         <button type="button" class="delete-btn toggle-user-status-btn" data-id="${userId}" data-next="${isActive ? 0 : 1}">
                             <i class="fas ${isActive ? 'fa-user-slash' : 'fa-user-check'}"></i> ${isActive ? 'Deactivate' : 'Activate'}

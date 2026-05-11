@@ -513,6 +513,50 @@ include "INC/navbar.php";
 			</div>
 		</div>
 
+		<!-- EDIT USER MODAL -->
+		<div class="modal fade" id="editUserModal" tabindex="-1" role="dialog" aria-labelledby="editUserModalLabel" aria-hidden="true">
+			<div class="modal-dialog modal-dialog-centered" role="document">
+				<div class="modal-content shadow rounded">
+					<form id="editUserForm">
+						<input type="hidden" id="editUserId" value="">
+						<div class="modal-header bg-primary text-white">
+							<h5 class="modal-title" id="editUserModalLabel">
+								<i class="fas fa-user-edit mr-2"></i>Edit User
+							</h5>
+							<button type="button" class="close text-white" data-dismiss="modal" aria-label="Close edit user modal">
+								<span aria-hidden="true">&times;</span>
+							</button>
+						</div>
+						<div class="modal-body">
+							<div class="form-group">
+								<label for="editUserFullName">Full Name</label>
+								<input type="text" class="form-control" id="editUserFullName" placeholder="Enter full name" required>
+							</div>
+							<div class="form-group">
+								<label for="editUserEmail">Email</label>
+								<input type="email" class="form-control" id="editUserEmail" placeholder="Enter email" required>
+							</div>
+							<div class="form-group">
+								<label for="editUserPassword">Password</label>
+								<input type="password" class="form-control" id="editUserPassword" placeholder="Leave blank to keep current password">
+								<small class="form-text text-muted">Only enter a value if you want to reset the password.</small>
+							</div>
+							<div class="form-group">
+								<label for="editUserRole">Role</label>
+								<select class="form-control" id="editUserRole" required>
+									<option value="">Select role</option>
+								</select>
+							</div>
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+							<button type="submit" class="btn btn-primary" id="editUserSubmitBtn">Update User</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+
 
 
     </main>

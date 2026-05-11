@@ -989,6 +989,7 @@ settingsEnsureBackupAuditTable($db);
 $settingsStrictCsrfActions = [
     'updateProfile',
     'createUser',
+    'updateUserDetails',
     'updateUserRole',
     'toggleUserStatus',
     'revokeSession',
@@ -1228,6 +1229,100 @@ switch ($action) {
         }
 
         respond('success', 'User created successfully');
+        break;
+
+    case 'updateUserDetails':
+        requirePermission($db, 'manage_users');
+        settingsEnforceRateLimit('settings_update_user_details', 20, 300);
+        $userId = intval($_POST['user_id'] ?? 0);
+        $fullName = safe_input($_POST['full_name'] ?? '');
+        $email = strtolower(safe_input($_POST['email'] ?? ''));
+        $password = (string)($_POST['password'] ?? '');
+        $roleId = intval($_POST['role_id'] ?? 0);
+
+        if ($userId <= 0) {
+            respond('error', 'User is required');
+        }
+        if ($fullName === '') {
+            respond('error', 'Full name is required');
+        }
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            respond('error', 'Valid email is required');
+        }
+        if ($roleId <= 0) {
+            respond('error', 'Role is required');
+        }
+
+        $userStmt = $db->prepare("SELECT user_id, full_name, email FROM users WHERE user_id = :uid AND cid = :cid LIMIT 1");
+        $userStmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+        $userStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $currentUser = $userStmt->execute()->fetchArray(SQLITE3_ASSOC);
+        if (!$currentUser) {
+            respond('error', 'User not found');
+        }
+
+        $roleStmt = $db->prepare("SELECT role_id FROM roles WHERE role_id = :rid AND cid = :cid LIMIT 1");
+        $roleStmt->bindValue(':rid', $roleId, SQLITE3_INTEGER);
+        $roleStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        if (!$roleStmt->execute()->fetchArray(SQLITE3_ASSOC)) {
+            respond('error', 'Invalid role selected');
+        }
+
+        $emailStmt = $db->prepare("SELECT 1 FROM users WHERE cid = :cid AND lower(email) = lower(:email) AND user_id != :uid LIMIT 1");
+        $emailStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $emailStmt->bindValue(':email', $email, SQLITE3_TEXT);
+        $emailStmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+        if ($emailStmt->execute()->fetchArray(SQLITE3_ASSOC)) {
+            respond('error', 'Email already exists');
+        }
+
+        $targetIsOwner = settingsUserIsOwner($db, $cid, $userId);
+        $newRoleIsOwner = settingsRoleIdIsOwner($db, $cid, $roleId);
+        if ($targetIsOwner && !$newRoleIsOwner) {
+            $ownerCount = settingsCountOwners($db, $cid, false);
+            if ($ownerCount <= 1) {
+                respond('error', 'Cannot remove the last Owner role.');
+            }
+        }
+
+        $fields = [
+            'full_name = :full_name',
+            'email = :email'
+        ];
+        $params = [
+            ':full_name' => $fullName,
+            ':email' => $email
+        ];
+
+        $newPassword = trim($password);
+        if ($newPassword !== '') {
+            $passwordPolicyError = settingsPasswordPolicyError($newPassword);
+            if ($passwordPolicyError !== '') {
+                respond('error', $passwordPolicyError);
+            }
+            $fields[] = 'password = :password';
+            $params[':password'] = password_hash($newPassword, PASSWORD_DEFAULT);
+        }
+
+        $sql = 'UPDATE users SET ' . implode(', ', $fields) . ' WHERE user_id = :uid AND cid = :cid';
+        $stmt = $db->prepare($sql);
+        $stmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+        $stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $stmt->bindValue(':full_name', $fullName, SQLITE3_TEXT);
+        $stmt->bindValue(':email', $email, SQLITE3_TEXT);
+        if (isset($params[':password'])) {
+            $stmt->bindValue(':password', $params[':password'], SQLITE3_TEXT);
+        }
+
+        if (!$stmt->execute()) {
+            respond('error', 'Failed to update user details');
+        }
+
+        if (!assignSingleRoleToUser($db, $userId, $roleId)) {
+            respond('error', 'User updated but role assignment failed');
+        }
+
+        respond('success', 'User details updated successfully');
         break;
 
     case 'updateUserRole':
