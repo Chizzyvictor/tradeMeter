@@ -372,10 +372,7 @@ include "INC/navbar.php";
 						</thead>
 						<tbody id="loginLogsTableBody">
 							<tr>
-								<td data-label="User">John Doe</td>
-								<td data-label="IP Address">192.168.1.1</td>
-								<td data-label="Timestamp">2024-06-01 12:34:56</td>
-								<td data-label="Status">Success</td>
+								<td colspan="4" class="text-muted">Loading login logs...</td>
 							</tr>
 						</tbody>
 					</table>

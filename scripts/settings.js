@@ -888,6 +888,11 @@ class SettingsTemplateApp {
 
     loadLoginLogs() {
         const status = String($('#loginLogsStatusFilter').val() || 'all').trim();
+        const $tbody = $('#loginLogsTableBody');
+        if ($tbody.length) {
+            $tbody.html('<tr class="table-empty-row"><td colspan="4" class="text-muted">Loading login logs...</td></tr>');
+        }
+
         this.app.ajaxHelper({
             url: 'apiSettings.php',
             action: 'loadLoginLogs',
@@ -899,7 +904,15 @@ class SettingsTemplateApp {
             },
             silent: true,
             onSuccess: (res) => {
-                this.renderLoginLogs(Array.isArray(res.data) ? res.data : []);
+                const rows = Array.isArray(res.data)
+                    ? res.data
+                    : (Array.isArray(res.rows) ? res.rows : []);
+                this.renderLoginLogs(rows);
+            },
+            onError: () => {
+                if ($tbody.length) {
+                    $tbody.html('<tr class="table-empty-row"><td colspan="4" class="text-danger">Failed to load login logs.</td></tr>');
+                }
             },
             onComplete: () => {
                 this.setTabLoading('logsTab', false);
