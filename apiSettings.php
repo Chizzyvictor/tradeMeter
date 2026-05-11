@@ -266,10 +266,23 @@ function settingsBackupDir(): string {
         ? $configured
         : (dirname(__DIR__) . DIRECTORY_SEPARATOR . 'private_storage' . DIRECTORY_SEPARATOR . 'backups');
 
-    $dir = rtrim($dir, '/\\');
-    if (!is_dir($dir)) {
-        mkdir($dir, 0777, true);
+    return rtrim($dir, '/\\');
+}
+
+function settingsEnsureBackupDir(): ?string {
+    $dir = settingsBackupDir();
+    if ($dir === '') {
+        return null;
     }
+
+    if (!is_dir($dir) && !@mkdir($dir, 0777, true)) {
+        return null;
+    }
+
+    if (!is_dir($dir) || !is_writable($dir)) {
+        return null;
+    }
+
     return $dir;
 }
 
@@ -379,13 +392,25 @@ function settingsBackupCapability(AppDbConnection $db, int $cid): array {
         ];
     }
 
+    $storagePath = settingsEnsureBackupDir();
+    if ($storagePath === null) {
+        return [
+            'supported' => false,
+            'driver' => $driver,
+            'message' => 'Backup storage directory is missing or not writable.',
+            'scheduler_hint' => settingsBackupSchedulerHint(),
+            'retention_days' => settingsBackupRetentionDays(),
+            'storage_path' => settingsBackupDir(),
+        ];
+    }
+
     return [
         'supported' => true,
         'driver' => $driver,
         'message' => 'Tenant backup and restore are enabled using JSON export/import.',
         'scheduler_hint' => settingsBackupSchedulerHint(),
         'retention_days' => settingsBackupRetentionDays(),
-        'storage_path' => settingsBackupDir(),
+        'storage_path' => $storagePath,
     ];
 }
 
@@ -558,11 +583,15 @@ function settingsCreateBackupFile(AppDbConnection $db, int $cid, bool $auto = fa
         return null;
     }
 
-    $dir = settingsBackupDir();
+    $dir = settingsEnsureBackupDir();
+    if ($dir === null) {
+        return null;
+    }
+
     $filename = settingsBuildBackupFilename($cid, $auto);
     $targetPath = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $filename;
 
-    if (@file_put_contents($targetPath, $json, LOCK_EX) === false) {
+    if (file_put_contents($targetPath, $json, LOCK_EX) === false) {
         return null;
     }
 
@@ -1601,7 +1630,7 @@ switch ($action) {
 
         $targetPath = settingsCreateBackupFile($db, $cid, false);
         if ($targetPath === null) {
-            respond('error', 'Failed to create backup file');
+            respond('error', 'Failed to create backup file. Check backup storage permissions and path.');
         }
 
         $uid = intval($_SESSION['user_id'] ?? 0);
