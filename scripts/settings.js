@@ -995,7 +995,7 @@ class SettingsTemplateApp {
                 this.renderBackups(Array.isArray(res.data) ? res.data : []);
             },
             onError: () => {
-                $('#backupListBody').html('<tr><td colspan="5" class="backup-empty">Failed to load backups.</td></tr>');
+                $('#backupListBody').html('<tr class="table-empty-row"><td colspan="5" class="backup-empty">Failed to load backups.</td></tr>');
                 $('#backupListMeta').text('0 files');
             },
             onComplete: () => {
@@ -1009,7 +1009,7 @@ class SettingsTemplateApp {
         if (!$tbody.length) return;
 
         if (!rows.length) {
-            $tbody.html('<tr><td colspan="5" class="backup-empty">No backups available.</td></tr>');
+            $tbody.html('<tr class="table-empty-row"><td colspan="5" class="backup-empty">No backups available.</td></tr>');
             $('#backupListMeta').text('0 files');
             return;
         }
@@ -1022,11 +1022,11 @@ class SettingsTemplateApp {
 
             return `
                 <tr>
-                    <td class="backup-filename" title="${filename}">${filename}</td>
-                    <td>${created}</td>
-                    <td>${size}</td>
-                    <td>${type}</td>
-                    <td>
+                    <td data-label="Filename" class="backup-filename" title="${filename}">${filename}</td>
+                    <td data-label="Created">${created}</td>
+                    <td data-label="Size">${size}</td>
+                    <td data-label="Type">${type}</td>
+                    <td data-label="Actions">
                         <button type="button" class="btn btn-sm btn-info backup-download-btn" data-filename="${filename}">
                             <i class="fas fa-download"></i> JSON
                         </button>

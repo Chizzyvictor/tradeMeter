@@ -447,7 +447,7 @@ include "INC/navbar.php";
 						<input type="text" class="form-control mr-2 mb-2" id="backupsSearchInput" placeholder="Search backup filename" style="max-width:320px;">
 					</div>
 					<div class="table-responsive">
-						<table class="table backup-table" id="backupTable">
+						<table class="table backup-table settings-mobile-cards" id="backupTable">
 							<thead>
 								<tr>
 									<th>Filename</th>
@@ -458,7 +458,7 @@ include "INC/navbar.php";
 								</tr>
 							</thead>
 							<tbody id="backupListBody">
-								<tr>
+								<tr class="table-empty-row">
 									<td colspan="5" class="backup-empty">No backups loaded yet.</td>
 								</tr>
 							</tbody>
