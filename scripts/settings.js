@@ -549,7 +549,7 @@ class SettingsTemplateApp {
         if (!$tbody.length) return;
 
         if (!users.length) {
-            $tbody.html('<tr><td colspan="5" class="text-muted">No users found.</td></tr>');
+            $tbody.html('<tr class="table-empty-row"><td colspan="5" class="text-muted">No users found.</td></tr>');
             return;
         }
 
@@ -569,15 +569,15 @@ class SettingsTemplateApp {
 
             return `
                 <tr>
-                    <td>${user.full_name || '-'}</td>
-                    <td>${user.email || '-'}</td>
-                    <td>
+                    <td data-label="Name">${user.full_name || '-'}</td>
+                    <td data-label="Email">${user.email || '-'}</td>
+                    <td data-label="Role">
                         <select class="form-control form-control-sm" id="roleSelect_${userId}">
                             ${roleOptions}
                         </select>
                     </td>
-                    <td>${statusBadge}</td>
-                    <td>
+                    <td data-label="Status">${statusBadge}</td>
+                    <td data-label="Actions">
                         <button type="button" class="edit-btn save-user-role-btn" data-id="${userId}"><i class="fas fa-save"></i> Save Role</button>
                         <button type="button" class="delete-btn toggle-user-status-btn" data-id="${userId}" data-next="${isActive ? 0 : 1}">
                             <i class="fas ${isActive ? 'fa-user-slash' : 'fa-user-check'}"></i> ${isActive ? 'Deactivate' : 'Activate'}
@@ -699,7 +699,7 @@ class SettingsTemplateApp {
         if (!$tbody.length) return;
 
         if (!rows.length) {
-            $tbody.html('<tr><td colspan="4" class="text-muted">No active sessions found.</td></tr>');
+            $tbody.html('<tr class="table-empty-row"><td colspan="4" class="text-muted">No active sessions found.</td></tr>');
             return;
         }
 
@@ -710,10 +710,10 @@ class SettingsTemplateApp {
             const current = row.is_current ? ' <span class="badge badge-success">Current Device</span>' : '';
             return `
                 <tr>
-                    <td>${device}${current}</td>
-                    <td>${ip}</td>
-                    <td>${when}</td>
-                    <td>
+                    <td data-label="Device">${device}${current}</td>
+                    <td data-label="IP Address">${ip}</td>
+                    <td data-label="Last Active">${when}</td>
+                    <td data-label="Actions">
                         <button type="button" class="logout-btn revoke-session-btn" data-session="${row.session_id}">
                             <i class="fas fa-sign-out-alt"></i> Revoke
                         </button>
@@ -766,7 +766,7 @@ class SettingsTemplateApp {
         if (!$tbody.length) return;
 
         if (!rows.length) {
-            $tbody.html('<tr><td colspan="4" class="text-muted">No login logs found.</td></tr>');
+            $tbody.html('<tr class="table-empty-row"><td colspan="4" class="text-muted">No login logs found.</td></tr>');
             return;
         }
 
@@ -787,10 +787,10 @@ class SettingsTemplateApp {
             const statusLabel = status.replace(/_/g, ' ');
             return `
                 <tr>
-                    <td>${userLabel}</td>
-                    <td>${ip}</td>
-                    <td>${when}</td>
-                    <td><span class="badge ${statusClass}">${statusLabel}</span></td>
+                    <td data-label="User">${userLabel}</td>
+                    <td data-label="IP Address">${ip}</td>
+                    <td data-label="Timestamp">${when}</td>
+                    <td data-label="Status"><span class="badge ${statusClass}">${statusLabel}</span></td>
                 </tr>
             `;
         }).join('');

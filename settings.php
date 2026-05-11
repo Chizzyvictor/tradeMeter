@@ -240,7 +240,7 @@ include "INC/navbar.php";
 					<input type="text" class="form-control" id="usersSearchInput" placeholder="Search by name or email">
 				</div>
 				<div class="table-responsive">
-					<table class="table">
+					<table class="table settings-mobile-cards">
 						<thead>
 							<tr>
 								<th>Name</th>
@@ -252,11 +252,11 @@ include "INC/navbar.php";
 						</thead>
 						<tbody id="usersTableBody">
 							<tr>
-								<td>John Doe</td>
-								<td>john.doe@example.com</td>
-								<td>Admin</td>
-								<td>Active</td>
-								<td>
+								<td data-label="Name">John Doe</td>
+								<td data-label="Email">john.doe@example.com</td>
+								<td data-label="Role">Admin</td>
+								<td data-label="Status">Active</td>
+								<td data-label="Actions">
 									<button class="edit-btn">
 										<i class="fas fa-edit"></i> Edit
 									</button>
@@ -315,7 +315,7 @@ include "INC/navbar.php";
 					<button type="button" class="backup-btn-secondary mb-2" id="refreshSessionsBtn"><i class="fas fa-sync-alt"></i> Refresh</button>
 				</div>
 				<div class="table-responsive">
-					<table class="table">
+					<table class="table settings-mobile-cards">
 						<thead>
 							<tr>
 								<th>Device</th>
@@ -326,10 +326,10 @@ include "INC/navbar.php";
 						</thead>
 						<tbody id="sessionsTableBody">
 							<tr>
-								<td>Chrome on Windows</td>
-								<td>192.168.1.1</td>
-								<td>2024-06-01 12:34:56</td>
-								<td>
+								<td data-label="Device">Chrome on Windows</td>
+								<td data-label="IP Address">192.168.1.1</td>
+								<td data-label="Last Active">2024-06-01 12:34:56</td>
+								<td data-label="Actions">
 									<button class="logout-btn">
 										<i class="fas fa-sign-out-alt"></i> Logout
 									</button>
@@ -361,7 +361,7 @@ include "INC/navbar.php";
 					<button type="button" class="backup-btn-secondary mb-2" id="refreshLoginLogsBtn"><i class="fas fa-sync-alt"></i> Refresh</button>
 				</div>
 				<div class="table-responsive">
-					<table class="table">
+					<table class="table settings-mobile-cards">
 						<thead>
 							<tr>
 								<th>User</th>
@@ -372,10 +372,10 @@ include "INC/navbar.php";
 						</thead>
 						<tbody id="loginLogsTableBody">
 							<tr>
-								<td>John Doe</td>
-								<td>192.168.1.1</td>
-								<td>2024-06-01 12:34:56</td>
-								<td>Success</td>
+								<td data-label="User">John Doe</td>
+								<td data-label="IP Address">192.168.1.1</td>
+								<td data-label="Timestamp">2024-06-01 12:34:56</td>
+								<td data-label="Status">Success</td>
 							</tr>
 						</tbody>
 					</table>
