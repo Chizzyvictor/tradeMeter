@@ -471,6 +471,48 @@ include "INC/navbar.php";
 			</div>
 		</section>
 
+		<!-- CREATE USER MODAL -->
+		<div class="modal fade" id="createUserModal" tabindex="-1" role="dialog" aria-labelledby="createUserModalLabel" aria-hidden="true">
+			<div class="modal-dialog modal-dialog-centered" role="document">
+				<div class="modal-content shadow rounded">
+					<form id="createUserForm">
+						<div class="modal-header bg-primary text-white">
+							<h5 class="modal-title" id="createUserModalLabel">
+								<i class="fas fa-user-plus mr-2"></i>Add User
+							</h5>
+							<button type="button" class="close text-white" data-dismiss="modal" aria-label="Close add user modal">
+								<span aria-hidden="true">&times;</span>
+							</button>
+						</div>
+						<div class="modal-body">
+							<div class="form-group">
+								<label for="createUserFullName">Full Name</label>
+								<input type="text" class="form-control" id="createUserFullName" placeholder="Enter full name" required>
+							</div>
+							<div class="form-group">
+								<label for="createUserEmail">Email</label>
+								<input type="email" class="form-control" id="createUserEmail" placeholder="Enter email" required>
+							</div>
+							<div class="form-group">
+								<label for="createUserPassword">Password</label>
+								<input type="password" class="form-control" id="createUserPassword" placeholder="Minimum 8 characters" required>
+							</div>
+							<div class="form-group">
+								<label for="createUserRole">Role</label>
+								<select class="form-control" id="createUserRole" required>
+									<option value="">Select role</option>
+								</select>
+							</div>
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+							<button type="submit" class="btn btn-primary" id="createUserSubmitBtn">Create User</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+
 
 
     </main>

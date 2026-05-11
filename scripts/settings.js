@@ -82,7 +82,12 @@ class SettingsTemplateApp {
         });
 
         $('#seedDemoUsersBtn').on('click', () => {
-            this.seedDemoUsers();
+            this.openCreateUserModal();
+        });
+
+        $('#createUserForm').on('submit', (event) => {
+            event.preventDefault();
+            this.createUserFromModal();
         });
 
         $('#refreshSessionsBtn').on('click', () => {
@@ -525,6 +530,77 @@ class SettingsTemplateApp {
         });
     }
 
+    renderCreateUserRoleOptions() {
+        const $roleSelect = $('#createUserRole');
+        if (!$roleSelect.length) return;
+
+        const currentValue = String($roleSelect.val() || '');
+        const optionsHtml = ['<option value="">Select role</option>']
+            .concat((this.roles || []).map((role) => {
+                const roleId = Number(role.role_id) || 0;
+                const roleName = String(role.role_name || '').trim();
+                if (roleId <= 0 || !roleName) return '';
+                return `<option value="${roleId}">${roleName}</option>`;
+            }).filter(Boolean))
+            .join('');
+
+        $roleSelect.html(optionsHtml);
+        if (currentValue) {
+            $roleSelect.val(currentValue);
+        }
+    }
+
+    openCreateUserModal() {
+        const showModal = () => {
+            this.renderCreateUserRoleOptions();
+            $('#createUserForm')[0]?.reset();
+            this.renderCreateUserRoleOptions();
+            $('#createUserModal').modal('show');
+            setTimeout(() => $('#createUserFullName').trigger('focus'), 150);
+        };
+
+        if (!Array.isArray(this.roles) || !this.roles.length) {
+            this.loadRoles(() => showModal());
+            return;
+        }
+
+        showModal();
+    }
+
+    createUserFromModal() {
+        const $btn = $('#createUserSubmitBtn');
+        const fullName = String($('#createUserFullName').val() || '').trim();
+        const email = String($('#createUserEmail').val() || '').trim();
+        const password = String($('#createUserPassword').val() || '');
+        const roleId = Number($('#createUserRole').val() || 0);
+
+        if (!fullName || !email || !password || roleId <= 0) {
+            this.app.showAlert('Please complete all user fields', 'error');
+            return;
+        }
+
+        this.setButtonLoading($btn, true, 'Creating...');
+
+        this.app.ajaxHelper({
+            url: 'apiSettings.php',
+            action: 'createUser',
+            data: {
+                full_name: fullName,
+                email,
+                password,
+                role_id: roleId
+            },
+            onSuccess: () => {
+                $('#createUserForm')[0]?.reset();
+                $('#createUserModal').modal('hide');
+                this.loadUsers();
+            },
+            onComplete: () => {
+                this.setButtonLoading($btn, false);
+            }
+        });
+    }
+
     loadUsers() {
         this.app.ajaxHelper({
             url: 'apiSettings.php',
@@ -594,23 +670,6 @@ class SettingsTemplateApp {
             const roleId = Number(user.role_id) || 0;
             if (userId > 0 && roleId > 0) {
                 $(`#roleSelect_${userId}`).val(String(roleId));
-            }
-        });
-    }
-
-    seedDemoUsers() {
-        const $btn = $('#seedDemoUsersBtn');
-        this.setButtonLoading($btn, true, 'Adding...');
-
-        this.app.ajaxHelper({
-            url: 'apiSettings.php',
-            action: 'seedDemoUsers',
-            data: {},
-            onSuccess: () => {
-                this.loadUsers();
-            },
-            onComplete: () => {
-                this.setButtonLoading($btn, false);
             }
         });
     }
