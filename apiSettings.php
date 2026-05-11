@@ -264,7 +264,7 @@ function settingsBackupDir(): string {
     $configured = trim((string)(appEnv('TM_BACKUP_DIR', '') ?? ''));
     $dir = $configured !== ''
         ? $configured
-        : (dirname(__DIR__) . DIRECTORY_SEPARATOR . 'private_storage' . DIRECTORY_SEPARATOR . 'backups');
+        : (__DIR__ . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'backups');
 
     return rtrim($dir, '/\\');
 }
