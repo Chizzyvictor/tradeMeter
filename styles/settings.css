@@ -343,56 +343,111 @@
     padding: 0;
 }
 
-.settings-container .table.settings-mobile-cards {
-    min-width: 0;
-    margin: 0;
-    border-collapse: separate;
-    border-spacing: 0 12px;
+/* MOBILE CARD LAYOUT - MOBILE ONLY */
+@media (max-width: 767.98px) {
+    .settings-container .table.settings-mobile-cards {
+        min-width: 0;
+        margin: 0;
+        border-collapse: separate;
+        border-spacing: 0 12px;
+    }
+
+    .settings-container .table.settings-mobile-cards thead {
+        display: none;
+    }
+
+    .settings-container .table.settings-mobile-cards tbody,
+    .settings-container .table.settings-mobile-cards tr,
+    .settings-container .table.settings-mobile-cards td {
+        display: block;
+        width: 100%;
+    }
+
+    .settings-container .table.settings-mobile-cards tr {
+        border: 1px solid var(--color-border);
+        border-radius: 14px;
+        background: var(--color-input);
+        padding: 12px;
+        box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+    }
+
+    .settings-container .table.settings-mobile-cards td {
+        border-top: none;
+        padding: 7px 0;
+        white-space: normal;
+    }
+
+    .settings-container .table.settings-mobile-cards td::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 0.72rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        margin-bottom: 3px;
+        font-weight: 700;
+    }
+
+    .settings-container .table.settings-mobile-cards .table-empty-row td {
+        text-align: center;
+        padding: 14px 10px;
+    }
+
+    .settings-container .table.settings-mobile-cards .table-empty-row td::before {
+        content: none;
+    }
 }
 
-.settings-container .table.settings-mobile-cards thead {
-    display: none;
-}
+/* DESKTOP TABLE LAYOUT - RESTORE NORMAL TABLE ON LARGE SCREENS */
+@media (min-width: 768px) {
+    .settings-container .table.settings-mobile-cards {
+        min-width: 100%;
+        margin: 0;
+        border-collapse: collapse;
+        border-spacing: 0;
+    }
 
-.settings-container .table.settings-mobile-cards tbody,
-.settings-container .table.settings-mobile-cards tr,
-.settings-container .table.settings-mobile-cards td {
-    display: block;
-    width: 100%;
-}
+    .settings-container .table.settings-mobile-cards thead {
+        display: table-header-group;
+    }
 
-.settings-container .table.settings-mobile-cards tr {
-    border: 1px solid var(--color-border);
-    border-radius: 14px;
-    background: var(--color-input);
-    padding: 12px;
-    box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
-}
+    .settings-container .table.settings-mobile-cards tbody,
+    .settings-container .table.settings-mobile-cards tr,
+    .settings-container .table.settings-mobile-cards td {
+        display: table-cell;
+        width: auto;
+    }
 
-.settings-container .table.settings-mobile-cards td {
-    border-top: none;
-    padding: 7px 0;
-    white-space: normal;
-}
+    .settings-container .table.settings-mobile-cards tr {
+        border: none;
+        border-bottom: 1px solid var(--color-border);
+        border-radius: 0;
+        background: transparent;
+        padding: 0;
+        box-shadow: none;
+    }
 
-.settings-container .table.settings-mobile-cards td::before {
-    content: attr(data-label);
-    display: block;
-    font-size: 0.72rem;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--color-text-muted);
-    margin-bottom: 3px;
-    font-weight: 700;
-}
+    .settings-container .table.settings-mobile-cards td {
+        border-top: none;
+        border-right: none;
+        border-bottom: inherit;
+        padding: 12px 14px;
+        white-space: normal;
+    }
 
-.settings-container .table.settings-mobile-cards .table-empty-row td {
-    text-align: center;
-    padding: 14px 10px;
-}
+    .settings-container .table.settings-mobile-cards td::before {
+        content: none;
+        display: none;
+    }
 
-.settings-container .table.settings-mobile-cards .table-empty-row td::before {
-    content: none;
+    .settings-container .table.settings-mobile-cards .table-empty-row td {
+        text-align: center;
+        padding: 14px 10px;
+    }
+
+    .settings-container .table.settings-mobile-cards .table-empty-row td::before {
+        content: none;
+    }
 }
 
 /* BACKUP TAB */
