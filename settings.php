@@ -333,6 +333,48 @@ include "INC/navbar.php";
                     </div>
                 </div>
 
+                <div class="card shadow-sm mb-5 border-0">
+                    <div class="card-header bg-white py-3">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <h5 class="mb-0 font-weight-bold"><i class="fas fa-list mr-2 text-info"></i>Employee Registry</h5>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text bg-light border-right-0"><i class="fas fa-search text-muted"></i></span>
+                                    </div>
+                                    <input type="text" id="attendanceEmployeeSearchSettings" class="form-control border-left-0 bg-light" placeholder="Search by name, email, or role...">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0" id="attendanceEmployeesTableSettings">
+                                <thead>
+                                    <tr>
+                                        <th>Employee Details</th>
+                                        <th>Designation</th>
+                                        <th>Attendance</th>
+                                        <th>Status Mix</th>
+                                        <th>Fines</th>
+                                        <th>GPI Score</th>
+                                        <th>Shift Details</th>
+                                        <th class="text-right">Quick Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="8" class="text-center text-muted py-3">Loading registry...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-white text-right py-2">
+                        <small class="text-muted font-italic" id="attendanceSearchSummarySettings">Showing all employees</small>
+                    </div>
+                </div>
+
                 <div class="card border-0 shadow-sm mb-4">
                     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                         <h6 class="mb-0 font-weight-bold text-primary">Pending Correction Requests</h6>

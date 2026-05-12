@@ -162,8 +162,7 @@ class EmployeeAttendancePage {
       onSuccess: (res) => {
         this.employees = Array.isArray(res.data) ? res.data : [];
         this.renderSummary(res.summary || {});
-        this.renderEmployees(this.employees);
-        this.loadEmployeeOptionsForModals();
+        // Registry rendering removed from this page
       }
     });
   }
@@ -190,78 +189,7 @@ class EmployeeAttendancePage {
     $('#attendanceStatFinesToday').text(`N${this.app.formatNumber(summary.total_fines_today || 0)}`);
   }
 
-  renderEmployees(rows) {
-    const $tbody = $('#attendanceEmployeesTable tbody');
-    if (!$tbody.length) return;
-
-    const filteredRows = (rows || []).filter((row) => {
-      if (!this.searchTerm) return true;
-      const haystack = `${row.full_name || ''} ${row.email || ''} ${row.role_name || ''} ${row.performance_label || ''}`.toLowerCase();
-      return haystack.includes(this.searchTerm);
-    });
-    this.filteredEmployees = filteredRows;
-
-    $('#attendanceSearchSummary').text(
-      filteredRows.length === (rows || []).length
-        ? `Showing all ${filteredRows.length} employees`
-        : `Showing ${filteredRows.length} of ${(rows || []).length} employees`
-    );
-
-    if (!filteredRows.length) {
-      $tbody.html('<tr><td colspan="8" class="text-center text-muted py-5">No employees found matching your search</td></tr>');
-      return;
-    }
-
-    const html = filteredRows.map((row) => {
-      const gpi = Number(row.gpi || 0);
-      const tone = String(row.performance_tone || 'danger');
-      const badgeClass = tone === 'success' ? 'badge-success' : (tone === 'warning' ? 'badge-warning text-dark' : 'badge-danger');
-      const shiftText = Number(row.has_shift || 0) === 1
-        ? `<span class="text-dark font-weight-bold">${row.shift_start || '-'} - ${row.shift_end || '-'}</span><br><small class="text-muted">+${Number(row.grace_minutes || 0)}m grace</small>`
-        : '<span class="text-muted">Global Policy</span>';
-
-      return `
-        <tr class="attendance-employee-row" data-id="${row.user_id}">
-          <td class="py-3">
-            <div class="d-flex align-items-center">
-               <div class="avatar-circle mr-3 bg-light d-flex align-items-center justify-content-center rounded-circle" style="width:40px; height:40px; border: 1px solid #e2e8f0;">
-                  <i class="fas fa-user text-secondary"></i>
-               </div>
-               <div>
-                  <div class="font-weight-bold text-dark">${AppCore.escapeHtml(row.full_name || '-')}</div>
-                  <div class="small text-muted">${AppCore.escapeHtml(row.email || '-')}</div>
-               </div>
-            </div>
-          </td>
-          <td><span class="badge badge-light border text-uppercase" style="font-size:0.7rem;">${AppCore.escapeHtml(row.role_name || '-')}</span></td>
-          <td><span class="h6 mb-0 font-weight-bold">${Number(row.attendance_days || 0)}</span> <small class="text-muted">days</small></td>
-          <td>
-            <div class="d-flex">
-              <span class="badge badge-success mr-1" title="On Time">${Number(row.on_time_days || 0)}</span>
-              <span class="badge badge-warning text-dark" title="Late">${Number(row.late_days || 0)}</span>
-            </div>
-          </td>
-          <td><span class="text-danger font-weight-bold">N${this.app.formatNumber(row.total_fine || 0)}</span></td>
-          <td>
-            <div class="d-flex flex-column">
-               <span class="font-weight-bold h6 mb-1">${this.app.formatNumber(gpi)}</span>
-               <span class="badge ${badgeClass} badge-performance text-center" style="width: fit-content;">${AppCore.escapeHtml(row.performance_label || 'Needs attention')}</span>
-            </div>
-          </td>
-          <td>${shiftText}</td>
-          <td class="text-right">
-            <div class="btn-group shadow-sm">
-              <button class="btn btn-sm btn-white border attendance-signout-btn" data-id="${row.user_id}" title="Force Sign-Out"><i class="fas fa-sign-out-alt"></i></button>
-              <button class="btn btn-sm btn-white border attendance-shift-btn" data-id="${row.user_id}" data-shift-start="${row.shift_start || '09:00'}" data-shift-end="${row.shift_end || '17:00'}" data-grace="${Number(row.grace_minutes || 0)}" data-active="${Number(row.has_shift || 0)}" title="Manage Shift"><i class="fas fa-user-cog"></i></button>
-              <button class="btn btn-sm btn-white border attendance-request-correction-btn" data-id="${row.user_id}" title="New Correction"><i class="fas fa-edit"></i></button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
-
-    $tbody.html(html);
-  }
+  // renderEmployees removed
 
   renderCorrections(rows) {
     const $tbody = $('#attendanceCorrectionsTable tbody');
