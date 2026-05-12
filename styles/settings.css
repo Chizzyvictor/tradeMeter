@@ -14,7 +14,7 @@
     bottom: 0;
     left: 0;
     z-index: 999;
-    width: min(88vw, 360px);
+    width: 100vw;
     background: var(--color-surface);
     border-right: 1px solid var(--color-border);
     overflow-y: auto;
@@ -389,6 +389,23 @@
 
 .settings-container .table.settings-mobile-cards .table-empty-row td::before {
     content: none;
+}
+
+.settings-container #attendanceEmployeesTableSettings td[data-label="Status Mix"] .d-flex {
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.settings-container #attendanceEmployeesTableSettings td[data-label="Quick Actions"] .btn-group,
+.settings-container #attendanceCorrectionsTableSettings td[data-label="Action"] .btn-group {
+    flex-wrap: wrap;
+    gap: 8px;
+    background: transparent !important;
+}
+
+.settings-container #attendanceEmployeesTableSettings td[data-label="Quick Actions"] .btn-group .btn,
+.settings-container #attendanceCorrectionsTableSettings td[data-label="Action"] .btn-group .btn {
+    border-radius: 10px;
 }
 
 /* BACKUP TAB */

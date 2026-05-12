@@ -905,7 +905,7 @@ class SettingsTemplateApp {
         );
 
         if (!filteredRows.length) {
-            $tbody.html('<tr><td colspan="8" class="text-center text-muted py-5">No employees found matching your search</td></tr>');
+            $tbody.html('<tr class="table-empty-row"><td colspan="8" class="text-center text-muted py-5">No employees found matching your search</td></tr>');
             return;
         }
 
@@ -918,8 +918,8 @@ class SettingsTemplateApp {
                 : '<span class="text-muted">Global Policy</span>';
 
             return `
-        <tr class="attendance-employee-row" data-id="${row.user_id}">
-          <td class="py-3">
+                <tr class="attendance-employee-row" data-id="${row.user_id}">
+                    <td class="py-3" data-label="Employee Details">
             <div class="d-flex align-items-center">
                <div class="avatar-circle mr-3 bg-light d-flex align-items-center justify-content-center rounded-circle" style="width:40px; height:40px; border: 1px solid #e2e8f0;">
                   <i class="fas fa-user text-secondary"></i>
@@ -930,23 +930,23 @@ class SettingsTemplateApp {
                </div>
             </div>
           </td>
-          <td><span class="badge badge-light border text-uppercase" style="font-size:0.7rem;">${AppCore.escapeHtml(row.role_name || '-')}</span></td>
-          <td><span class="h6 mb-0 font-weight-bold">${Number(row.attendance_days || 0)}</span> <small class="text-muted">days</small></td>
-          <td>
+                    <td data-label="Designation"><span class="badge badge-light border text-uppercase" style="font-size:0.7rem;">${AppCore.escapeHtml(row.role_name || '-')}</span></td>
+                    <td data-label="Attendance"><span class="h6 mb-0 font-weight-bold">${Number(row.attendance_days || 0)}</span> <small class="text-muted">days</small></td>
+                    <td data-label="Status Mix">
             <div class="d-flex">
               <span class="badge badge-success mr-1" title="On Time">${Number(row.on_time_days || 0)}</span>
               <span class="badge badge-warning text-dark" title="Late">${Number(row.late_days || 0)}</span>
             </div>
           </td>
-          <td><span class="text-danger font-weight-bold">N${this.app.formatNumber(row.total_fine || 0)}</span></td>
-          <td>
+                    <td data-label="Fines"><span class="text-danger font-weight-bold">N${this.app.formatNumber(row.total_fine || 0)}</span></td>
+                    <td data-label="GPI Score">
             <div class="d-flex flex-column">
                <span class="font-weight-bold h6 mb-1">${this.app.formatNumber(gpi)}</span>
                <span class="badge ${badgeClass} badge-performance text-center" style="width: fit-content;">${AppCore.escapeHtml(row.performance_label || 'Needs attention')}</span>
             </div>
           </td>
-          <td>${shiftText}</td>
-          <td class="text-right">
+                    <td data-label="Shift Details">${shiftText}</td>
+                    <td class="text-right" data-label="Quick Actions">
             <div class="btn-group shadow-sm bg-white">
               <button class="btn btn-sm btn-light border attendance-signout-btn" data-id="${row.user_id}" title="Force Sign-Out"><i class="fas fa-sign-out-alt"></i></button>
               <button class="btn btn-sm btn-light border attendance-shift-btn" data-id="${row.user_id}" data-shift-start="${row.shift_start || '09:00'}" data-shift-end="${row.shift_end || '17:00'}" data-grace="${Number(row.grace_minutes || 0)}" data-active="${Number(row.has_shift || 0)}" title="Manage Shift"><i class="fas fa-user-cog"></i></button>
@@ -987,7 +987,7 @@ class SettingsTemplateApp {
         if (!$tbody.length) return;
 
         if (!rows.length) {
-            $tbody.html('<tr><td colspan="6" class="text-center text-muted py-4">No correction requests found</td></tr>');
+            $tbody.html('<tr class="table-empty-row"><td colspan="6" class="text-center text-muted py-4">No correction requests found</td></tr>');
             return;
         }
 
@@ -1004,12 +1004,12 @@ class SettingsTemplateApp {
 
             return `
                 <tr>
-                    <td class="pl-3 font-weight-bold">${AppCore.escapeHtml(row.full_name || '-')}</td>
-                    <td>${AppCore.escapeHtml(row.attendance_date || '-')}</td>
-                    <td class="small">${proposedText}</td>
-                    <td><small class="text-muted">${AppCore.escapeHtml(row.reason || '-')}</small></td>
-                    <td><span class="badge ${badgeClass} text-uppercase">${AppCore.escapeHtml(status)}</span></td>
-                    <td class="text-right pr-3">${reviewButtons}</td>
+                    <td class="pl-3 font-weight-bold" data-label="Employee">${AppCore.escapeHtml(row.full_name || '-')}</td>
+                    <td data-label="Date">${AppCore.escapeHtml(row.attendance_date || '-')}</td>
+                    <td class="small" data-label="Proposed Changes">${proposedText}</td>
+                    <td data-label="Reason"><small class="text-muted">${AppCore.escapeHtml(row.reason || '-')}</small></td>
+                    <td data-label="Status"><span class="badge ${badgeClass} text-uppercase">${AppCore.escapeHtml(status)}</span></td>
+                    <td class="text-right pr-3" data-label="Action">${reviewButtons}</td>
                 </tr>
             `;
         }).join('');

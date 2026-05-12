@@ -350,25 +350,13 @@ include "INC/navbar.php";
                         </div>
                     </div>
                     <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0" id="attendanceEmployeesTableSettings">
-                                <thead>
-                                    <tr>
-                                        <th>Employee Details</th>
-                                        <th>Designation</th>
-                                        <th>Attendance</th>
-                                        <th>Status Mix</th>
-                                        <th>Fines</th>
-                                        <th>GPI Score</th>
-                                        <th>Shift Details</th>
-                                        <th class="text-right">Quick Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td colspan="8" class="text-center text-muted py-3">Loading registry...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
+						<div class="table-responsive">
+							<table class="table table-hover mb-0 settings-mobile-cards" id="attendanceEmployeesTableSettings">
+								<tbody>
+									<tr class="table-empty-row"><td colspan="8" class="text-center text-muted py-3">Loading registry...</td></tr>
+								</tbody>
+							</table>
+						</div>
                     </div>
                     <div class="card-footer bg-white text-right py-2">
                         <small class="text-muted font-italic" id="attendanceSearchSummarySettings">Showing all employees</small>
@@ -386,23 +374,13 @@ include "INC/navbar.php";
                         </select>
                     </div>
                     <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table mb-0" id="attendanceCorrectionsTableSettings">
-                                <thead class="bg-light small text-uppercase">
-                                    <tr>
-                                        <th class="pl-3">Employee</th>
-                                        <th>Date</th>
-                                        <th>Proposed Changes</th>
-                                        <th>Reason</th>
-                                        <th>Status</th>
-                                        <th class="text-right pr-3">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="small">
-                                    <tr><td colspan="6" class="text-center text-muted py-3">Loading requests...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
+						<div class="table-responsive">
+							<table class="table mb-0 settings-mobile-cards" id="attendanceCorrectionsTableSettings">
+								<tbody class="small">
+									<tr class="table-empty-row"><td colspan="6" class="text-center text-muted py-3">Loading requests...</td></tr>
+								</tbody>
+							</table>
+						</div>
                     </div>
                 </div>
             </div>
