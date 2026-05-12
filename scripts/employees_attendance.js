@@ -38,6 +38,8 @@ class EmployeeAttendancePage {
       }
     });
 
+    this.setupPageGuard();
+
     $('#attendanceEmployeeSearch').on('input', (e) => {
       this.searchTerm = String($(e.currentTarget).val() || '').trim().toLowerCase();
       this.renderEmployees(this.employees);
@@ -681,6 +683,40 @@ class EmployeeAttendancePage {
 
     $('#attendanceDetailsTab').hide();
     $('#attendanceListTab').show();
+  }
+
+  setupPageGuard() {
+    // Intercept clicks on navbar and other links to prevent leaving without password
+    const $links = $('.tab button, .navbar a, .sidebar a, a[href]');
+
+    $links.on('click', (e) => {
+      const target = $(e.currentTarget).attr('href') || '';
+      // Allow internal hashes or empty links
+      if (!target || target.startsWith('#') || target.includes('javascript:')) return;
+
+      e.preventDefault();
+      const pass = window.prompt('Owner Security: Enter password to exit attendance kiosk mode:', '');
+
+      if (!pass) return;
+
+      this.app.ajaxHelper({
+        url: 'apiAuthentications.php',
+        action: 'verifyOwnerPassword',
+        data: { password: pass },
+        onSuccess: () => {
+          window.location.href = target;
+        },
+        onError: () => {
+          this.app.showAlert('Incorrect password. Access denied.', 'error');
+        }
+      });
+    });
+
+    // Also handle browser back/forward if possible, though restricted by modern browsers
+    window.addEventListener('popstate', () => {
+      // Logic to push state back if they try to use browser buttons?
+      // Usually prompt is better on click events.
+    });
   }
 }
 

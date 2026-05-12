@@ -47,10 +47,6 @@ if (!$isManagerOrOwner) {
             <button class="btn btn-outline-secondary btn-sm" id="attendanceExportPdfBtn" title="Export PDF"><i class="fas fa-file-pdf"></i></button>
           </div>
 
-          <button class="btn btn-warning btn-sm mr-2 mb-2 mb-md-0 shadow-sm" id="runAutoAbsenceBtn">
-            <i class="fas fa-magic mr-1"></i> Auto-Absence
-          </button>
-
           <button class="btn btn-primary btn-sm shadow-sm" id="openAttendanceSignInModalBtn">
             <i class="fas fa-plus-circle mr-1"></i> Record Sign-In
           </button>
@@ -271,46 +267,6 @@ if (!$isManagerOrOwner) {
         </div>
       </div>
 
-
-      <div class="card shadow-sm border-0 overflow-hidden">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-          <h5 class="mb-0 font-weight-bold"><i class="fas fa-clipboard-check mr-2 text-primary"></i>Correction Workflow</h5>
-          <div class="d-flex align-items-center">
-            <div class="input-group input-group-sm mr-2 shadow-sm" style="width: auto;">
-              <div class="input-group-prepend">
-                <span class="input-group-text bg-white border-right-0"><i class="fas fa-filter text-muted"></i></span>
-              </div>
-              <select id="attendanceCorrectionStatus" class="form-control border-left-0 pl-0">
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="all">All</option>
-              </select>
-            </div>
-            <button class="btn btn-sm btn-outline-primary shadow-sm" id="openCorrectionRequestBtn">
-              <i class="fas fa-paper-plane mr-1"></i> Request Correction
-            </button>
-          </div>
-        </div>
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table mb-0" id="attendanceCorrectionsTable">
-              <thead class="bg-light text-muted small text-uppercase">
-                <tr>
-                  <th class="pl-4">Employee</th>
-                  <th>Date</th>
-                  <th>Current Logs</th>
-                  <th>Proposed Logs</th>
-                  <th>Reasoning</th>
-                  <th>Status</th>
-                  <th class="pr-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody class="small"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
 
     </div>
   </div>

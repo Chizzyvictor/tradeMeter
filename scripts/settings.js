@@ -81,6 +81,21 @@ class SettingsTemplateApp {
             this.saveAttendancePolicy();
         });
 
+        $('#runAutoAbsenceSettingsBtn').on('click', () => {
+            this.runAutoAbsence();
+        });
+
+        $('#attendanceCorrectionStatusSettings').on('change', () => {
+            this.loadCorrections();
+        });
+
+        $(document).on('click', '.settings-correction-review-btn', (event) => {
+            const correctionId = Number($(event.currentTarget).data('id')) || 0;
+            const decision = String($(event.currentTarget).data('decision') || '').trim().toLowerCase();
+            if (!correctionId || !decision) return;
+            this.reviewCorrection(correctionId, decision);
+        });
+
         $('#seedDemoUsersBtn').on('click', () => {
             this.openCreateUserModal();
         });
@@ -420,6 +435,9 @@ class SettingsTemplateApp {
                 break;
             case 'attendanceTab':
                 this.loadAttendancePolicy();
+                break;
+            case 'attendanceAdminTab':
+                this.loadCorrections();
                 break;
             case 'sessionsTab':
                 this.loadSessions();
@@ -814,6 +832,90 @@ class SettingsTemplateApp {
                 fine_0_15: Number($('#attendanceFine0To15').val() || 0),
                 fine_15_60: Number($('#attendanceFine15To60').val() || 0),
                 fine_60_plus: Number($('#attendanceFine60Plus').val() || 0)
+            },
+            onComplete: () => {
+                this.setButtonLoading($btn, false);
+            }
+        });
+    }
+
+    loadCorrections() {
+        const status = String($('#attendanceCorrectionStatusSettings').val() || 'pending');
+        this.app.ajaxHelper({
+            url: 'apiEmployeeAttendance.php',
+            action: 'loadCorrectionRequests',
+            data: { status },
+            silent: true,
+            onSuccess: (res) => {
+                this.renderCorrections(Array.isArray(res.data) ? res.data : []);
+            },
+            onComplete: () => {
+                this.setTabLoading('attendanceAdminTab', false);
+            }
+        });
+    }
+
+    renderCorrections(rows) {
+        const $tbody = $('#attendanceCorrectionsTableSettings tbody');
+        if (!$tbody.length) return;
+
+        if (!rows.length) {
+            $tbody.html('<tr><td colspan="6" class="text-center text-muted py-4">No correction requests found</td></tr>');
+            return;
+        }
+
+        const html = rows.map((row) => {
+            const status = String(row.status || 'pending');
+            const badgeClass = status === 'approved' ? 'badge-success' : (status === 'rejected' ? 'badge-danger' : 'badge-warning text-dark');
+            const proposedText = `In: ${row.proposed_signin_at || '-'} <br> Out: ${row.proposed_signout_at || '-'}`;
+            const reviewButtons = status === 'pending'
+                ? `<div class="btn-group">
+                    <button class="btn btn-sm btn-success settings-correction-review-btn" data-id="${row.correction_id}" data-decision="approve"><i class="fas fa-check"></i></button>
+                    <button class="btn btn-sm btn-danger settings-correction-review-btn" data-id="${row.correction_id}" data-decision="reject"><i class="fas fa-times"></i></button>
+                   </div>`
+                : '-';
+
+            return `
+                <tr>
+                    <td class="pl-3 font-weight-bold">${AppCore.escapeHtml(row.full_name || '-')}</td>
+                    <td>${AppCore.escapeHtml(row.attendance_date || '-')}</td>
+                    <td class="small">${proposedText}</td>
+                    <td><small class="text-muted">${AppCore.escapeHtml(row.reason || '-')}</small></td>
+                    <td><span class="badge ${badgeClass} text-uppercase">${AppCore.escapeHtml(status)}</span></td>
+                    <td class="text-right pr-3">${reviewButtons}</td>
+                </tr>
+            `;
+        }).join('');
+
+        $tbody.html(html);
+    }
+
+    reviewCorrection(correctionId, decision) {
+        const review_note = window.prompt(`Optional ${decision} note:`, '') || '';
+        this.app.ajaxHelper({
+            url: 'apiEmployeeAttendance.php',
+            action: 'reviewCorrection',
+            data: { correction_id: correctionId, decision, review_note },
+            onSuccess: () => {
+                this.loadCorrections();
+            }
+        });
+    }
+
+    runAutoAbsence() {
+        const date = window.prompt('Enter date for auto-absence (YYYY-MM-DD):', new Date().toISOString().slice(0, 10));
+        if (!date) return;
+
+        const $btn = $('#runAutoAbsenceSettingsBtn');
+        this.setButtonLoading($btn, true, 'Processing...');
+
+        this.app.ajaxHelper({
+            url: 'apiEmployeeAttendance.php',
+            action: 'runAutoAbsence',
+            data: { date },
+            onSuccess: (res) => {
+                const inserted = Number(res?.data?.inserted || 0);
+                this.app.showAlert(`Auto-absence complete: ${inserted} records created.`, 'success');
             },
             onComplete: () => {
                 this.setButtonLoading($btn, false);

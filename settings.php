@@ -73,8 +73,19 @@ include "INC/navbar.php";
                 <div class="item-left">
                     <i class="fas fa-user-clock"></i>
                     <div>
-                        <h4>Attendance</h4>
-                        <span>Employee attendance policy</span>
+                        <h4>Attendance Policy</h4>
+                        <span>General rules & fines</span>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right"></i>
+            </button>
+
+            <button class="settings-item" data-tab="attendanceAdminTab">
+                <div class="item-left">
+                    <i class="fas fa-tasks"></i>
+                    <div>
+                        <h4>Attendance Mgmt</h4>
+                        <span>Absence, shifts & corrections</span>
                     </div>
                 </div>
                 <i class="fas fa-chevron-right"></i>
@@ -291,8 +302,69 @@ include "INC/navbar.php";
 					</button>
 				</form>
 			</div>
-		</section>	
+		</section>
 
+        <!-- ATTENDANCE MGMT TAB -->
+        <section class="tab-content" id="attendanceAdminTab">
+            <div class="content-card">
+                <div class="content-header">
+                    <h2>Attendance Management</h2>
+                    <p>Handle automated tasks, shifts, and data corrections</p>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-3">
+                        <div class="p-3 border rounded bg-light shadow-sm h-100">
+                            <h5 class="font-weight-bold mb-2">Automated Operations</h5>
+                            <p class="small text-muted">Run daily routines like marking absence for employees who didn't sign in.</p>
+                            <button class="btn btn-warning btn-block font-weight-bold" id="runAutoAbsenceSettingsBtn">
+                                <i class="fas fa-magic mr-1"></i> Run Auto-Absence Routine
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="p-3 border rounded bg-light shadow-sm h-100">
+                            <h5 class="font-weight-bold mb-2">Data Integrity</h5>
+                            <p class="small text-muted">Audit and cleanup duplicate or invalid attendance records.</p>
+                            <button class="btn btn-outline-danger btn-block font-weight-bold" id="auditAttendanceDataBtn" disabled>
+                                <i class="fas fa-vial mr-1"></i> Run Data Audit (Coming Soon)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0 font-weight-bold text-primary">Pending Correction Requests</h6>
+                        <select id="attendanceCorrectionStatusSettings" class="form-control form-control-sm w-auto">
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="all">All</option>
+                        </select>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table mb-0" id="attendanceCorrectionsTableSettings">
+                                <thead class="bg-light small text-uppercase">
+                                    <tr>
+                                        <th class="pl-3">Employee</th>
+                                        <th>Date</th>
+                                        <th>Proposed Changes</th>
+                                        <th>Reason</th>
+                                        <th>Status</th>
+                                        <th class="text-right pr-3">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="small">
+                                    <tr><td colspan="6" class="text-center text-muted py-3">Loading requests...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
 		<!-- SESSIONS TAB -->
 		<section class="tab-content" id="sessionsTab">

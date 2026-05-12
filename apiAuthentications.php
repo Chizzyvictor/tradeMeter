@@ -555,6 +555,32 @@ $begin      = strtotime("first day of last month");
 $ending     = strtotime("last day of last month");
 $action     = $_POST['action'] ?? null;
 
+// ============================
+// VERIFY OWNER PASSWORD
+// ============================
+if ($action === 'verifyOwnerPassword') {
+    if (empty($_SESSION['isLogedin'])) {
+        respond('error', 'Session expired');
+    }
+
+    $userId = intval($_SESSION['user_id'] ?? 0);
+    $password = $_POST['password'] ?? '';
+
+    if ($password === '') {
+        respond('error', 'Password required');
+    }
+
+    $stmt = $db->prepare("SELECT password FROM users WHERE user_id = :uid LIMIT 1");
+    $stmt->bindValue(':uid', $userId, SQLITE3_INTEGER);
+    $user = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+
+    if ($user && password_verify($password, $user['password'])) {
+        respond('success', 'Verified');
+    }
+
+    respond('error', 'Invalid password');
+}
+
 
 
 
