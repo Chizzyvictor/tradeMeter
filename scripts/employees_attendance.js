@@ -206,7 +206,7 @@ class EmployeeAttendancePage {
     );
 
     if (!filteredRows.length) {
-      $tbody.html('<tr><td colspan="10" class="text-center text-muted">No employees found</td></tr>');
+      $tbody.html('<tr><td colspan="8" class="text-center text-muted py-5">No employees found matching your search</td></tr>');
       return;
     }
 
@@ -215,24 +215,44 @@ class EmployeeAttendancePage {
       const tone = String(row.performance_tone || 'danger');
       const badgeClass = tone === 'success' ? 'badge-success' : (tone === 'warning' ? 'badge-warning text-dark' : 'badge-danger');
       const shiftText = Number(row.has_shift || 0) === 1
-        ? `${row.shift_start || '-'}-${row.shift_end || '-'} (+${Number(row.grace_minutes || 0)}m)`
-        : 'Default';
+        ? `<span class="text-dark font-weight-bold">${row.shift_start || '-'} - ${row.shift_end || '-'}</span><br><small class="text-muted">+${Number(row.grace_minutes || 0)}m grace</small>`
+        : '<span class="text-muted">Global Policy</span>';
 
       return `
-        <tr class="attendance-employee-row" data-id="${row.user_id}" style="cursor:pointer;">
-          <td>${AppCore.escapeHtml(row.full_name || '-')}<br><small class="text-muted">${AppCore.escapeHtml(row.email || '-')}</small></td>
-          <td>${AppCore.escapeHtml(row.role_name || '-')}</td>
-          <td>${Number(row.attendance_days || 0)}</td>
-          <td><span class="badge badge-success">${Number(row.on_time_days || 0)}</span></td>
-          <td><span class="badge badge-warning text-dark">${Number(row.late_days || 0)}</span></td>
-          <td>N${this.app.formatNumber(row.total_fine || 0)}</td>
-          <td><strong>${this.app.formatNumber(gpi)}</strong></td>
-          <td><span class="badge ${badgeClass}">${AppCore.escapeHtml(row.performance_label || 'Needs attention')}</span></td>
-          <td>${AppCore.escapeHtml(shiftText)}</td>
+        <tr class="attendance-employee-row" data-id="${row.user_id}">
+          <td class="py-3">
+            <div class="d-flex align-items-center">
+               <div class="avatar-circle mr-3 bg-light d-flex align-items-center justify-content-center rounded-circle" style="width:40px; height:40px; border: 1px solid #e2e8f0;">
+                  <i class="fas fa-user text-secondary"></i>
+               </div>
+               <div>
+                  <div class="font-weight-bold text-dark">${AppCore.escapeHtml(row.full_name || '-')}</div>
+                  <div class="small text-muted">${AppCore.escapeHtml(row.email || '-')}</div>
+               </div>
+            </div>
+          </td>
+          <td><span class="badge badge-light border text-uppercase" style="font-size:0.7rem;">${AppCore.escapeHtml(row.role_name || '-')}</span></td>
+          <td><span class="h6 mb-0 font-weight-bold">${Number(row.attendance_days || 0)}</span> <small class="text-muted">days</small></td>
           <td>
-            <button class="btn btn-sm btn-outline-dark attendance-signout-btn" data-id="${row.user_id}">Sign-Out</button>
-            <button class="btn btn-sm btn-outline-info attendance-shift-btn" data-id="${row.user_id}" data-shift-start="${row.shift_start || '09:00'}" data-shift-end="${row.shift_end || '17:00'}" data-grace="${Number(row.grace_minutes || 0)}" data-active="${Number(row.has_shift || 0)}">Shift</button>
-            <button class="btn btn-sm btn-outline-warning attendance-request-correction-btn" data-id="${row.user_id}">Correction</button>
+            <div class="d-flex">
+              <span class="badge badge-success mr-1" title="On Time">${Number(row.on_time_days || 0)}</span>
+              <span class="badge badge-warning text-dark" title="Late">${Number(row.late_days || 0)}</span>
+            </div>
+          </td>
+          <td><span class="text-danger font-weight-bold">N${this.app.formatNumber(row.total_fine || 0)}</span></td>
+          <td>
+            <div class="d-flex flex-column">
+               <span class="font-weight-bold h6 mb-1">${this.app.formatNumber(gpi)}</span>
+               <span class="badge ${badgeClass} badge-performance text-center" style="width: fit-content;">${AppCore.escapeHtml(row.performance_label || 'Needs attention')}</span>
+            </div>
+          </td>
+          <td>${shiftText}</td>
+          <td class="text-right">
+            <div class="btn-group shadow-sm">
+              <button class="btn btn-sm btn-white border attendance-signout-btn" data-id="${row.user_id}" title="Force Sign-Out"><i class="fas fa-sign-out-alt"></i></button>
+              <button class="btn btn-sm btn-white border attendance-shift-btn" data-id="${row.user_id}" data-shift-start="${row.shift_start || '09:00'}" data-shift-end="${row.shift_end || '17:00'}" data-grace="${Number(row.grace_minutes || 0)}" data-active="${Number(row.has_shift || 0)}" title="Manage Shift"><i class="fas fa-user-cog"></i></button>
+              <button class="btn btn-sm btn-white border attendance-request-correction-btn" data-id="${row.user_id}" title="New Correction"><i class="fas fa-edit"></i></button>
+            </div>
           </td>
         </tr>
       `;
@@ -246,29 +266,31 @@ class EmployeeAttendancePage {
     if (!$tbody.length) return;
 
     if (!rows.length) {
-      $tbody.html('<tr><td colspan="7" class="text-center text-muted">No correction requests</td></tr>');
+      $tbody.html('<tr><td colspan="7" class="text-center text-muted py-4">No pending correction requests</td></tr>');
       return;
     }
 
     const html = rows.map((row) => {
       const status = String(row.status || 'pending');
       const badgeClass = status === 'approved' ? 'badge-success' : (status === 'rejected' ? 'badge-danger' : 'badge-warning text-dark');
-      const currentText = `${row.current_signin_at || '-'} / ${row.current_signout_at || '-'}`;
-      const proposedText = `${row.proposed_signin_at || '-'} / ${row.proposed_signout_at || '-'}`;
+      const currentText = `In: ${row.current_signin_at || '-'} <br> Out: ${row.current_signout_at || '-'}`;
+      const proposedText = `<span class="text-primary">In: ${row.proposed_signin_at || '-'}</span> <br> <span class="text-primary">Out: ${row.proposed_signout_at || '-'}</span>`;
       const reviewButtons = status === 'pending'
-        ? `<button class="btn btn-sm btn-success attendance-correction-review-btn" data-id="${row.correction_id}" data-decision="approve">Approve</button>
-           <button class="btn btn-sm btn-danger attendance-correction-review-btn" data-id="${row.correction_id}" data-decision="reject">Reject</button>`
+        ? `<div class="btn-group shadow-sm">
+            <button class="btn btn-sm btn-success attendance-correction-review-btn" data-id="${row.correction_id}" data-decision="approve"><i class="fas fa-check"></i></button>
+            <button class="btn btn-sm btn-danger attendance-correction-review-btn" data-id="${row.correction_id}" data-decision="reject"><i class="fas fa-times"></i></button>
+           </div>`
         : '-';
 
       return `
         <tr>
-          <td>${AppCore.escapeHtml(row.full_name || '-')}</td>
+          <td class="pl-4 font-weight-bold text-dark">${AppCore.escapeHtml(row.full_name || '-')}</td>
           <td>${AppCore.escapeHtml(row.attendance_date || '-')}</td>
-          <td>${AppCore.escapeHtml(currentText)}</td>
-          <td>${AppCore.escapeHtml(proposedText)}</td>
-          <td>${AppCore.escapeHtml(row.reason || '-')}</td>
-          <td><span class="badge ${badgeClass}">${AppCore.escapeHtml(status)}</span></td>
-          <td>${reviewButtons}</td>
+          <td class="small">${currentText}</td>
+          <td class="small">${proposedText}</td>
+          <td><span class="text-muted">${AppCore.escapeHtml(row.reason || '-')}</span></td>
+          <td><span class="badge ${badgeClass} text-uppercase px-2">${AppCore.escapeHtml(status)}</span></td>
+          <td class="pr-4 text-right">${reviewButtons}</td>
         </tr>
       `;
     }).join('');
@@ -564,7 +586,7 @@ class EmployeeAttendancePage {
     if (!$tbody.length) return;
 
     if (!rows.length) {
-      $tbody.html('<tr><td colspan="6" class="text-center text-muted">No attendance records</td></tr>');
+      $tbody.html('<tr><td colspan="6" class="text-center text-muted py-4">No recent activities recorded</td></tr>');
       return;
     }
 
@@ -573,25 +595,30 @@ class EmployeeAttendancePage {
       const grade = String(row.late_grade || 'on_time');
       let statusLabel = 'On time';
       let statusClass = 'badge-success';
+      let statusIcon = '<i class="fas fa-check-circle mr-1"></i>';
+
       if (grade === 'absent') {
         statusLabel = 'Absent';
         statusClass = 'badge-danger';
+        statusIcon = '<i class="fas fa-user-slash mr-1"></i>';
       } else if (minutesLate > 60) {
         statusLabel = 'Very late';
         statusClass = 'badge-danger';
+        statusIcon = '<i class="fas fa-exclamation-circle mr-1"></i>';
       } else if (minutesLate > 0) {
         statusLabel = 'Late';
         statusClass = 'badge-warning text-dark';
+        statusIcon = '<i class="fas fa-clock mr-1"></i>';
       }
 
       return `
         <tr>
-          <td>${row.attendance_date || '-'}</td>
-          <td>${row.signin_at ? this.app.formatDateSafe(row.signin_at, '-') : '-'}</td>
-          <td>${row.signout_at ? this.app.formatDateSafe(row.signout_at, '-') : '-'}</td>
-          <td><span class="badge ${statusClass}">${statusLabel}</span></td>
-          <td>${minutesLate}</td>
-          <td>N${this.app.formatNumber(row.fine_amount || 0)}</td>
+          <td class="pl-3">${row.attendance_date || '-'}</td>
+          <td>${row.signin_at ? this.app.formatDateSafe(row.signin_at, '-') : '<span class="text-muted">-</span>'}</td>
+          <td>${row.signout_at ? this.app.formatDateSafe(row.signout_at, '-') : '<span class="text-muted">-</span>'}</td>
+          <td><span class="badge ${statusClass} px-2">${statusIcon}${statusLabel}</span></td>
+          <td class="${minutesLate > 0 ? 'text-warning font-weight-bold' : ''}">${minutesLate}</td>
+          <td class="pr-3 ${Number(row.fine_amount) > 0 ? 'text-danger font-weight-bold' : ''}">N${this.app.formatNumber(row.fine_amount || 0)}</td>
         </tr>
       `;
     }).join('');

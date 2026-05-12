@@ -1,0 +1,221 @@
+/* TradeMeter Attendance Premium Styles */
+
+.attendance-page {
+    background-color: #f8f9fa;
+    min-height: 100vh;
+    padding-bottom: 2rem;
+}
+
+.attendance-page .content-header {
+    background: #fff;
+    padding: 1.5rem 0;
+    border-bottom: 1px solid #e9ecef;
+    margin-bottom: 2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.attendance-page .content-header h1 {
+    font-weight: 700;
+    color: #2d3748;
+    font-size: 1.75rem;
+    letter-spacing: -0.025em;
+}
+
+/* Stat Cards */
+.attendance-stat-card {
+    border: none;
+    border-radius: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
+    position: relative;
+}
+
+.attendance-stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.attendance-stat-card .card-body {
+    padding: 1.5rem;
+    z-index: 1;
+}
+
+.attendance-stat-card h3 {
+    font-weight: 800;
+    margin: 0.5rem 0 0;
+    font-size: 1.875rem;
+    color: #1a202c;
+}
+
+.attendance-stat-card .text-muted {
+    text-transform: uppercase;
+    font-weight: 600;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    color: #718096 !important;
+}
+
+/* Specific Card Colors */
+.attendance-stat-indigo { border-left: 4px solid #667eea; background: linear-gradient(135deg, #ffffff 0%, #f0f4ff 100%); }
+.attendance-stat-green  { border-left: 4px solid #48bb78; background: linear-gradient(135deg, #ffffff 0%, #f0fff4 100%); }
+.attendance-stat-amber  { border-left: 4px solid #ed8936; background: linear-gradient(135deg, #ffffff 0%, #fffaf0 100%); }
+.attendance-stat-slate  { border-left: 4px solid #a0aec0; background: linear-gradient(135deg, #ffffff 0%, #f7fafc 100%); }
+.attendance-stat-rose   { border-left: 4px solid #f56565; background: linear-gradient(135deg, #ffffff 0%, #fff5f5 100%); }
+
+/* Table Styling */
+.attendance-page .card {
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+}
+
+.attendance-page .card-header {
+    background-color: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 1.25rem 1.5rem;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+.attendance-page .table thead th {
+    background-color: #f7fafc;
+    border-top: none;
+    border-bottom: 2px solid #e2e8f0;
+    color: #4a5568;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    padding: 1rem 1.5rem;
+}
+
+.attendance-page .table tbody td {
+    padding: 1rem 1.5rem;
+    vertical-align: middle;
+    color: #4a5568;
+    border-bottom: 1px solid #edf2f7;
+}
+
+.attendance-page .table-hover tbody tr:hover {
+    background-color: #f8fafc;
+    cursor: pointer;
+}
+
+/* Badges & Status */
+.badge-performance {
+    padding: 0.4em 0.8em;
+    border-radius: 9999px;
+    font-weight: 600;
+    font-size: 0.7rem;
+}
+
+.performance-high { background-color: #c6f6d5; color: #22543d; }
+.performance-mid  { background-color: #feebc8; color: #744210; }
+.performance-low  { background-color: #fff5f5; color: #822727; }
+
+/* Detail View Layout */
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.detail-item {
+    background: #fff;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.detail-item small {
+    display: block;
+    color: #718096;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+}
+
+.detail-item div {
+    font-weight: 700;
+    color: #2d3748;
+    font-size: 1.1rem;
+}
+
+/* Buttons */
+.attendance-page .btn {
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 0.6rem 1.25rem;
+    transition: all 0.2s;
+}
+
+.attendance-page .btn-primary {
+    background-color: #4299e1;
+    border-color: #4299e1;
+    box-shadow: 0 4px 6px -1px rgba(66, 153, 225, 0.4);
+}
+
+.attendance-page .btn-primary:hover {
+    background-color: #3182ce;
+    transform: translateY(-1px);
+    box-shadow: 0 7px 14px -3px rgba(66, 153, 225, 0.4);
+}
+
+.attendance-page .btn-white {
+    background-color: #fff;
+    color: #4a5568;
+}
+
+.attendance-page .btn-white:hover {
+    background-color: #f7fafc;
+    color: #2d3748;
+}
+
+.bg-light-soft {
+    background-color: #f8fafc;
+}
+
+.text-indigo {
+    color: #667eea;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.attendance-tab-pane {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Dark Mode Compatibility (Partial) */
+[data-theme='dark'] .attendance-page {
+    background-color: #1a202c;
+}
+
+[data-theme='dark'] .attendance-page .content-header,
+[data-theme='dark'] .attendance-page .card,
+[data-theme='dark'] .attendance-page .card-header,
+[data-theme='dark'] .detail-item {
+    background-color: #2d3748;
+    border-color: #4a5568;
+}
+
+[data-theme='dark'] .attendance-page .content-header h1,
+[data-theme='dark'] .attendance-page .card-header,
+[data-theme='dark'] .detail-item div,
+[data-theme='dark'] .attendance-stat-card h3 {
+    color: #e2e8f0;
+}
+
+[data-theme='dark'] .attendance-page .table thead th {
+    background-color: #2d3748;
+    color: #a0aec0;
+}
+
+[data-theme='dark'] .attendance-page .table tbody td {
+    color: #cbd5e0;
+    border-color: #4a5568;
+}
