@@ -696,7 +696,9 @@ try {
             $rangeMeta = attendanceBuildRangeFilter((string)($_POST['range'] ?? '30d'));
 
             $employees = [];
-            $usersStmt = $db->prepare("SELECT u.user_id, u.full_name, u.email, u.is_active,
+                $todayDate = date('Y-m-d');
+
+                $usersStmt = $db->prepare("SELECT u.user_id, u.full_name, u.email, u.is_active,
                                               COALESCE((
                                                  SELECT r.role_name
                                                  FROM user_roles ur
@@ -712,11 +714,17 @@ try {
                                               COALESCE(sr.shift_start, '') AS shift_start,
                                               COALESCE(sr.shift_end, '') AS shift_end,
                                               COALESCE(sr.grace_minutes, 0) AS grace_minutes,
-                                              COALESCE(sr.is_active, 0) AS has_shift
+                                                COALESCE(sr.is_active, 0) AS has_shift,
+                                                COALESCE(tl.signin_at, '') AS today_signin_at,
+                                                COALESCE(tl.signout_at, '') AS today_signout_at,
+                                                COALESCE(tl.minutes_late, 0) AS today_minutes_late,
+                                                COALESCE(tl.late_grade, '') AS today_late_grade
                                        FROM users u
                                        LEFT JOIN employee_shift_rules sr ON sr.cid = u.cid AND sr.user_id = u.user_id
+                                            LEFT JOIN employee_attendance_logs tl ON tl.cid = u.cid AND tl.user_id = u.user_id AND tl.attendance_date = :today_date
                                        WHERE u.cid = :cid
                                        ORDER BY u.full_name ASC");
+                             $usersStmt->bindValue(':today_date', $todayDate, SQLITE3_TEXT);
             $usersStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
             $usersRes = $usersStmt->execute();
             while ($usersRes && ($u = $usersRes->fetchArray(SQLITE3_ASSOC))) {
@@ -733,6 +741,10 @@ try {
                     'shift_end' => (string)($u['shift_end'] ?? ''),
                     'grace_minutes' => intval($u['grace_minutes'] ?? 0),
                     'has_shift' => intval($u['has_shift'] ?? 0),
+                    'today_signin_at' => (string)($u['today_signin_at'] ?? ''),
+                    'today_signout_at' => (string)($u['today_signout_at'] ?? ''),
+                    'today_minutes_late' => intval($u['today_minutes_late'] ?? 0),
+                    'today_late_grade' => (string)($u['today_late_grade'] ?? ''),
                     'attendance_days' => 0,
                     'on_time_days' => 0,
                     'late_days' => 0,

@@ -126,6 +126,44 @@ if (!$isManagerOrOwner) {
         </div>
       </div>
 
+      <div id="attendanceListTab" class="attendance-tab-pane">
+        <div class="card shadow-sm mb-4 border-0 attendance-list-panel">
+          <div class="card-header bg-white d-flex flex-column flex-lg-row justify-content-between align-items-lg-center py-3">
+            <div>
+              <h5 class="mb-1 font-weight-bold">Signed-In Employees</h5>
+              <small class="text-muted">Employees with a recorded sign-in for today</small>
+            </div>
+            <div class="attendance-list-toolbar mt-3 mt-lg-0">
+              <div class="input-group shadow-sm attendance-list-search">
+                <div class="input-group-prepend">
+                  <span class="input-group-text bg-white border-right-0"><i class="fas fa-search text-muted"></i></span>
+                </div>
+                <input type="text" class="form-control border-left-0 pl-0" id="attendanceEmployeeSearch" placeholder="Search employee, email, or role">
+              </div>
+            </div>
+          </div>
+          <div class="card-body pt-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0 attendance-signins-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Role</th>
+                    <th>Signed In</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="attendanceEmployeesTableBody">
+                  <tr class="attendance-empty-row">
+                    <td colspan="4" class="text-center text-muted py-4">Loading signed-in employees...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
 
       <div id="attendanceDetailsTab" class="attendance-tab-pane" style="display:none;">
         <div class="card shadow-sm mb-4 border-0">

@@ -162,7 +162,8 @@ class EmployeeAttendancePage {
       onSuccess: (res) => {
         this.employees = Array.isArray(res.data) ? res.data : [];
         this.renderSummary(res.summary || {});
-        // Registry rendering removed from this page
+        this.renderEmployees(this.employees);
+        this.loadEmployeeOptionsForModals();
       }
     });
   }
@@ -189,7 +190,92 @@ class EmployeeAttendancePage {
     $('#attendanceStatFinesToday').text(`N${this.app.formatNumber(summary.total_fines_today || 0)}`);
   }
 
-  // renderEmployees removed
+  renderEmployees(rows) {
+    const $tbody = $('#attendanceEmployeesTableBody');
+    if (!$tbody.length) return;
+
+    const sourceRows = Array.isArray(rows) ? rows : [];
+    const signedInRows = sourceRows.filter((row) => String(row.today_signin_at || '').trim() !== '');
+    const filteredRows = signedInRows.filter((row) => {
+      if (!this.searchTerm) return true;
+
+      const haystack = [
+        row.full_name || '',
+        row.email || '',
+        row.role_name || ''
+      ].join(' ').toLowerCase();
+
+      return haystack.includes(this.searchTerm);
+    });
+
+    this.filteredEmployees = filteredRows;
+
+    if (!filteredRows.length) {
+      const emptyMessage = signedInRows.length
+        ? 'No signed-in employees match your search.'
+        : 'No employees have signed in today.';
+      $tbody.html(`<tr class="attendance-empty-row"><td colspan="4" class="text-center text-muted py-4">${emptyMessage}</td></tr>`);
+      return;
+    }
+
+    const html = filteredRows.map((row) => {
+      const statusMeta = this.getEmployeeTodayStatusMeta(row);
+      const signInTime = this.formatAttendanceTime(row.today_signin_at);
+      const employeeLabel = AppCore.escapeHtml(row.full_name || '-');
+      const email = AppCore.escapeHtml(row.email || '-');
+      const role = AppCore.escapeHtml(row.role_name || 'User');
+
+      return `
+        <tr class="attendance-employee-row" data-id="${Number(row.user_id) || 0}">
+          <td data-label="Employee">
+            <div class="attendance-employee-name">${employeeLabel}</div>
+            <div class="attendance-employee-meta">${email}</div>
+          </td>
+          <td data-label="Role">${role}</td>
+          <td data-label="Signed In">${signInTime}</td>
+          <td data-label="Status"><span class="badge ${statusMeta.badgeClass}">${statusMeta.label}</span></td>
+        </tr>
+      `;
+    }).join('');
+
+    $tbody.html(html);
+  }
+
+  getEmployeeTodayStatusMeta(row) {
+    const hasSignOut = String(row.today_signout_at || '').trim() !== '';
+    const minutesLate = Number(row.today_minutes_late || 0);
+    const grade = String(row.today_late_grade || '').trim().toLowerCase();
+
+    if (hasSignOut) {
+      return { label: 'Signed out', badgeClass: 'badge-secondary px-2 py-1' };
+    }
+
+    if (grade === 'absent') {
+      return { label: 'Absent', badgeClass: 'badge-danger px-2 py-1' };
+    }
+
+    if (minutesLate > 0) {
+      return { label: `Late by ${minutesLate}m`, badgeClass: 'badge-warning text-dark px-2 py-1' };
+    }
+
+    return { label: 'On time', badgeClass: 'badge-success px-2 py-1' };
+  }
+
+  formatAttendanceTime(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '-';
+
+    const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) {
+      return raw;
+    }
+
+    return parsed.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
 
   renderCorrections(rows) {
     const $tbody = $('#attendanceCorrectionsTable tbody');
