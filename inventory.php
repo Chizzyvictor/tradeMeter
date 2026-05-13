@@ -381,6 +381,7 @@ include "INC/navbar.php";
             </div>
         </div>
 </div>
+      </div>
 
 <div class="modal fade" id="stockTakingModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="stockTakingModalLabel">
   <div class="modal-dialog modal-dialog-centered" role="document">
