@@ -338,7 +338,7 @@ function appEnsureCoreBusinessSchema(AppDbConnection $db): void {
             ledger_id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id INTEGER NOT NULL,
             cid INTEGER NOT NULL,
-            reference_type TEXT NOT NULL CHECK(reference_type IN ('purchase','sale','adjustment')),
+            reference_type TEXT NOT NULL CHECK(reference_type IN ('purchase','sale','adjustment','stock_taking')),
             reference_id INTEGER,
             qty_in INTEGER DEFAULT 0,
             qty_out INTEGER DEFAULT 0,
