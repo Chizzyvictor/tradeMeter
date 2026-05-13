@@ -8,6 +8,8 @@ class Inventory {
       categories: [],
       products: [],
       filteredProducts: [],
+      stockTakingProducts: [],
+      filteredStockTakingProducts: [],
       purchasePartners: [],
       purchaseProducts: [],
       salePartners: [],
@@ -23,6 +25,14 @@ class Inventory {
     this.$stockMovementCards = $("#stockMovementCards");
     this.$reorderTableBody = $("#reorderTableBody");
     this.$reorderSuggestionsCards = $("#reorderSuggestionsCards");
+    this.$stockTakingProductsTableBody = $("#stockTakingProductsTableBody");
+    this.$stockTakingProductsCards = $("#stockTakingProductsCards");
+    this.$stockTakingSearchInput = $("#stockTakingSearchInput");
+    this.$stockTakingSearchSummary = $("#stockTakingSearchSummary");
+    this.$stockTakingModal = $("#stockTakingModal");
+    this.$stockTakingHistoryModal = $("#stockTakingHistoryModal");
+    this.$stockTakingHistoryTableBody = $("#stockTakingHistoryTableBody");
+    this.$stockTakingHistoryCards = $("#stockTakingHistoryCards");
     this.$productTransactionsTable = $("#productTransactionsTable tbody");
     this.$productTransactionsCards = $("#productTransactionsCards");
     this.$productStockMovementTable = $("#productStockMovementTable tbody");
@@ -55,6 +65,7 @@ class Inventory {
     this.$saleTotal = $("#saleTotal");
     this.$saleAmountPaid = $("#saleAmountPaid");
     this.searchTimeout = null;
+    this.stockTakingSearchTimeout = null;
   }
 
   post(action, data = {}, onSuccess = null) {
@@ -222,6 +233,17 @@ class Inventory {
       const rows = res.data || [];
       this.renderReorderSuggestions(rows);
       this.showSection("reorderTab");
+    });
+  }
+
+  loadStockTakingProducts(search = "", onSuccess = null) {
+    this.post("loadStockTakingProducts", { search }, (res) => {
+      const rows = Array.isArray(res.data) ? res.data : [];
+      this.state.stockTakingProducts = rows;
+      this.state.filteredStockTakingProducts = rows;
+      this.renderStockTakingProducts(rows);
+      this.showSection("stockTakingTab");
+      if (typeof onSuccess === "function") onSuccess(rows);
     });
   }
 
@@ -856,12 +878,14 @@ class Inventory {
     const canRestock = this.app.hasAnyPermission("manage_inventory", "create_purchases");
     const canSell = this.app.hasPermission("create_sales");
     const canDelete = this.app.hasPermission("delete_records");
+    const canStockTake = this.app.hasAnyPermission("manage_inventory", "create_purchases", "manage_products");
 
     $("#addCategoryBtn, #addProductBtn, #editProductBtn").toggle(canManageCatalog);
     $("#newSaleBtn").toggle(canSell);
     $("#newPurchaseBtn").toggle(canRestock);
     $("#restockProductBtn").toggle(canRestock);
     $("#deleteProductBtn").toggle(canDelete);
+    $("#viewStockTakingBtn").toggle(canStockTake);
   }
 
   renderProducts(rows) {
@@ -1194,6 +1218,235 @@ class Inventory {
     this.$reorderSuggestionsCards.html(cardsHtml);
   }
 
+  getVarianceTone(varianceValue) {
+    const variance = this.app.toNumber(varianceValue, 0);
+    if (variance === 0) return { label: "Accurate", className: "success" };
+    if (variance > 0) return { label: `+${variance} Excess`, className: "info" };
+    return { label: `${variance} Missing`, className: "danger" };
+  }
+
+  renderStockTakingProducts(rows) {
+    this.$stockTakingProductsTableBody.empty();
+    this.$stockTakingProductsCards.empty();
+
+    if (!rows.length) {
+      this.$stockTakingProductsTableBody.html("<tr><td colspan='6' class='text-center text-muted'>No products found for stock taking</td></tr>");
+      this.$stockTakingProductsCards.html("<div class='text-center text-muted py-3'>No products found for stock taking</div>");
+      this.$stockTakingSearchSummary.addClass("d-none").text("");
+      return;
+    }
+
+    const query = String(this.$stockTakingSearchInput.val() || "").trim().toLowerCase();
+    const filteredRows = rows.filter((row) => {
+      if (!query) return true;
+      const haystack = `${row.product_name || ""} ${row.category_name || ""} ${row.product_unit || ""}`.toLowerCase();
+      return haystack.includes(query);
+    });
+
+    this.state.filteredStockTakingProducts = filteredRows;
+    this.$stockTakingSearchSummary
+      .removeClass("d-none")
+      .text(`Showing ${filteredRows.length} of ${rows.length} products`);
+
+    if (!filteredRows.length) {
+      this.$stockTakingProductsTableBody.html("<tr><td colspan='6' class='text-center text-muted'>No products match your search</td></tr>");
+      this.$stockTakingProductsCards.html("<div class='text-center text-muted py-3'>No products match your search</div>");
+      return;
+    }
+
+    const tableHtml = filteredRows.map((p) => {
+      const systemQty = this.app.toNumber(p.system_quantity, 0);
+      const lastCounted = this.app.toNumber(p.last_counted_quantity, 0);
+      const varianceTone = this.getVarianceTone(this.app.toNumber(p.last_variance_quantity, 0));
+      const varianceBadge = `<span class=\"badge badge-${varianceTone.className}\">${varianceTone.label}</span>`;
+      const lastCountLabel = Number(p.last_counted_at || 0) > 0
+        ? `${lastCounted} <small class=\"text-muted d-block\">${this.app.formatDateSafe(p.last_counted_at)}</small>`
+        : "<span class='text-muted'>-</span>";
+
+      return `
+        <tr>
+          <td>
+            <div class="font-weight-bold">${AppCore.escapeHtml(p.product_name || "-")}</div>
+            <small class="text-muted text-uppercase">${AppCore.escapeHtml(p.product_unit || "pcs")}</small>
+          </td>
+          <td>${AppCore.escapeHtml(p.category_name || "Uncategorized")}</td>
+          <td><strong>${systemQty}</strong></td>
+          <td>${lastCountLabel}</td>
+          <td>${varianceBadge}</td>
+          <td>
+            <div class="btn-group">
+              <button type="button" class="btn btn-sm btn-success stockTakingAddBtn" data-product-id="${p.product_id}" data-product-name="${AppCore.escapeHtml(p.product_name || "")}" data-system-qty="${systemQty}">Add</button>
+              <button type="button" class="btn btn-sm btn-outline-primary stockTakingViewBtn" data-product-id="${p.product_id}" data-product-name="${AppCore.escapeHtml(p.product_name || "")}">View</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    const cardsHtml = filteredRows.map((p) => {
+      const systemQty = this.app.toNumber(p.system_quantity, 0);
+      const lastCounted = this.app.toNumber(p.last_counted_quantity, 0);
+      const varianceTone = this.getVarianceTone(this.app.toNumber(p.last_variance_quantity, 0));
+      const lastDate = Number(p.last_counted_at || 0) > 0 ? this.app.formatDateSafe(p.last_counted_at) : "-";
+
+      return `
+        <div class="card shadow-sm inventory-product-card mb-3">
+          <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div>
+                <h6 class="mb-0">${AppCore.escapeHtml(p.product_name || "-")}</h6>
+                <small class="text-muted">${AppCore.escapeHtml(p.category_name || "Uncategorized")} • ${AppCore.escapeHtml(p.product_unit || "pcs")}</small>
+              </div>
+              <span class="badge badge-${varianceTone.className}">${varianceTone.label}</span>
+            </div>
+
+            <div class="inventory-stock-meta text-muted mb-2">
+              <span>System Qty: ${systemQty}</span>
+              <span>Last Count: ${lastCounted}</span>
+              <span>Last Date: ${lastDate}</span>
+            </div>
+
+            <div class="d-flex">
+              <button type="button" class="btn btn-sm btn-success flex-fill mr-2 stockTakingAddBtn" data-product-id="${p.product_id}" data-product-name="${AppCore.escapeHtml(p.product_name || "")}" data-system-qty="${systemQty}">Add</button>
+              <button type="button" class="btn btn-sm btn-outline-primary flex-fill stockTakingViewBtn" data-product-id="${p.product_id}" data-product-name="${AppCore.escapeHtml(p.product_name || "")}">View</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    this.$stockTakingProductsTableBody.html(tableHtml);
+    this.$stockTakingProductsCards.html(cardsHtml);
+  }
+
+  openStockTakingModal(productId, productName, systemQty) {
+    $("#stockTakingProductId").val(String(productId || 0));
+    $("#stockTakingProductName").text(productName || "-");
+    $("#stockTakingSystemQty").text(String(this.app.toNumber(systemQty, 0)));
+    $("#stockTakingCountedQty").val(String(this.app.toNumber(systemQty, 0)));
+    $("#stockTakingNotes").val("");
+    this.updateStockTakingVariancePreview();
+    this.$stockTakingModal.modal("show");
+  }
+
+  updateStockTakingVariancePreview() {
+    const systemQty = this.app.toNumber($("#stockTakingSystemQty").text(), 0);
+    const countedQty = this.app.toNumber($("#stockTakingCountedQty").val(), 0);
+    const variance = countedQty - systemQty;
+    const tone = this.getVarianceTone(variance);
+
+    $("#stockTakingVarianceValue")
+      .text(variance > 0 ? `+${variance}` : String(variance))
+      .removeClass("text-success text-danger text-info")
+      .addClass(tone.className === "success" ? "text-success" : (tone.className === "danger" ? "text-danger" : "text-info"));
+
+    const showAlert = Math.abs(variance) >= 10;
+    $("#stockTakingVarianceAlert").toggleClass("d-none", !showAlert);
+  }
+
+  saveStockTaking() {
+    const productId = Number($("#stockTakingProductId").val()) || 0;
+    const countedQuantity = this.app.toNumber($("#stockTakingCountedQty").val(), -1);
+    const notes = String($("#stockTakingNotes").val() || "").trim();
+
+    if (!productId) {
+      this.app.showAlert("Invalid product for stock taking.", "error");
+      return;
+    }
+
+    if (countedQuantity < 0) {
+      this.app.showAlert("Counted quantity cannot be negative.", "error");
+      return;
+    }
+
+    this.post("saveStockTaking", {
+      product_id: productId,
+      counted_quantity: countedQuantity,
+      notes
+    }, () => {
+      AppCore.safeHideModal("#stockTakingModal");
+      this.loadStockTakingProducts(String(this.$stockTakingSearchInput.val() || ""));
+      this.loadProducts(this.state.currentCategoryId || 0);
+      if (this.state.currentProduct?.product_id) {
+        this.loadProductDetails(this.state.currentProduct.product_id);
+      }
+    });
+  }
+
+  loadStockTakingHistory(productId, productName = "") {
+    if (!productId) return;
+
+    $("#stockTakingHistoryModalLabel").text(`Stock Taking History - ${productName || "Product"}`);
+    this.$stockTakingHistoryTableBody.html("<tr><td colspan='7' class='text-center text-muted'>Loading history...</td></tr>");
+    this.$stockTakingHistoryCards.html("");
+
+    this.post("loadStockTakingHistory", { product_id: productId }, (res) => {
+      const rows = Array.isArray(res.data) ? res.data : [];
+      this.renderStockTakingHistory(rows);
+      this.$stockTakingHistoryModal.modal("show");
+    });
+  }
+
+  renderStockTakingHistory(rows) {
+    this.$stockTakingHistoryTableBody.empty();
+    this.$stockTakingHistoryCards.empty();
+
+    if (!rows.length) {
+      this.$stockTakingHistoryTableBody.html("<tr><td colspan='7' class='text-center text-muted'>No stock taking history found</td></tr>");
+      this.$stockTakingHistoryCards.html("<div class='text-center text-muted py-3'>No stock taking history found</div>");
+      return;
+    }
+
+    const tableHtml = rows.map((row) => {
+      const varianceTone = this.getVarianceTone(row.variance_quantity);
+      const countedBy = row.counted_by_name || "-";
+      const status = String(row.status || "pending");
+      const statusClass = status === "approved" ? "success" : (status === "rejected" ? "danger" : "warning");
+
+      return `
+        <tr>
+          <td>${this.app.formatDateSafe(row.created_at)}</td>
+          <td>${this.app.toNumber(row.system_quantity, 0)}</td>
+          <td>${this.app.toNumber(row.counted_quantity, 0)}</td>
+          <td><span class="badge badge-${varianceTone.className}">${varianceTone.label}</span></td>
+          <td>${AppCore.escapeHtml(countedBy)}</td>
+          <td><span class="badge badge-${statusClass}">${AppCore.escapeHtml(status)}</span></td>
+          <td>${AppCore.escapeHtml(row.notes || "-")}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const cardsHtml = rows.map((row) => {
+      const varianceTone = this.getVarianceTone(row.variance_quantity);
+      const status = String(row.status || "pending");
+      const statusClass = status === "approved" ? "success" : (status === "rejected" ? "danger" : "warning");
+
+      return `
+        <div class="card shadow-sm inventory-detail-card mb-3">
+          <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div>
+                <h6 class="mb-0">${this.app.formatDateSafe(row.created_at)}</h6>
+                <small class="text-muted">Counted by ${AppCore.escapeHtml(row.counted_by_name || "-")}</small>
+              </div>
+              <span class="badge badge-${statusClass}">${AppCore.escapeHtml(status)}</span>
+            </div>
+
+            <div class="inventory-stock-meta text-muted mb-2">
+              <span>System: ${this.app.toNumber(row.system_quantity, 0)}</span>
+              <span>Counted: ${this.app.toNumber(row.counted_quantity, 0)}</span>
+              <span>Variance: <span class="badge badge-${varianceTone.className}">${varianceTone.label}</span></span>
+              <span>Notes: ${AppCore.escapeHtml(row.notes || "-")}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    this.$stockTakingHistoryTableBody.html(tableHtml);
+    this.$stockTakingHistoryCards.html(cardsHtml);
+  }
+
   updateStatBadges(products = null) {
     const productsForStats = Array.isArray(products) ? products : this.state.products;
     const catCount = this.state.categories.length;
@@ -1289,6 +1542,10 @@ $(document).ready(function () {
     InventoryApp.loadReorderSuggestions();
   });
 
+  $("#viewStockTakingBtn").on("click", function () {
+    InventoryApp.loadStockTakingProducts();
+  });
+
   $("#backToCategoriesFromMovementBtn").on("click", function () {
     InventoryApp.loadCategories();
     InventoryApp.loadProducts(0);
@@ -1297,6 +1554,39 @@ $(document).ready(function () {
 
   $("#backToHomeFromReorder").on("click", function () {
     InventoryApp.showSection("home");
+  });
+
+  $("#backToHomeFromStockTaking").on("click", function () {
+    InventoryApp.showSection("home");
+  });
+
+  InventoryApp.$stockTakingSearchInput.on("input", function () {
+    clearTimeout(InventoryApp.stockTakingSearchTimeout);
+    InventoryApp.stockTakingSearchTimeout = setTimeout(() => {
+      InventoryApp.renderStockTakingProducts(InventoryApp.state.stockTakingProducts || []);
+    }, 250);
+  });
+
+  $(document).on("click", ".stockTakingAddBtn", function () {
+    const productId = Number($(this).data("productId")) || 0;
+    const productName = String($(this).data("productName") || "");
+    const systemQty = Number($(this).data("systemQty")) || 0;
+    InventoryApp.openStockTakingModal(productId, productName, systemQty);
+  });
+
+  $(document).on("click", ".stockTakingViewBtn", function () {
+    const productId = Number($(this).data("productId")) || 0;
+    const productName = String($(this).data("productName") || "");
+    InventoryApp.loadStockTakingHistory(productId, productName);
+  });
+
+  $("#stockTakingCountedQty").on("input", function () {
+    InventoryApp.updateStockTakingVariancePreview();
+  });
+
+  $("#stockTakingForm").on("submit", function (e) {
+    e.preventDefault();
+    InventoryApp.saveStockTaking();
   });
 
   $(document).on("click", ".viewProductsBtn", function () {

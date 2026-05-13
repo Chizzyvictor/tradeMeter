@@ -27,6 +27,9 @@ include "INC/navbar.php";
                 <button class="btn btn-warning" id="viewReorderBtn">&#128722; Reorder Suggestions</button>
             </li>
             <li class="breadcrumb-item">
+              <button class="btn btn-outline-dark" id="viewStockTakingBtn">Stock Taking</button>
+            </li>
+            <li class="breadcrumb-item">
                 <button class="btn btn-outline-primary" id="addCategoryBtn">Add Category<span class="badge badge-primary badge-pill ml-2" id="badgeCategories">0</span></button>
             </li>
             <li class="breadcrumb-item active">
@@ -187,6 +190,50 @@ include "INC/navbar.php";
     </div>
 </div>
 
+  <div class="tab-content" id="stockTakingTab">
+    <div class="card p-3 inventory-section-card">
+      <div class="d-flex justify-content-between align-items-center mb-4 inventory-section-head">
+        <button class="btn btn-secondary" id="backToHomeFromStockTaking">Back</button>
+        <h3 class="mb-0">Stock Taking</h3>
+      </div>
+
+      <div class="mb-3">
+        <input
+          type="text"
+          id="stockTakingSearchInput"
+          class="form-control"
+          placeholder="Search product by name, category, or unit..."
+          autocomplete="off"
+        >
+        <small id="stockTakingSearchSummary" class="inventory-search-indicator d-none"></small>
+      </div>
+
+      <div class="table-responsive inventory-table-wrap inventory-stock-taking-table-wrap">
+        <table class="table table-hover table-striped table-bordered" id="stockTakingProductsTable">
+          <thead class="thead-dark">
+            <tr>
+              <th>Product</th>
+              <th>Category</th>
+              <th>System Qty</th>
+              <th>Last Count</th>
+              <th>Last Variance</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="stockTakingProductsTableBody">
+            <tr>
+              <td colspan="6" class="text-center text-muted">Loading products...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="stockTakingProductsCards" class="inventory-stock-taking-cards" aria-live="polite">
+        <!-- Mobile stock taking cards will be dynamically loaded here -->
+      </div>
+    </div>
+  </div>
+
 <div class="tab-content" id="home">
     <div class="card p-3 inventory-section-card">
         <div class="d-flex justify-content-between align-items-center mb-4 inventory-section-head">
@@ -333,6 +380,90 @@ include "INC/navbar.php";
                 <!-- Mobile product stock movement cards will be dynamically loaded here -->
             </div>
         </div>
+</div>
+
+<div class="modal fade" id="stockTakingModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="stockTakingModalLabel">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <form id="stockTakingForm">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title" id="stockTakingModalLabel">Record Stock Count</h5>
+          <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close stock taking modal">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="stockTakingProductId">
+
+          <div class="mb-3">
+            <label class="font-weight-bold mb-1">Product</label>
+            <div id="stockTakingProductName" class="text-dark">-</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="font-weight-bold mb-1">System Quantity</label>
+            <div id="stockTakingSystemQty" class="h5 mb-0">0</div>
+          </div>
+
+          <div class="form-group">
+            <label for="stockTakingCountedQty">Counted Quantity</label>
+            <input type="number" class="form-control" id="stockTakingCountedQty" min="0" step="1" required>
+          </div>
+
+          <div class="form-group">
+            <label for="stockTakingNotes">Notes</label>
+            <textarea class="form-control" id="stockTakingNotes" rows="3" placeholder="Optional reconciliation note"></textarea>
+          </div>
+
+          <div class="alert alert-light border mb-0" id="stockTakingVariancePreview">
+            Variance: <strong id="stockTakingVarianceValue">0</strong>
+          </div>
+          <div class="alert alert-warning mt-2 mb-0 d-none" id="stockTakingVarianceAlert">
+            Large stock discrepancy detected.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success" id="saveStockTakingBtn">Save Stock Count</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="stockTakingHistoryModal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="stockTakingHistoryModalLabel">
+  <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title" id="stockTakingHistoryModalLabel">Stock Taking History</h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close stock taking history modal">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive inventory-table-wrap inventory-stock-taking-history-table-wrap">
+          <table class="table table-hover table-striped table-bordered" id="stockTakingHistoryTable">
+            <thead class="thead-dark">
+              <tr>
+                <th>Date</th>
+                <th>System Qty</th>
+                <th>Counted Qty</th>
+                <th>Variance</th>
+                <th>Counted By</th>
+                <th>Status</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="stockTakingHistoryTableBody">
+              <tr>
+                <td colspan="7" class="text-center text-muted">Loading history...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="stockTakingHistoryCards" class="inventory-stock-taking-history-cards" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 

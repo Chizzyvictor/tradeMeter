@@ -1,6 +1,28 @@
 <?php 
 require_once __DIR__ . '/helpers.php';
 
+function ensureStockTakingSchema(AppDbConnection $db): void {
+    $db->exec("CREATE TABLE IF NOT EXISTS stock_taking (
+        stock_take_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cid INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        system_quantity REAL NOT NULL DEFAULT 0,
+        counted_quantity REAL NOT NULL DEFAULT 0,
+        variance_quantity REAL NOT NULL DEFAULT 0,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'approved',
+        approved_by INTEGER,
+        approved_at INTEGER,
+        created_at INTEGER NOT NULL
+    )");
+
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_stock_taking_cid_product ON stock_taking(cid, product_id)");
+    $db->exec("CREATE INDEX IF NOT EXISTS idx_stock_taking_cid_created ON stock_taking(cid, created_at)");
+}
+
+ensureStockTakingSchema($db);
+
 switch ($action) {
 
 
@@ -216,6 +238,266 @@ $data[]=$row;
 }
 
 respond("success","Inventory loaded",["data"=>$data]);
+
+break;
+
+
+
+// =============================
+// LOAD STOCK TAKING PRODUCTS
+// =============================
+case "loadStockTakingProducts":
+
+requireAnyPermission($db, ['manage_inventory', 'manage_products', 'create_purchases', 'create_sales']);
+
+$search = trim((string)($_POST['search'] ?? ''));
+$searchLower = strtolower($search);
+$data = [];
+
+$stmt = $db->prepare(" 
+SELECT
+p.product_id,
+p.product_name,
+p.product_unit,
+pc.category_name,
+COALESCE(i.quantity, 0) AS system_quantity,
+COALESCE(ls.counted_quantity, 0) AS last_counted_quantity,
+COALESCE(ls.variance_quantity, 0) AS last_variance_quantity,
+COALESCE(ls.created_at, 0) AS last_counted_at,
+COALESCE(ls.status, '') AS last_status
+FROM products p
+LEFT JOIN product_categories pc ON pc.category_id = p.category_id
+LEFT JOIN inventory i ON i.product_id = p.product_id AND i.cid = p.cid
+LEFT JOIN (
+    SELECT st.stock_take_id, st.cid, st.product_id, st.counted_quantity, st.variance_quantity, st.created_at, st.status
+    FROM stock_taking st
+    INNER JOIN (
+        SELECT cid, product_id, MAX(stock_take_id) AS max_stock_take_id
+        FROM stock_taking
+        WHERE cid = :cid_latest
+        GROUP BY cid, product_id
+    ) latest ON latest.max_stock_take_id = st.stock_take_id
+) ls ON ls.product_id = p.product_id AND ls.cid = p.cid
+WHERE p.cid = :cid
+  AND p.is_active = 1
+ORDER BY p.product_name ASC
+");
+$stmt->bindValue(':cid_latest', $cid, SQLITE3_INTEGER);
+$stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+$res = $stmt->execute();
+
+while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+    $name = (string)($row['product_name'] ?? '');
+    $category = (string)($row['category_name'] ?? '');
+    $unit = (string)($row['product_unit'] ?? '');
+    $haystack = strtolower(trim($name . ' ' . $category . ' ' . $unit));
+
+    if ($searchLower !== '' && strpos($haystack, $searchLower) === false) {
+        continue;
+    }
+
+    $data[] = [
+        'product_id' => intval($row['product_id'] ?? 0),
+        'product_name' => $name,
+        'category_name' => $category,
+        'product_unit' => $unit,
+        'system_quantity' => floatval($row['system_quantity'] ?? 0),
+        'last_counted_quantity' => floatval($row['last_counted_quantity'] ?? 0),
+        'last_variance_quantity' => floatval($row['last_variance_quantity'] ?? 0),
+        'last_counted_at' => intval($row['last_counted_at'] ?? 0),
+        'last_status' => (string)($row['last_status'] ?? ''),
+    ];
+}
+
+respond("success", "Stock taking products loaded", ["data" => $data]);
+
+break;
+
+
+
+// =============================
+// SAVE STOCK TAKING
+// =============================
+case "saveStockTaking":
+
+requireAnyPermission($db, ['manage_inventory', 'manage_products', 'create_purchases']);
+
+$productId = intval($_POST['product_id'] ?? 0);
+$countedQty = intval($_POST['counted_quantity'] ?? 0);
+$notes = trim((string)($_POST['notes'] ?? ''));
+$userId = intval($_SESSION['user_id'] ?? 0);
+
+if ($productId <= 0) {
+    respond('error', 'Product is required.');
+}
+
+if ($countedQty < 0) {
+    respond('error', 'Counted quantity cannot be negative.');
+}
+
+if ($userId <= 0) {
+    respond('error', 'Session user is invalid. Please login again.');
+}
+
+$productStmt = $db->prepare(" 
+SELECT
+    p.product_id,
+    p.product_name,
+    COALESCE(i.quantity, 0) AS system_quantity
+FROM products p
+LEFT JOIN inventory i ON i.product_id = p.product_id AND i.cid = p.cid
+WHERE p.cid = :cid AND p.product_id = :product_id
+LIMIT 1
+");
+$productStmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+$productStmt->bindValue(':product_id', $productId, SQLITE3_INTEGER);
+$productRow = $productStmt->execute()->fetchArray(SQLITE3_ASSOC);
+
+if (!$productRow) {
+    respond('error', 'Product not found.');
+}
+
+$systemQty = intval($productRow['system_quantity'] ?? 0);
+$variance = $countedQty - $systemQty;
+$createdAt = time();
+$status = 'approved';
+
+$db->exec('BEGIN');
+
+try {
+    $ins = $db->prepare(" 
+    INSERT INTO stock_taking
+    (cid, product_id, user_id, system_quantity, counted_quantity, variance_quantity, notes, status, approved_by, approved_at, created_at)
+    VALUES
+    (:cid, :product_id, :user_id, :system_quantity, :counted_quantity, :variance_quantity, :notes, :status, :approved_by, :approved_at, :created_at)
+    ");
+    $ins->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    $ins->bindValue(':product_id', $productId, SQLITE3_INTEGER);
+    $ins->bindValue(':user_id', $userId, SQLITE3_INTEGER);
+    $ins->bindValue(':system_quantity', $systemQty, SQLITE3_INTEGER);
+    $ins->bindValue(':counted_quantity', $countedQty, SQLITE3_INTEGER);
+    $ins->bindValue(':variance_quantity', $variance, SQLITE3_INTEGER);
+    $ins->bindValue(':notes', $notes, SQLITE3_TEXT);
+    $ins->bindValue(':status', $status, SQLITE3_TEXT);
+    $ins->bindValue(':approved_by', $userId, SQLITE3_INTEGER);
+    $ins->bindValue(':approved_at', $createdAt, SQLITE3_INTEGER);
+    $ins->bindValue(':created_at', $createdAt, SQLITE3_INTEGER);
+    $ins->execute();
+
+    $stockTakeId = intval($db->lastInsertRowID());
+    $nowDateTime = appNowBusinessDateTime();
+
+    $upInv = $db->prepare(" 
+    UPDATE inventory
+    SET quantity = :quantity,
+        last_updated = :last_updated
+    WHERE cid = :cid AND product_id = :product_id
+    ");
+    $upInv->bindValue(':quantity', $countedQty, SQLITE3_INTEGER);
+    $upInv->bindValue(':last_updated', $nowDateTime, SQLITE3_TEXT);
+    $upInv->bindValue(':cid', $cid, SQLITE3_INTEGER);
+    $upInv->bindValue(':product_id', $productId, SQLITE3_INTEGER);
+    $upInv->execute();
+
+    if ($db->changes() <= 0) {
+        $insInv = $db->prepare(" 
+        INSERT INTO inventory (product_id, cid, quantity, last_updated)
+        VALUES (:product_id, :cid, :quantity, :last_updated)
+        ");
+        $insInv->bindValue(':product_id', $productId, SQLITE3_INTEGER);
+        $insInv->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $insInv->bindValue(':quantity', $countedQty, SQLITE3_INTEGER);
+        $insInv->bindValue(':last_updated', $nowDateTime, SQLITE3_TEXT);
+        $insInv->execute();
+    }
+
+    if ($variance !== 0) {
+        $ledger = $db->prepare(" 
+        INSERT INTO stock_ledger
+        (product_id, cid, reference_type, reference_id, qty_in, qty_out, balance_after, created_at)
+        VALUES
+        (:product_id, :cid, 'stock_taking', :reference_id, :qty_in, :qty_out, :balance_after, :created_at)
+        ");
+        $ledger->bindValue(':product_id', $productId, SQLITE3_INTEGER);
+        $ledger->bindValue(':cid', $cid, SQLITE3_INTEGER);
+        $ledger->bindValue(':reference_id', $stockTakeId, SQLITE3_INTEGER);
+        $ledger->bindValue(':qty_in', $variance > 0 ? $variance : 0, SQLITE3_INTEGER);
+        $ledger->bindValue(':qty_out', $variance < 0 ? abs($variance) : 0, SQLITE3_INTEGER);
+        $ledger->bindValue(':balance_after', $countedQty, SQLITE3_INTEGER);
+        $ledger->bindValue(':created_at', $nowDateTime, SQLITE3_TEXT);
+        $ledger->execute();
+    }
+
+    $db->exec('COMMIT');
+
+    respond('success', 'Stock count saved successfully.', [
+        'stock_take_id' => $stockTakeId,
+        'variance_quantity' => $variance,
+        'counted_quantity' => $countedQty,
+        'system_quantity' => $systemQty,
+    ]);
+} catch (Throwable $e) {
+    $db->exec('ROLLBACK');
+    respond('error', $e->getMessage());
+}
+
+break;
+
+
+
+// =============================
+// LOAD STOCK TAKING HISTORY
+// =============================
+case "loadStockTakingHistory":
+
+requireAnyPermission($db, ['manage_inventory', 'manage_products', 'create_purchases', 'create_sales']);
+
+$productId = intval($_POST['product_id'] ?? 0);
+if ($productId <= 0) {
+    respond('error', 'Product is required.');
+}
+
+$data = [];
+
+$stmt = $db->prepare(" 
+SELECT
+st.stock_take_id,
+st.product_id,
+st.system_quantity,
+st.counted_quantity,
+st.variance_quantity,
+st.notes,
+st.status,
+st.created_at,
+COALESCE(u.full_name, '') AS counted_by_name,
+COALESCE(ua.full_name, '') AS approved_by_name
+FROM stock_taking st
+LEFT JOIN users u ON u.user_id = st.user_id
+LEFT JOIN users ua ON ua.user_id = st.approved_by
+WHERE st.cid = :cid AND st.product_id = :product_id
+ORDER BY st.stock_take_id DESC
+LIMIT 100
+");
+$stmt->bindValue(':cid', $cid, SQLITE3_INTEGER);
+$stmt->bindValue(':product_id', $productId, SQLITE3_INTEGER);
+$res = $stmt->execute();
+
+while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+    $data[] = [
+        'stock_take_id' => intval($row['stock_take_id'] ?? 0),
+        'product_id' => intval($row['product_id'] ?? 0),
+        'system_quantity' => floatval($row['system_quantity'] ?? 0),
+        'counted_quantity' => floatval($row['counted_quantity'] ?? 0),
+        'variance_quantity' => floatval($row['variance_quantity'] ?? 0),
+        'notes' => (string)($row['notes'] ?? ''),
+        'status' => (string)($row['status'] ?? 'pending'),
+        'created_at' => intval($row['created_at'] ?? 0),
+        'counted_by_name' => (string)($row['counted_by_name'] ?? ''),
+        'approved_by_name' => (string)($row['approved_by_name'] ?? ''),
+    ];
+}
+
+respond('success', 'Stock taking history loaded', ['data' => $data]);
 
 break;
 
