@@ -93,6 +93,14 @@ function migratePostgres(PDO $pdo): void {
 
 try {
     if (appDbDriver() === 'pgsql') {
+        if (!extension_loaded('pdo_pgsql')) {
+            $loadedIni = php_ini_loaded_file() ?: 'unknown';
+            throw new RuntimeException(
+                "pdo_pgsql extension is not enabled for this PHP CLI. " .
+                "Enable extension=pdo_pgsql in php.ini (loaded: {$loadedIni}) and rerun."
+            );
+        }
+
         $config = appPostgresConfig();
         if (($config['host'] ?? '') === '' || ($config['dbname'] ?? '') === '') {
             throw new RuntimeException('DATABASE_URL/PG config missing for PostgreSQL migration.');
