@@ -2140,7 +2140,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     .inventory-product-stock-movement-table-wrap,
     .inventory-stock-taking-table-wrap,
     .inventory-stock-taking-history-table-wrap {
-        display: none;
+        display: none !important;
     }
 
     #stockTakingProductsCards,
