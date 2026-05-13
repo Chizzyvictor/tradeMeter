@@ -27,8 +27,9 @@ class ResetPasswordPage {
       return;
     }
 
-    if (password.length < 6) {
-      this.app.showAlert('Password must be at least 6 characters', 'error');
+    const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+    if (!pwdRegex.test(password)) {
+      this.app.showAlert('Password must be at least 8 characters with uppercase, lowercase, number, and special character', 'error');
       return;
     }
 

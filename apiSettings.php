@@ -36,27 +36,7 @@ function toEpochInt($value): int {
 }
 
 function settingsPasswordPolicyError(string $password): string {
-    if (strlen($password) < 10) {
-        return 'Password must be at least 10 characters';
-    }
-
-    if (!preg_match('/[A-Z]/', $password)) {
-        return 'Password must include at least one uppercase letter';
-    }
-
-    if (!preg_match('/[a-z]/', $password)) {
-        return 'Password must include at least one lowercase letter';
-    }
-
-    if (!preg_match('/[0-9]/', $password)) {
-        return 'Password must include at least one number';
-    }
-
-    if (!preg_match('/[\W_]/', $password)) {
-        return 'Password must include at least one special character';
-    }
-
-    return '';
+    return validatePasswordPolicy($password);
 }
 
 function settingsVerifyCsrfToken(): void {

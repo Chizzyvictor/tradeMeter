@@ -551,7 +551,7 @@ include "INC/navbar.php";
 							</div>
 							<div class="form-group">
 								<label for="createUserPassword">Password</label>
-								<input type="password" class="form-control" id="createUserPassword" placeholder="Minimum 8 characters" required>
+								<input type="password" class="form-control" id="createUserPassword" placeholder="Min 8 chars, uppercase, lowercase, number, special" required>
 							</div>
 							<div class="form-group">
 								<label for="createUserRole">Role</label>

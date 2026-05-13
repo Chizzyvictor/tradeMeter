@@ -40,7 +40,7 @@ $(document).ready(() => {
     e.preventDefault();
     const rulesMap = {
       cEmail: Validator.rules.email,
-      cPass: Validator.rules.password,
+      cPass: Validator.rules.newPassword,
       cName: Validator.rules.name,
       fullName: Validator.rules.name
     };
@@ -116,7 +116,7 @@ $(document).ready(() => {
     );
   $("#companyEmail").on("input blur", validateCompanyIdentifier);
   live("#cEmail", Validator.rules.email, "#cEmailValid");
-  live("#cPass", Validator.rules.password, "#cpasscheck");
+  live("#cPass", Validator.rules.newPassword, "#cpasscheck");
   live("#cName", Validator.rules.name, "#cNameCheck");
   live("#fullName", Validator.rules.name, "#fullNameCheck");
   live("#email", Validator.rules.email, "#emailvalid");

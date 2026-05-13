@@ -753,6 +753,11 @@ switch ($action) {
             respond("error", "Invalid email");
         }
 
+        $pwdError = validatePasswordPolicy($rawPassword);
+        if ($pwdError !== '') {
+            respond("error", $pwdError);
+        }
+
         $passHash = password_hash($rawPassword, PASSWORD_DEFAULT);
 
         // check if name exists
@@ -1016,8 +1021,9 @@ switch ($action) {
         $token = trim(safe_input($_POST["token"]));
         $newPassword = $_POST["password"] ?? '';
 
-        if (strlen($newPassword) < 6) {
-            respond("error", "Password must be at least 6 characters.");
+        $pwdError = validatePasswordPolicy($newPassword);
+        if ($pwdError !== '') {
+            respond("error", $pwdError);
         }
 
         $tokenData = validateResetToken($db, $token);

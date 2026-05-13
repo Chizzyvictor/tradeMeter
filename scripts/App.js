@@ -455,8 +455,13 @@ class FormValidator {
       },
       password: {
         required: true,
-        regex: /^.{6,25}$/,
-        msg: "Password must be 6–25 characters"
+        regex: /^.{6,}$/,
+        msg: "Password is required"
+      },
+      newPassword: {
+        required: true,
+        regex: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/,
+        msg: "Password must be at least 8 characters with uppercase, lowercase, number, and special character"
       },
       phone: {
         required: true,

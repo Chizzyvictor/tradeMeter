@@ -1161,3 +1161,29 @@ function appDbConnectCompat(): AppDbConnection {
 
     return new AppDbConnection('pgsql', $pdo);
 }
+
+/**
+ * Canonical password policy for the entire application.
+ * All password creation and change flows MUST use this function.
+ * Policy: min 8 characters, at least 1 uppercase, 1 lowercase, 1 digit, 1 special character.
+ *
+ * @return string Empty string on success, or a human-readable error message.
+ */
+function validatePasswordPolicy(string $password): string {
+    if (strlen($password) < 8) {
+        return 'Password must be at least 8 characters';
+    }
+    if (!preg_match('/[A-Z]/', $password)) {
+        return 'Password must include at least one uppercase letter';
+    }
+    if (!preg_match('/[a-z]/', $password)) {
+        return 'Password must include at least one lowercase letter';
+    }
+    if (!preg_match('/[0-9]/', $password)) {
+        return 'Password must include at least one number';
+    }
+    if (!preg_match('/[\W_]/', $password)) {
+        return 'Password must include at least one special character';
+    }
+    return '';
+}

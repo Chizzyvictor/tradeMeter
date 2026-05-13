@@ -349,8 +349,9 @@ switch ($action) {
             respond('error', 'All password fields are required');
         }
 
-        if (strlen($newPassword) < 6) {
-            respond('error', 'New password must be at least 6 characters');
+        $pwdError = validatePasswordPolicy($newPassword);
+        if ($pwdError !== '') {
+            respond('error', $pwdError);
         }
 
         if ($newPassword !== $confirmPassword) {
