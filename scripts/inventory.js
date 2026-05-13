@@ -19,6 +19,7 @@ class Inventory {
     };
     // Cache DOM elements
     this.$categoriesTable = $("#inventoryCategoriesTable tbody");
+    this.$categoriesCards = $("#inventoryCategoriesCards");
     this.$productsTable = $("#inventoryProductsTable tbody");
     this.$productsCards = $("#inventoryProductsCards");
     this.$stockMovementTable = $("#stockMovementTable tbody");
@@ -844,9 +845,11 @@ class Inventory {
 
   renderCategories(rows) {
     this.$categoriesTable.empty();
+    this.$categoriesCards.empty();
 
     if (!rows.length) {
       this.$categoriesTable.html("<tr><td colspan='3' class='text-center text-muted'>No categories found</td></tr>");
+      this.$categoriesCards.html("<div class='text-center text-muted py-3'>No categories found</div>");
       return;
     }
 
@@ -870,7 +873,32 @@ class Inventory {
       `;
     }).join("");
 
+    const cardsHtml = rows.map((c) => {
+      const isActive = Number(c.is_active ?? 1) === 1;
+      const name = c.category_name || "-";
+      const desc = c.category_description || "-";
+      return `
+        <div class="card shadow-sm inventory-product-card mb-3">
+          <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <div class="flex-grow-1">
+                <h6 class="mb-0">${name}</h6>
+                <small class="text-muted">${desc}</small>
+              </div>
+              <span class="badge badge-${isActive ? "success" : "secondary"}">${isActive ? "Active" : "Inactive"}</span>
+            </div>
+            <div class="d-flex flex-column">
+              <button type="button" class="btn btn-sm btn-info mb-2 viewProductsBtn" data-id="${c.category_id}">Products</button>
+              ${canManageCatalog ? `<button type="button" class="btn btn-sm btn-primary mb-2 editCategoryBtn" data-id="${c.category_id}" data-name="${name}" data-description="${desc}" data-status="${Number(c.is_active ?? 1)}">Edit</button>` : ""}
+              ${canDelete ? `<button type="button" class="btn btn-sm btn-danger deleteCategoryBtn" data-id="${c.category_id}">Delete</button>` : ""}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
     this.$categoriesTable.html(html);
+    this.$categoriesCards.html(cardsHtml);
   }
 
   applyPermissionState() {

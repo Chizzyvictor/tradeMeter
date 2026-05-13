@@ -240,7 +240,7 @@ include "INC/navbar.php";
             <h3 class="mb-0">Inventory Categories</h3>
             <div> </div>
         </div>
-        <div class="table-responsive inventory-table-wrap">
+        <div class="table-responsive inventory-table-wrap inventory-categories-table-wrap">
             <table class="table table-hover table-striped table-bordered" id="inventoryCategoriesTable">
                 <thead class="thead-dark">
                     <tr>
@@ -254,6 +254,9 @@ include "INC/navbar.php";
                 </tbody>
             </table>
         </div>
+            <div id="inventoryCategoriesCards" class="inventory-categories-cards" aria-live="polite">
+              <!-- Mobile category cards will be dynamically loaded here -->
+            </div>
         </div>
     </div>  
 

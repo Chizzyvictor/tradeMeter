@@ -1776,6 +1776,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
 }
 
 .inventory-products-cards,
+.inventory-categories-cards,
 .inventory-stock-movement-cards,
 .inventory-product-transactions-cards,
 .inventory-product-stock-movement-cards,
@@ -1912,6 +1913,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     }
 
     .inventory-products-cards,
+    .inventory-categories-cards,
     .inventory-stock-movement-cards,
     .inventory-product-transactions-cards,
     .inventory-product-stock-movement-cards,
@@ -2043,6 +2045,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     }
 
     .inventory-products-cards,
+    .inventory-categories-cards,
     .inventory-stock-movement-cards,
     .inventory-product-transactions-cards,
     .inventory-product-stock-movement-cards,
@@ -2135,6 +2138,7 @@ body.dark-mode .moon { opacity: 1; transform: scale(1); }
     }
 
     .inventory-products-table-wrap,
+    .inventory-categories-table-wrap,
     .inventory-stock-movement-table-wrap,
     .inventory-product-transactions-table-wrap,
     .inventory-product-stock-movement-table-wrap,
