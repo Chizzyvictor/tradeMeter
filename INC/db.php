@@ -84,6 +84,10 @@ function appPostgresConfig(): array {
 }
 
 function appDbConnect(): SQLite3 {
+    if (!class_exists('SQLite3')) {
+        throw new RuntimeException('SQLite3 extension is not enabled for this PHP runtime.');
+    }
+
     $db = new SQLite3(appSqlitePath());
     $db->enableExceptions(true);
     $db->busyTimeout(5000);
@@ -1127,9 +1131,14 @@ function appDbConnectCompat(): AppDbConnection {
         return new AppDbConnection('sqlite', appDbConnect());
     }
 
+    if (!extension_loaded('pdo_pgsql')) {
+        $loadedIni = php_ini_loaded_file() ?: 'unknown';
+        throw new RuntimeException('pdo_pgsql extension is not enabled for this PHP runtime. Loaded php.ini: ' . $loadedIni);
+    }
+
     $config = appPostgresConfig();
     if (($config['host'] ?? '') === '' || ($config['dbname'] ?? '') === '') {
-        return new AppDbConnection('sqlite', appDbConnect());
+        throw new RuntimeException('DATABASE_URL is invalid or incomplete for PostgreSQL. Expected host and database name.');
     }
 
     $dsn = sprintf(
