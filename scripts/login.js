@@ -135,22 +135,6 @@ $(document).ready(() => {
   });
 
   // ============================
-  // PASSWORD STRENGTH
-  // ============================
-  $("#cPass").on("input", function () {
-    const pass = $(this).val();
-    const score =
-      (pass.length >= 6) +
-      (pass.length >= 10) +
-      /[A-Z]/.test(pass) +
-      /[0-9]/.test(pass) +
-      /[^A-Za-z0-9]/.test(pass);
-    $("#passwordStrength").text(
-      ["Very weak", "Weak", "Medium", "Strong", "Very strong"][Math.max(0, score - 1)]
-    );
-  });
-
-  // ============================
   // CAPS LOCK WARNING
   // ============================
   $("input[type=password]").on("keyup", e =>

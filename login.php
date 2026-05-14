@@ -83,7 +83,6 @@ include "INC/header.php";
                     <small id="passCheck" class="form-text text-danger" style="display:none;">
                         Please fill in the password
                     </small>
-                    <div id="passwordStrength" class="small text-muted"></div>
                     <div id="capsWarning" class="text-warning small" style="display:none"></div>
                 </div>
 

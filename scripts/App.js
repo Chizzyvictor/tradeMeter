@@ -5,6 +5,7 @@ class AppCore {
   constructor(CSRF_TOKEN) {
     this.CSRF_TOKEN = CSRF_TOKEN;
     this.userPermissions = []; // Store user permissions
+    this.passwordMeterBound = false;
 
     this.productUnits = [
       { value: "sheet", label: "Sheet" },
@@ -62,6 +63,145 @@ class AppCore {
       topbuyers: "topBuyers"
     };
 
+    this.initPasswordInputEnhancements();
+
+  }
+
+  initPasswordInputEnhancements() {
+    this.enhancePasswordInputs();
+    if (this.passwordMeterBound) return;
+
+    this.passwordMeterBound = true;
+
+    // Re-apply to modal inputs that may be rendered/updated later.
+    $(document).on("shown.bs.modal", () => {
+      this.enhancePasswordInputs();
+    });
+  }
+
+  enhancePasswordInputs(root = document) {
+    $(root)
+      .find("input[type='password']")
+      .each((_, el) => {
+        const $input = $(el);
+        if ($input.prop("disabled")) return;
+
+        this.attachPasswordToggle($input);
+        this.attachPasswordMeter($input);
+      });
+  }
+
+  attachPasswordToggle($input) {
+    if ($input.next(".toggle-pass").length) {
+      return;
+    }
+
+    if (!$input.parent().hasClass("tm-password-wrap")) {
+      $input.wrap('<div class="tm-password-wrap" style="position:relative"></div>');
+    }
+
+    const $btn = $('<span class="toggle-pass" aria-label="Toggle password visibility" role="button" tabindex="0">👁️</span>')
+      .css({ position: "absolute", right: "10px", top: "50%", cursor: "pointer", transform: "translateY(-50%)" })
+      .insertAfter($input);
+
+    const toggleInputType = () => {
+      const nextType = $input.attr("type") === "password" ? "text" : "password";
+      $input.attr("type", nextType);
+      $btn.text(nextType === "password" ? "👁️" : "🙈");
+    };
+
+    $btn.on("click", toggleInputType);
+    $btn.on("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        toggleInputType();
+      }
+    });
+  }
+
+  attachPasswordMeter($input) {
+    if ($input.data("passwordMeterInitialized")) {
+      this.updatePasswordMeter($input);
+      return;
+    }
+
+    const $meter = $(
+      '<div class="tm-password-meter mt-2">' +
+      '  <div class="progress" style="height:6px;">' +
+      '    <div class="progress-bar bg-secondary" role="progressbar" style="width:0%"></div>' +
+      "  </div>" +
+      '  <small class="tm-password-meter-text d-block text-muted mt-1">Strength: Start typing</small>' +
+      "</div>"
+    );
+
+    const $wrap = $input.closest(".tm-password-wrap");
+    if ($wrap.length) {
+      $wrap.after($meter);
+    } else {
+      $input.after($meter);
+    }
+
+    $input.data("passwordMeterInitialized", true);
+    $input.data("passwordMeter", $meter);
+
+    $input.on("input blur", () => {
+      this.updatePasswordMeter($input);
+    });
+
+    this.updatePasswordMeter($input);
+  }
+
+  calculatePasswordStrength(password) {
+    const value = String(password || "");
+    if (!value) {
+      return {
+        score: 0,
+        percent: 0,
+        label: "Start typing",
+        colorClass: "bg-secondary"
+      };
+    }
+
+    const checks = [
+      value.length >= 8,
+      /[a-z]/.test(value),
+      /[A-Z]/.test(value),
+      /\d/.test(value),
+      /[\W_]/.test(value)
+    ];
+    const score = checks.filter(Boolean).length;
+
+    if (score <= 1) {
+      return { score, percent: 20, label: "Very weak", colorClass: "bg-danger" };
+    }
+    if (score === 2) {
+      return { score, percent: 40, label: "Weak", colorClass: "bg-warning" };
+    }
+    if (score === 3) {
+      return { score, percent: 60, label: "Fair", colorClass: "bg-info" };
+    }
+    if (score === 4) {
+      return { score, percent: 80, label: "Strong", colorClass: "bg-primary" };
+    }
+
+    return { score, percent: 100, label: "Excellent", colorClass: "bg-success" };
+  }
+
+  updatePasswordMeter($input) {
+    const $meter = $input.data("passwordMeter");
+    if (!$meter || !$meter.length) return;
+
+    const value = String($input.val() || "");
+    const status = this.calculatePasswordStrength(value);
+
+    const $bar = $meter.find(".progress-bar");
+    $bar
+      .removeClass("bg-secondary bg-danger bg-warning bg-info bg-primary bg-success")
+      .addClass(status.colorClass)
+      .css("width", `${status.percent}%`)
+      .attr("aria-valuenow", String(status.percent));
+
+    $meter.find(".tm-password-meter-text").text(`Strength: ${status.label}`);
   }
 
   normalizeResponseKeys(payload) {
